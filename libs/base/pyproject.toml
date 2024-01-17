@@ -1,0 +1,15 @@
+[tool.poetry]
+name = "vision-ai-base"
+version = "0.1.0"
+description = "Example shared library"
+authors = ["Gabriel Gazola Milan <gabriel.gazola@poli.ufrj.br>"]
+packages = [{ include = "vision_ai" }]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
