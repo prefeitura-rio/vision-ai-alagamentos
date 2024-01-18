@@ -15,11 +15,8 @@ def get_secret():
     version_id = 'latest'  
 
     name = f"projects/{project_id}/secrets/{secret_id}/versions/{version_id}"
-
     client = secretmanager.SecretManagerServiceClient()
-
     response = client.access_secret_version(request={"name": name})
-
     secret_key = response.payload.data.decode("UTF-8")
 
     return secret_key
@@ -75,14 +72,14 @@ def predict(cloud_event):
     google_api_key=get_secret()
 
     label = get_prediction(
-      image_base64=image_base64,
-      prompt=prompt,
-      google_api_key=google_api_key,
-      google_api_model=google_api_model,
-      max_output_tokens=max_output_tokens,
-      temperature=temperature,
-      top_k=top_k,
-      top_p=top_p,
+        image_base64=image_base64,
+        prompt=prompt,
+        google_api_key=google_api_key,
+        google_api_model=google_api_model,
+        max_output_tokens=max_output_tokens,
+        temperature=temperature,
+        top_k=top_k,
+        top_p=top_p,
     )
 
     print(label)
