@@ -59,7 +59,10 @@ def predict(cloud_event):
     """
         Triggered from a message on a Cloud Pub/Sub topic.
     """
-    data = cloud_event.data
+    data_bytes = base64.b64decode(cloud_event.data["message"]["data"])
+
+
+    data = json.loads(data_bytes.decode("utf-8"))
 
     image_base64 = data.get('image_base64')
     prompt = data.get('prompt')
