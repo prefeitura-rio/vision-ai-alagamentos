@@ -4,9 +4,13 @@ import sys
 import sentry_sdk
 from app import config
 from app.db import TORTOISE_ORM
+from app.oidc import AuthError, get_current_user
 from fastapi import FastAPI
+from fastapi import Request
+from fastapi import Security
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
+from starlette.responses import JSONResponse
 from tortoise.contrib.fastapi import register_tortoise
 
 # from app.routers import ... # TODO: import routers
@@ -50,3 +54,13 @@ register_tortoise(
     generate_schemas=False,
     add_exception_handlers=True,
 )
+
+
+@app.exception_handler(AuthError)
+def handle_auth_error(request: Request, ex: AuthError):
+    return JSONResponse(status_code=ex.status_code, content=ex.error)
+
+
+@app.get("/private")
+def private(user=Security(get_current_user)):
+    return {"message": "You're an authorized user"}
