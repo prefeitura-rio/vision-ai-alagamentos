@@ -6,7 +6,9 @@ from infisical import InfisicalClient
 from loguru import logger
 
 
-def getenv_or_action(env_name: str, *, action: str = "raise", default: str = None) -> str:
+def getenv_or_action(
+    env_name: str, *, action: str = "raise", default: str = None
+) -> str:
     """Get an environment variable or raise an exception.
 
     Args:
@@ -65,6 +67,31 @@ def getenv_list_or_action(
     return []
 
 
+def mask_string(string: str, *, mask: str = "*") -> str:
+    """This function masks a string with a given mask.
+    It will show a few first and last characters of the string, and mask the rest.
+    The number of characters shown is the length of the string divided by 4, rounded down.
+
+    Args:
+        string (str): The string to be masked.
+        mask (str, optional): The mask to use. Defaults to "*".
+
+    Returns:
+        str: The masked string.
+    """
+    length = len(string)
+    number_of_characters_to_show = int(length / 4)
+    if number_of_characters_to_show % 2 == 0:
+        number_of_starting_characters_to_show = int(number_of_characters_to_show / 2)
+        number_of_ending_characters_to_show = number_of_starting_characters_to_show
+    else:
+        number_of_starting_characters_to_show = int(number_of_characters_to_show / 2)
+        number_of_ending_characters_to_show = number_of_starting_characters_to_show + 1
+    first_characters = string[:number_of_starting_characters_to_show]
+    last_characters = string[-number_of_ending_characters_to_show:]
+    return f"{first_characters}{mask * (length - number_of_characters_to_show * 2)}{last_characters}"  # noqa
+
+
 def inject_environment_variables(environment: str):
     """Inject environment variables from Infisical."""
     site_url = getenv_or_action("INFISICAL_ADDRESS", action="raise")
@@ -73,10 +100,12 @@ def inject_environment_variables(environment: str):
         token=token,
         site_url=site_url,
     )
-    secrets = infisical_client.get_all_secrets(environment=environment, attach_to_os_environ=True)
+    secrets = infisical_client.get_all_secrets(
+        environment=environment, attach_to_os_environ=True
+    )
     logger.info(f"Injecting {len(secrets)} environment variables from Infisical:")
     for secret in secrets:
-        logger.info(f" - {secret.secret_name}: {'*' * len(secret.secret_value)}")
+        logger.info(f" - {secret.secret_name}: {mask_string(secret.secret_value)}")
 
 
 environment = getenv_or_action("ENVIRONMENT", action="warn", default="dev")
