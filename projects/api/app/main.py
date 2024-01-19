@@ -28,9 +28,7 @@ app = FastAPI(
 logger.debug("Configuring CORS with the following settings:")
 allow_origins = config.ALLOWED_ORIGINS if config.ALLOWED_ORIGINS else ()
 logger.debug(f"ALLOWED_ORIGINS: {allow_origins}")
-allow_origin_regex = (
-    config.ALLOWED_ORIGINS_REGEX if config.ALLOWED_ORIGINS_REGEX else None
-)
+allow_origin_regex = config.ALLOWED_ORIGINS_REGEX if config.ALLOWED_ORIGINS_REGEX else None
 logger.debug(f"ALLOWED_ORIGINS_REGEX: {allow_origin_regex}")
 logger.debug(f"ALLOWED_METHODS: {config.ALLOWED_METHODS}")
 logger.debug(f"ALLOWED_HEADERS: {config.ALLOWED_HEADERS}")

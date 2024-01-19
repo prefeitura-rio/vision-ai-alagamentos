@@ -6,9 +6,7 @@ from infisical import InfisicalClient
 from loguru import logger
 
 
-def getenv_or_action(
-    env_name: str, *, action: str = "raise", default: str = None
-) -> str:
+def getenv_or_action(env_name: str, *, action: str = "raise", default: str = None) -> str:
     """Get an environment variable or raise an exception.
 
     Args:
@@ -75,9 +73,7 @@ def inject_environment_variables(environment: str):
         token=token,
         site_url=site_url,
     )
-    secrets = infisical_client.get_all_secrets(
-        environment=environment, attach_to_os_environ=True
-    )
+    secrets = infisical_client.get_all_secrets(environment=environment, attach_to_os_environ=True)
     logger.info(f"Injecting {len(secrets)} environment variables from Infisical:")
     for secret in secrets:
         logger.info(f" - {secret.secret_name}: {'*' * len(secret.secret_value)}")

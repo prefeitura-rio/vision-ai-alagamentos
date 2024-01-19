@@ -1,18 +1,18 @@
+# -*- coding: utf-8 -*-
 import base64
 import io
 import json
 
 import functions_framework
-from PIL import Image
 import google.generativeai as genai
 from google.cloud import secretmanager
-
+from PIL import Image
 
 
 def get_secret():
-    project_id = 'rj-escritorio-dev' 
-    secret_id = 'gemini-api-key-cloud-functions'
-    version_id = 'latest'  
+    project_id = "rj-escritorio-dev"
+    secret_id = "gemini-api-key-cloud-functions"
+    version_id = "latest"
 
     name = f"projects/{project_id}/secrets/{secret_id}/versions/{version_id}"
     client = secretmanager.SecretManagerServiceClient()
@@ -21,16 +21,16 @@ def get_secret():
 
     return secret_key
 
+
 def get_prediction(
     image_base64: str,
     prompt: str,
-    google_api_key:str,
-    google_api_model:str="gemini-pro-vision",
+    google_api_key: str,
+    google_api_model: str = "gemini-pro-vision",
     max_output_tokens: int = 300,
     temperature: float = 0.4,
     top_k: int = 32,
     top_p: int = 1,
-    
 ):
     img = Image.open(io.BytesIO(base64.b64decode(image_base64)))
     genai.configure(api_key=google_api_key)
@@ -54,22 +54,21 @@ def get_prediction(
 @functions_framework.cloud_event
 def predict(cloud_event):
     """
-        Triggered from a message on a Cloud Pub/Sub topic.
+    Triggered from a message on a Cloud Pub/Sub topic.
     """
     data_bytes = base64.b64decode(cloud_event.data["message"]["data"])
 
-
     data = json.loads(data_bytes.decode("utf-8"))
 
-    image_base64 = data.get('image_base64')
-    prompt = data.get('prompt')
-    google_api_model=data.get('google_api_model')
-    max_output_tokens = data.get('max_output_tokens')
-    temperature = data.get('temperature')
-    top_k = data.get('top_k')
-    top_p = data.get('top_p')
+    image_base64 = data.get("image_base64")
+    prompt = data.get("prompt")
+    google_api_model = data.get("google_api_model")
+    max_output_tokens = data.get("max_output_tokens")
+    temperature = data.get("temperature")
+    top_k = data.get("top_k")
+    top_p = data.get("top_p")
 
-    google_api_key=get_secret()
+    google_api_key = get_secret()
 
     label = get_prediction(
         image_base64=image_base64,
