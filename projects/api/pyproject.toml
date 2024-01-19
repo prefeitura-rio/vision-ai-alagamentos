@@ -1,0 +1,55 @@
+[tool.poetry]
+name = "vision-ai-api"
+version = "0.1.0"
+description = "Vision AI API"
+authors = ["Gabriel Gazola Milan <gabriel.gazola@poli.ufrj.br>"]
+readme = "README.md"
+packages = [{ include = "app", from = "." }]
+license = "MIT"
+homepage = "https://github.com/prefeitura-rio/vision-ai"
+repository = "https://github.com/prefeitura-rio/vision-ai"
+keywords = ["vision", "ai", "api"]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+aerich = "^0.7.2"
+fastapi = "^0.109.0"
+infisical = "^1.5.0"
+loguru = "^0.7.2"
+sentry-sdk = { extras = ["fastapi"], version = "^1.39.2" }
+tortoise-orm = { extras = ["asyncpg"], version = "^0.20.0" }
+uvicorn = { extras = ["standard"], version = "^0.26.0" }
+
+
+[tool.poetry.group.dev.dependencies]
+black = "^23.12.1"
+flake8 = "^7.0.0"
+isort = "^5.13.2"
+pre-commit = "^3.6.0"
+pytest-asyncio = "^0.23.3"
+pytest-cov = "^4.1.0"
+pytest-ordering = "^0.6"
+taskipy = "^1.12.2"
+
+[tool.aerich]
+tortoise_orm = "app.db.TORTOISE_ORM"
+location = "./migrations"
+src_folder = "./."
+
+[tool.coverage.run]
+omit = ["app/config/*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+norecursedirs = ["dist", "build", ".tox", ".eggs", "scripts"]
+addopts = ["--doctest-modules", "--cov=app", "-ra", "-v"]
+
+[tool.taskipy.tasks]
+lint = "black . && isort . && flake8 ."
+serve = "uvicorn app.main:app --reload --port 8001"
+test = "pytest"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
