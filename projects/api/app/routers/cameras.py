@@ -7,6 +7,10 @@ from app.pydantic_models import (
     Snapshot,
     SnapshotPostResponse,
 )
+from app.utils import (
+    download_camera_snapshot_from_bucket,
+    upload_camera_snapshot_to_bucket,
+)
 from fastapi import APIRouter
 from fastapi_pagination import Page, paginate
 
@@ -92,7 +96,9 @@ async def get_camera_snapshot(
     # TODO: Add authentication
 ) -> Snapshot:
     """Get a camera snapshot from the server."""
-    raise NotImplementedError()  # TODO: Implement
+    camera = await Camera.get(id=camera_id)
+    snapshot = await download_camera_snapshot_from_bucket(camera.id)
+    return Snapshot(image_base64=snapshot)
 
 
 @router.post("/{camera_id}/snapshot", response_model=SnapshotPostResponse)
@@ -102,4 +108,8 @@ async def camera_snapshot(
     # TODO: Add authentication
 ) -> SnapshotPostResponse:
     """Post a camera snapshot to the server."""
-    raise NotImplementedError()  # TODO: Implement
+    camera = await Camera.get(id=camera_id)
+    await upload_camera_snapshot_to_bucket(
+        image_base64=snapshot.image_base64, camera_id=camera.id
+    )
+    return SnapshotPostResponse(error=False, message="OK")
