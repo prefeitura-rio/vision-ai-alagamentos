@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import json
 from urllib.request import urlopen
 
@@ -33,10 +34,7 @@ async def get_current_user(authorization_header: str = Depends(oidc_scheme)):
         unverified_header = jwt.get_unverified_header(tokens[1])
     except Exception:
         raise AuthError(
-            {
-                "code": "invalid_jwt_header",
-                "description": "Unable to parse JWT header"
-            },
+            {"code": "invalid_jwt_header", "description": "Unable to parse JWT header"},
             401,
         )
 
@@ -72,10 +70,7 @@ async def get_current_user(authorization_header: str = Depends(oidc_scheme)):
         )
     except jwt.ExpiredSignatureError:
         raise AuthError(
-            {
-                "code": "token_expired",
-                "description": "token is expired"
-            }, 401
+            {"code": "token_expired", "description": "token is expired"}, 401
         )
     except jwt.JWTClaimsError:
         raise AuthError(
