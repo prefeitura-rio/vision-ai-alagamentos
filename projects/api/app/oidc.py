@@ -4,10 +4,13 @@ from urllib.request import urlopen
 
 from app import config
 from fastapi import Depends
-from fastapi.security import OpenIdConnect
+from fastapi.security import OAuth2PasswordBearer
 from jose import jwt
 
-oidc_scheme = OpenIdConnect(openIdConnectUrl=config.OIDC_ISSUER_URL)
+oidc_scheme = OAuth2PasswordBearer(
+    tokenUrl=config.OIDC_TOKEN_URL,
+    scopes={"openid": "openid", "email": "email", "profile": "profile"},
+)
 
 
 class AuthError(Exception):
@@ -17,21 +20,11 @@ class AuthError(Exception):
 
 
 async def get_current_user(authorization_header: str = Depends(oidc_scheme)):
-    tokens = authorization_header.split(" ")
-    if len(tokens) != 2 or tokens[0].lower() != "bearer":
-        raise AuthError(
-            {
-                "code": "invalid_header",
-                "description": "Unable to parse authentication token.",
-            },
-            401,
-        )
-
     jwksurl = urlopen(config.OIDC_ISSUER_URL + "/jwks/")
     jwks = json.loads(jwksurl.read())
 
     try:
-        unverified_header = jwt.get_unverified_header(tokens[1])
+        unverified_header = jwt.get_unverified_header(authorization_header)
     except Exception:
         raise AuthError(
             {"code": "invalid_jwt_header", "description": "Unable to parse JWT header"},
@@ -62,7 +55,7 @@ async def get_current_user(authorization_header: str = Depends(oidc_scheme)):
 
     try:
         payload = jwt.decode(
-            tokens[1],
+            authorization_header,
             rsa_key,
             algorithms=algorithms,
             audience=config.OIDC_CLIENT_ID,
