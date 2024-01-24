@@ -129,7 +129,7 @@ func getInfisicalSecrets(config infisicalConfig) (map[string]string, error) {
 
 func getConfig() (config, error) {
 	envNames := []string{
-		"INFISICAL_URL",
+		"INFISICAL_ADDRESS",
 		"INFISICAL_TOKEN",
 		"INFISICAL_ENVIRONMENT",
 		"AGENT_URL",
@@ -158,7 +158,7 @@ func getConfig() (config, error) {
 	}
 
 	infisicalConfig := infisicalConfig{
-		url:         os.Getenv("INFISICAL_URL"),
+		url:         os.Getenv("INFISICAL_ADDRESS"),
 		token:       os.Getenv("INFISICAL_TOKEN"),
 		secretKey:   match[secretIndex],
 		environment: os.Getenv("INFISICAL_ENVIRONMENT"),
