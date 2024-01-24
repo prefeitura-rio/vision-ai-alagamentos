@@ -62,6 +62,25 @@ class SnapshotPostResponse(BaseModel):
     message: Optional[str]
 
 
+class UserInfo(BaseModel):
+    iss: str
+    sub: str
+    aud: str
+    exp: int
+    iat: int
+    auth_time: int
+    acr: str
+    azp: str
+    uid: str
+    email: Optional[str]
+    email_verified: Optional[bool]
+    name: Optional[str]
+    given_name: Optional[str]
+    preferred_username: Optional[str]
+    nickname: Optional[str]
+    groups: Optional[List[str]]
+
+
 CameraBasicInfo.update_forward_refs()
 CameraConnectionInfo.update_forward_refs()
 CameraDetails.update_forward_refs()
@@ -72,3 +91,4 @@ PromptsRequest.update_forward_refs()
 PromptsResponse.update_forward_refs()
 Snapshot.update_forward_refs()
 SnapshotPostResponse.update_forward_refs()
+UserInfo.update_forward_refs()

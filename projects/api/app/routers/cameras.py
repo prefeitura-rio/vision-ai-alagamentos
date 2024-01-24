@@ -1,17 +1,19 @@
 # -*- coding: utf-8 -*-
 from app.models import Camera, CameraIdentification
+from app.oidc import get_current_user
 from app.pydantic_models import (
     CameraBasicInfo,
     CameraDetails,
     IdentificationDetails,
     Snapshot,
     SnapshotPostResponse,
+    UserInfo,
 )
 from app.utils import (
     download_camera_snapshot_from_bucket,
     upload_camera_snapshot_to_bucket,
 )
-from fastapi import APIRouter
+from fastapi import APIRouter, Security
 from fastapi_pagination import Page, paginate
 
 router = APIRouter(prefix="/cameras", tags=["Cameras"])
@@ -19,7 +21,7 @@ router = APIRouter(prefix="/cameras", tags=["Cameras"])
 
 @router.get("", response_model=Page[CameraBasicInfo])
 async def get_cameras(
-    # TODO: Add authentication
+    user: UserInfo = Security(get_current_user, scopes=["profile"]),
 ) -> Page[CameraBasicInfo]:
     """Get a list of basic information about all cameras."""
     cameras = await Camera.all()
@@ -40,7 +42,7 @@ async def get_cameras(
 
 @router.get("/details", response_model=Page[CameraDetails])
 async def get_cameras_details(
-    # TODO: Add authentication
+    user: UserInfo = Security(get_current_user, scopes=["profile"]),
 ) -> Page[CameraDetails]:
     """Get a list of detailed information about all cameras."""
     cameras = await Camera.all()
@@ -68,7 +70,7 @@ async def get_cameras_details(
 @router.get("/{camera_id}/details", response_model=CameraDetails)
 async def get_camera_details(
     camera_id: int,
-    # TODO: Add authentication
+    user: UserInfo = Security(get_current_user, scopes=["profile"]),
 ) -> CameraDetails:
     """Get detailed information about a camera."""
     camera = await Camera.get(id=camera_id)
@@ -93,7 +95,7 @@ async def get_camera_details(
 @router.get("/{camera_id}/snapshot", response_model=Snapshot)
 async def get_camera_snapshot(
     camera_id: int,
-    # TODO: Add authentication
+    user: UserInfo = Security(get_current_user, scopes=["profile"]),
 ) -> Snapshot:
     """Get a camera snapshot from the server."""
     camera = await Camera.get(id=camera_id)
@@ -105,7 +107,7 @@ async def get_camera_snapshot(
 async def camera_snapshot(
     camera_id: int,
     snapshot: Snapshot,
-    # TODO: Add authentication
+    user: UserInfo = Security(get_current_user, scopes=["profile"]),
 ) -> SnapshotPostResponse:
     """Post a camera snapshot to the server."""
     camera = await Camera.get(id=camera_id)

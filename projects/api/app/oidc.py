@@ -3,6 +3,7 @@ import json
 from urllib.request import urlopen
 
 from app import config
+from app.pydantic_models import UserInfo
 from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer
 from jose import jwt
@@ -82,4 +83,4 @@ async def get_current_user(authorization_header: str = Depends(oidc_scheme)):
             401,
         )
 
-    return payload
+    return UserInfo(**payload)

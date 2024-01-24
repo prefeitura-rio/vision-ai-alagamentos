@@ -52,7 +52,7 @@ addopts = ["--doctest-modules", "--cov=app", "-ra", "-v"]
 
 [tool.taskipy.tasks]
 lint = "black . && isort . && flake8 ."
-serve = "uvicorn app.main:app --reload --port 8001"
+serve = "uvicorn app.main:app --reload --port 8080"
 test = "pytest"
 
 [build-system]
