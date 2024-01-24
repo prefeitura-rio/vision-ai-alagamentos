@@ -2,7 +2,7 @@
 import base64
 import io
 import json
-from typing import List
+from typing import Any, Callable, Dict, List
 from uuid import uuid4
 
 from app import config
@@ -10,6 +10,15 @@ from google.cloud import storage
 from google.cloud.storage.blob import Blob
 from google.oauth2 import service_account
 from PIL import Image
+from pydantic import BaseModel
+from tortoise.models import Model
+
+
+def apply_to_list(lst: List[Any], fn: Callable) -> List[Any]:
+    """
+    Applies a function to a whole list and returns the result.
+    """
+    return [fn(item) for item in lst]
 
 
 def download_camera_snapshot_from_bucket(*, camera_id: str) -> str:
@@ -103,6 +112,51 @@ def get_gcs_client() -> storage.Client:
     """
     credentials = get_gcp_credentials()
     return storage.Client(credentials=credentials)
+
+
+def slugify(text: str) -> str:
+    """
+    Slugifies a string.
+
+    Args:
+        text (str): The string to slugify.
+
+    Returns:
+        str: The slugified string.
+    """
+    return text.lower().replace(" ", "-").replace("_", "-").replace(".", "-").strip()
+
+
+def transform_tortoise_to_pydantic(
+    tortoise_model: Model, pydantic_model: BaseModel, vars_map: Dict[str, str]
+) -> BaseModel:
+    """
+    Transform a Tortoise ORM model to a Pydantic model using a variable mapping.
+
+    Args:
+        tortoise_model (Model): The Tortoise ORM model to transform.
+        pydantic_model (BaseModel): The Pydantic model to transform into.
+        vars_map (Dict[str, str]): A dictionary mapping Tortoise ORM variable names
+                                   to Pydantic variable names.
+
+    Returns:
+        BaseModel: An instance of the Pydantic model with values from the Tortoise model.
+    """
+    # Create a dictionary to store Pydantic field values
+    pydantic_values = {}
+
+    # Iterate through the variable mapping
+    for tortoise_var, pydantic_var in vars_map.items():
+        # Get the value from the Tortoise model
+        tortoise_value = getattr(tortoise_model, tortoise_var, None)
+
+        # Set the value in the Pydantic dictionary
+        pydantic_values[pydantic_var] = tortoise_value
+
+    # Create an instance of the Pydantic model with the transformed values
+    transformed_pydantic_model = pydantic_model(**pydantic_values)
+
+    return transformed_pydantic_model
 
 
 def upload_camera_snapshot_to_bucket(*, image_base64: str, camera_id: str) -> str:

@@ -7,6 +7,7 @@ class Agent(Model):
     id = fields.UUIDField(pk=True)
     name = fields.CharField(max_length=255, unique=True)
     slug = fields.CharField(max_length=255, unique=True)
+    auth_sub = fields.CharField(max_length=255, unique=True, index=True)
     last_heartbeat = fields.DatetimeField(null=True)
     cameras = fields.ManyToManyField("app.Camera", related_name="agents")
 
@@ -24,8 +25,11 @@ class CameraIdentification(Model):
     id = fields.UUIDField(pk=True)
     camera = fields.ForeignKeyField("app.Camera", related_name="identifications")
     object = fields.ForeignKeyField("app.Object", related_name="identifications")
-    timestamp = fields.DatetimeField()
-    label = fields.BooleanField()
+    timestamp = fields.DatetimeField(null=True)
+    label = fields.BooleanField(null=True)
+
+    class Meta:
+        unique_together = (("camera", "object"),)
 
 
 class Object(Model):

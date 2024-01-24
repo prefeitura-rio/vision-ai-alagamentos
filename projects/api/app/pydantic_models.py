@@ -1,15 +1,22 @@
 # -*- coding: utf-8 -*-
 from datetime import datetime
 from typing import List, Optional
+from uuid import UUID
 
 from pydantic import BaseModel
 
 
-class CameraBasicInfo(BaseModel):
-    id: str
-    latitude: float
-    longitude: float
-    objects: List[str]
+class AgentPydantic(BaseModel):
+    id: UUID
+    name: str
+    slug: str
+    auth_sub: str
+    last_heartbeat: Optional[datetime]
+
+
+class APICaller(BaseModel):
+    is_admin: Optional[bool] = False
+    agent: Optional[AgentPydantic]
 
 
 class CameraConnectionInfo(BaseModel):
@@ -18,18 +25,20 @@ class CameraConnectionInfo(BaseModel):
     update_interval: int
 
 
-class CameraDetails(BaseModel):
+class CameraIn(BaseModel):
+    name: Optional[str]
+    rtsp_url: str
+    update_interval: int
+    latitude: float
+    longitude: float
+
+
+class CameraOut(BaseModel):
     id: str
     latitude: float
     longitude: float
     objects: List[str]
     identifications: List["IdentificationDetails"]
-
-
-class IdentificationDetails(BaseModel):
-    object: str
-    timestamp: datetime
-    label: bool
 
 
 class Heartbeat(BaseModel):
@@ -40,8 +49,40 @@ class HeartbeatResponse(BaseModel):
     command: Optional[str]
 
 
-class PromptObjects(BaseModel):
-    prompt: str
+class IdentificationDetails(BaseModel):
+    object: str
+    timestamp: datetime
+    label: bool
+
+
+class ObjectIn(BaseModel):
+    name: str
+    slug: str
+
+
+class ObjectOut(BaseModel):
+    id: UUID
+    name: str
+    slug: str
+
+
+class PromptIn(BaseModel):
+    name: str
+    prompt_text: str
+    max_output_token: int
+    temperature: float
+    top_k: int
+    top_p: float
+
+
+class PromptOut(BaseModel):
+    id: UUID
+    name: str
+    prompt_text: str
+    max_output_token: int
+    temperature: float
+    top_k: int
+    top_p: float
     objects: List[str]
 
 
@@ -50,7 +91,7 @@ class PromptsRequest(BaseModel):
 
 
 class PromptsResponse(BaseModel):
-    prompts: List[PromptObjects]
+    prompts: List[PromptOut]
 
 
 class Snapshot(BaseModel):
@@ -81,14 +122,13 @@ class UserInfo(BaseModel):
     groups: Optional[List[str]]
 
 
-CameraBasicInfo.update_forward_refs()
+AgentPydantic.update_forward_refs()
+APICaller.update_forward_refs()
 CameraConnectionInfo.update_forward_refs()
-CameraDetails.update_forward_refs()
+CameraOut.update_forward_refs()
 IdentificationDetails.update_forward_refs()
-HeartbeatResponse.update_forward_refs()
-PromptObjects.update_forward_refs()
-PromptsRequest.update_forward_refs()
-PromptsResponse.update_forward_refs()
+ObjectOut.update_forward_refs()
+PromptOut.update_forward_refs()
 Snapshot.update_forward_refs()
 SnapshotPostResponse.update_forward_refs()
 UserInfo.update_forward_refs()

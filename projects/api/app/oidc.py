@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import json
+from typing import Annotated
 from urllib.request import urlopen
 
 from app import config
@@ -20,7 +21,7 @@ class AuthError(Exception):
         self.status_code = status_code
 
 
-async def get_current_user(authorization_header: str = Depends(oidc_scheme)):
+async def get_current_user(authorization_header: Annotated[str, Depends(oidc_scheme)]):
     jwksurl = urlopen(config.OIDC_ISSUER_URL + "/jwks/")
     jwks = json.loads(jwksurl.read())
 
