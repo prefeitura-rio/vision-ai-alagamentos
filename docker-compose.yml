@@ -1,0 +1,48 @@
+services:
+  postgres:
+    image: postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: postgres
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+  api:
+    build:
+      context: ./projects/api
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - 8080:8080
+    depends_on:
+      - postgres
+  agent:
+    build:
+      context: ./projects/agent
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: teste
+    depends_on:
+      - api
+  stream-server:
+    image: bluenviron/mediamtx:latest
+    ports: 
+      - 8888:8888
+  send-stream:
+    build:
+      context: ./scripts
+      dockerfile: stream.Dockerfile
+    environment:
+      DATA_PATH: /data
+      STREAM_SERVER: stream-server
+    volumes:
+      - stream-data:/data
+    depends_on:
+      - stream-server
+
+volumes:
+  postgres-data:
+  stream-data:
