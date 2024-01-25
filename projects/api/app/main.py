@@ -5,7 +5,7 @@ import sentry_sdk
 from app import config
 from app.db import TORTOISE_ORM
 from app.oidc import AuthError
-from app.routers import agents, cameras, prompts
+from app.routers import agents, cameras, objects, prompts
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi_pagination import add_pagination
@@ -48,6 +48,7 @@ app.add_middleware(
 
 app.include_router(agents.router)
 app.include_router(cameras.router)
+app.include_router(objects.router)
 app.include_router(prompts.router)
 
 

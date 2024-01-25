@@ -19,6 +19,7 @@ google-cloud-storage = "^2.14.0"
 infisical = "^1.5.0"
 loguru = "^0.7.2"
 namesgenerator = "^0.3"
+nest-asyncio = "^1.6.0"
 pillow = "^10.2.0"
 python-jose = { extras = ["cryptography"], version = "^3.3.0" }
 sentry-sdk = { extras = ["fastapi"], version = "^1.39.2" }
@@ -53,7 +54,7 @@ addopts = ["--doctest-modules", "--cov=app", "-ra", "-v"]
 
 [tool.taskipy.tasks]
 lint = "black . && isort . && flake8 ."
-serve = "uvicorn app.main:app --reload --port 8080"
+serve = "uvicorn app.main:app --reload --port 8080 --loop asyncio"
 test = "pytest"
 
 [build-system]

@@ -1,10 +1,14 @@
 # -*- coding: utf-8 -*-
+import asyncio
 import base64
+import inspect
 import io
 import json
-from typing import Any, Callable, Dict, List
+from asyncio import Task
+from typing import Any, Callable, List, Tuple, Union
 from uuid import uuid4
 
+import nest_asyncio
 from app import config
 from google.cloud import storage
 from google.cloud.storage.blob import Blob
@@ -14,11 +18,35 @@ from pydantic import BaseModel
 from tortoise.models import Model
 
 
+def _to_task(future, as_task, loop):
+    if not as_task or isinstance(future, Task):
+        return future
+    return loop.create_task(future)
+
+
 def apply_to_list(lst: List[Any], fn: Callable) -> List[Any]:
     """
     Applies a function to a whole list and returns the result.
     """
     return [fn(item) for item in lst]
+
+
+def asyncio_run(future, as_task=True):
+    """
+    A better implementation of `asyncio.run`.
+
+    :param future: A future or task or call of an async method.
+    :param as_task: Forces the future to be scheduled as task (needed for e.g. aiohttp).
+    """
+
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:  # no event loop running:
+        loop = asyncio.new_event_loop()
+        return loop.run_until_complete(_to_task(future, as_task, loop))
+    else:
+        nest_asyncio.apply(loop)
+        return asyncio.run(_to_task(future, as_task, loop))
 
 
 def download_camera_snapshot_from_bucket(*, camera_id: str) -> str:
@@ -66,6 +94,19 @@ def download_file_from_bucket(
     bucket = storage_client.bucket(bucket_name)
     blob = bucket.blob(source_blob_name)
     blob.download_to_filename(destination_file_name)
+
+
+def fn_is_async(fn: Callable) -> bool:
+    """
+    Checks if a function is async.
+
+    Args:
+        fn (Callable): The function to check.
+
+    Returns:
+        bool: True if the function is async, False otherwise.
+    """
+    return inspect.iscoroutinefunction(fn) or inspect.isasyncgenfunction(fn)
 
 
 def generate_blob_path(camera_id: str) -> str:
@@ -128,7 +169,9 @@ def slugify(text: str) -> str:
 
 
 def transform_tortoise_to_pydantic(
-    tortoise_model: Model, pydantic_model: BaseModel, vars_map: Dict[str, str]
+    tortoise_model: Model,
+    pydantic_model: BaseModel,
+    vars_map: List[Tuple[str, Union[str, Tuple[str, Callable]]]],
 ) -> BaseModel:
     """
     Transform a Tortoise ORM model to a Pydantic model using a variable mapping.
@@ -146,9 +189,17 @@ def transform_tortoise_to_pydantic(
     pydantic_values = {}
 
     # Iterate through the variable mapping
-    for tortoise_var, pydantic_var in vars_map.items():
+    for tortoise_var, pydantic_var in vars_map:
         # Get the value from the Tortoise model
         tortoise_value = getattr(tortoise_model, tortoise_var, None)
+
+        # If pydanctic_var is a tuple, it means that we need to apply a function to the value
+        if isinstance(pydantic_var, tuple):
+            pydantic_var, fn = pydantic_var
+            if fn_is_async(fn):
+                tortoise_value = asyncio_run(fn(tortoise_value))
+            else:
+                tortoise_value = fn(tortoise_value)
 
         # Set the value in the Pydantic dictionary
         pydantic_values[pydantic_var] = tortoise_value

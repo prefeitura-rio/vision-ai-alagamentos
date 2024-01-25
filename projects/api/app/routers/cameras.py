@@ -23,6 +23,7 @@ from app.utils import (
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi_pagination import Page
 from fastapi_pagination.ext.tortoise import paginate as tortoise_paginate
+from tortoise.fields import ReverseRelation
 
 router = APIRouter(prefix="/cameras", tags=["Cameras"])
 
@@ -30,6 +31,28 @@ router = APIRouter(prefix="/cameras", tags=["Cameras"])
 @router.get("", response_model=Page[CameraOut])
 async def get_cameras(_=Depends(is_admin)) -> Page[CameraOut]:
     """Get a list of all cameras."""
+
+    async def get_objects(identifications_relation: ReverseRelation) -> List[str]:
+        identifications: List[
+            CameraIdentification
+        ] = await identifications_relation.all()
+        return [(await item.object).slug for item in identifications]
+
+    async def get_identifications(
+        identifications_relation: ReverseRelation,
+    ) -> List[IdentificationDetails]:
+        identifications: List[
+            CameraIdentification
+        ] = await identifications_relation.all()
+        return [
+            IdentificationDetails(
+                object=(await item.object).slug,
+                timestamp=item.timestamp,
+                label=item.label,
+            )
+            for item in identifications
+        ]
+
     return await tortoise_paginate(
         Camera,
         transformer=partial(
@@ -37,13 +60,16 @@ async def get_cameras(_=Depends(is_admin)) -> Page[CameraOut]:
             fn=partial(
                 transform_tortoise_to_pydantic,
                 pydantic_model=CameraOut,
-                vars_map={
-                    "id": "id",
-                    "latitude": "latitude",
-                    "longitude": "longitude",
-                    "objects": "objects",  # TODO: this must be a callable
-                    "identifications": "identifications",  # TODO: this must be a callable
-                },
+                vars_map=[
+                    ("id", "id"),
+                    ("name", "name"),
+                    ("rtsp_url", "rtsp_url"),
+                    ("update_interval", "update_interval"),
+                    ("latitude", "latitude"),
+                    ("longitude", "longitude"),
+                    ("identifications", ("objects", get_objects)),
+                    ("identifications", ("identifications", get_identifications)),
+                ],
             ),
         ),
     )
@@ -79,15 +105,20 @@ async def get_camera(
     camera = await Camera.get(id=camera_id)
     camera_details = CameraOut(
         id=camera.id,
+        name=camera.name,
+        rtsp_url=camera.rtsp_url,
+        update_interval=camera.update_interval,
         latitude=camera.latitude,
         longitude=camera.longitude,
         objects=[
-            item.object.slug
+            (await item.object).slug
             for item in await CameraIdentification.filter(camera=camera).all()
         ],
         identifications=[
             IdentificationDetails(
-                object=item.object.slug, timestamp=item.timestamp, label=item.label
+                object=(await item.object).slug,
+                timestamp=item.timestamp,
+                label=item.label,
             )
             for item in await CameraIdentification.filter(camera=camera).all()
         ],
@@ -104,7 +135,7 @@ async def get_camera_objects(
     camera = await Camera.get(id=camera_id)
     return [
         IdentificationDetails(
-            object=item.object.slug, timestamp=item.timestamp, label=item.label
+            object=(await item.object).slug, timestamp=item.timestamp, label=item.label
         )
         for item in await CameraIdentification.filter(camera=camera).all()
     ]
@@ -128,17 +159,23 @@ async def create_camera_object(
             status_code=status.HTTP_404_NOT_FOUND, detail="Object not found."
         )
     await CameraIdentification.create(camera=camera, object=object_)
+    # TODO: check if CameraIdentification already exists before adding
     return CameraOut(
         id=camera.id,
+        name=camera.name,
+        rtsp_url=camera.rtsp_url,
+        update_interval=camera.update_interval,
         latitude=camera.latitude,
         longitude=camera.longitude,
         objects=[
-            item.object.slug
+            (await item.object).slug
             for item in await CameraIdentification.filter(camera=camera).all()
         ],
         identifications=[
             IdentificationDetails(
-                object=item.object.slug, timestamp=item.timestamp, label=item.label
+                object=(await item.object).slug,
+                timestamp=item.timestamp,
+                label=item.label,
             )
             for item in await CameraIdentification.filter(camera=camera).all()
         ],
@@ -156,7 +193,7 @@ async def get_camera_object(
     object_ = await Object.get(id=object_id)
     identification = await CameraIdentification.get(camera=camera, object=object_)
     return IdentificationDetails(
-        object=identification.object.slug,
+        object=(await identification.object).slug,
         timestamp=identification.timestamp,
         label=identification.label,
     )
@@ -192,7 +229,7 @@ async def update_camera_object(
     identification.timestamp = datetime.now()
     await identification.save()
     return IdentificationDetails(
-        object=identification.object.slug,
+        object=(await identification.object).slug,
         timestamp=identification.timestamp,
         label=identification.label,
     )
@@ -218,6 +255,7 @@ async def delete_camera_object(
     await CameraIdentification.filter(camera=camera, object=object_).delete()
 
 
+# TODO: testar endpoints de snapshot
 @router.get("/{camera_id}/snapshot", response_model=Snapshot)
 async def get_camera_snapshot(
     camera_id: int,

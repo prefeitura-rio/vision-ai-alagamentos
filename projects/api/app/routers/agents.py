@@ -31,13 +31,13 @@ async def get_agents(_=Depends(is_admin)) -> Page[AgentPydantic]:
             fn=partial(
                 transform_tortoise_to_pydantic,
                 pydantic_model=AgentPydantic,
-                vars_map={
-                    "id": "id",
-                    "name": "name",
-                    "slug": "slug",
-                    "auth_sub": "auth_sub",
-                    "last_heartbeat": "last_heartbeat",
-                },
+                vars_map=[
+                    ("id", "id"),
+                    ("name", "name"),
+                    ("slug", "slug"),
+                    ("auth_sub", "auth_sub"),
+                    ("last_heartbeat", "last_heartbeat"),
+                ],
             ),
         ),
     )
@@ -64,11 +64,11 @@ async def get_cameras(
             fn=partial(
                 transform_tortoise_to_pydantic,
                 pydantic_model=CameraConnectionInfo,
-                vars_map={
-                    "id": "id",
-                    "rtsp_url": "rtsp_url",
-                    "update_interval": "update_interval",
-                },
+                vars_map=[
+                    ("id", "id"),
+                    ("rtsp_url", "rtsp_url"),
+                    ("update_interval", "update_interval"),
+                ],
             ),
         ),
     )
@@ -93,11 +93,11 @@ async def get_agent_cameras(
             fn=partial(
                 transform_tortoise_to_pydantic,
                 pydantic_model=CameraConnectionInfo,
-                vars_map={
-                    "id": "id",
-                    "rtsp_url": "rtsp_url",
-                    "update_interval": "update_interval",
-                },
+                vars_map=[
+                    ("id", "id"),
+                    ("rtsp_url", "rtsp_url"),
+                    ("update_interval", "update_interval"),
+                ],
             ),
         ),
     )
@@ -106,7 +106,7 @@ async def get_agent_cameras(
 @router.post("/{agent_id}/cameras", response_model=CameraConnectionInfo)
 async def add_camera_to_agent(
     agent_id: UUID,
-    camera_id: UUID,
+    camera_id: str,
     _=Depends(is_admin),
 ) -> CameraConnectionInfo:
     """Adds a camera to an agent."""
@@ -132,7 +132,7 @@ async def add_camera_to_agent(
 
 @router.post("/{agent_id}/heartbeat", response_model=HeartbeatResponse)
 async def agent_heartbeat(
-    agent_id: int,
+    agent_id: UUID,
     heartbeat: Heartbeat,
     caller: Annotated[APICaller, Depends(get_caller)],
 ) -> HeartbeatResponse:

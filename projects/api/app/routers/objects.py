@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from functools import partial
 from typing import Annotated
+from uuid import UUID
 
 from app.dependencies import get_caller, is_admin
 from app.models import Object
@@ -25,11 +26,11 @@ async def get_objects(
             fn=partial(
                 transform_tortoise_to_pydantic,
                 pydantic_model=ObjectOut,
-                vars_map={
-                    "id": "id",
-                    "name": "name",
-                    "slug": "slug",
-                },
+                vars_map=[
+                    ("id", "id"),
+                    ("name", "name"),
+                    ("slug", "slug"),
+                ],
             ),
         ),
     )
@@ -51,7 +52,7 @@ async def create_object(
 
 @router.delete("/{object_id}", response_model=ObjectOut)
 async def delete_object(
-    object_id: int,
+    object_id: UUID,
     _=Depends(is_admin),
 ) -> ObjectOut:
     """Delete an object."""

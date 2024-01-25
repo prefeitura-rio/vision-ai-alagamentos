@@ -26,6 +26,7 @@ class CameraConnectionInfo(BaseModel):
 
 
 class CameraIn(BaseModel):
+    id: str
     name: Optional[str]
     rtsp_url: str
     update_interval: int
@@ -35,6 +36,9 @@ class CameraIn(BaseModel):
 
 class CameraOut(BaseModel):
     id: str
+    name: Optional[str]
+    rtsp_url: str
+    update_interval: int
     latitude: float
     longitude: float
     objects: List[str]
@@ -51,8 +55,8 @@ class HeartbeatResponse(BaseModel):
 
 class IdentificationDetails(BaseModel):
     object: str
-    timestamp: datetime
-    label: bool
+    timestamp: Optional[datetime]
+    label: Optional[bool]
 
 
 class ObjectIn(BaseModel):
