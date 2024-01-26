@@ -21,7 +21,7 @@ from fastapi_pagination.ext.tortoise import paginate as tortoise_paginate
 router = APIRouter(prefix="/agents", tags=["Agents"])
 
 
-@router.get("/", response_model=Page[AgentPydantic])
+@router.get("", response_model=Page[AgentPydantic])
 async def get_agents(_=Depends(is_admin)) -> Page[AgentPydantic]:
     """Returns the list of registered agents."""
     return await tortoise_paginate(

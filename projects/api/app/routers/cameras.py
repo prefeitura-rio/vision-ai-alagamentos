@@ -81,6 +81,9 @@ async def create_camera(camera_: CameraIn, _=Depends(is_admin)) -> CameraOut:
     camera = await Camera.create(**camera_.dict())
     return CameraOut(
         id=camera.id,
+        name=camera.name,
+        rtsp_url=camera.rtsp_url,
+        update_interval=camera.update_interval,
         latitude=camera.latitude,
         longitude=camera.longitude,
         objects=[
@@ -255,16 +258,15 @@ async def delete_camera_object(
     await CameraIdentification.filter(camera=camera, object=object_).delete()
 
 
-# TODO: testar endpoints de snapshot
 @router.get("/{camera_id}/snapshot", response_model=Snapshot)
 async def get_camera_snapshot(
-    camera_id: int,
+    camera_id: str,
     _: Annotated[APICaller, Depends(get_caller)],  # TODO: Review permissions here
 ) -> Snapshot:
     """Get a camera snapshot from the server."""
     camera = await Camera.get(id=camera_id)
     # TODO: Modify download for no-base64
-    snapshot = await download_camera_snapshot_from_bucket(camera.id)
+    snapshot = download_camera_snapshot_from_bucket(camera_id=camera.id)
     return Snapshot(image_base64=snapshot)
 
 
@@ -293,7 +295,7 @@ async def camera_snapshot(
             detail="Not allowed to post snapshots for this camera.",
         )
     camera = await Camera.get(id=camera_id)
-    await upload_camera_snapshot_to_bucket(  # TODO: Modify upload for no-base64
+    upload_camera_snapshot_to_bucket(  # TODO: Modify upload for no-base64
         image_base64=snapshot.image_base64, camera_id=camera.id
     )
     return SnapshotPostResponse(error=False, message="OK")

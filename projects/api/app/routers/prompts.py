@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from functools import partial
 from typing import Annotated, List
+from uuid import UUID
 
 from app.dependencies import get_caller, is_admin
 from app.models import Object, Prompt
@@ -16,6 +17,7 @@ from app.utils import apply_to_list, transform_tortoise_to_pydantic
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi_pagination import Page
 from fastapi_pagination.ext.tortoise import paginate as tortoise_paginate
+from tortoise.fields import ReverseRelation
 
 router = APIRouter(prefix="/prompts", tags=["Prompts"])
 
@@ -25,6 +27,11 @@ async def get_prompts(
     _=Depends(is_admin),
 ) -> Page[PromptOut]:
     """Get a list of all prompts."""
+
+    async def get_objects(objects_relation: ReverseRelation) -> List[str]:
+        objects: List[Object] = await objects_relation.all()
+        return [object_.slug for object_ in objects]
+
     return await tortoise_paginate(
         Prompt,
         transformer=partial(
@@ -32,16 +39,16 @@ async def get_prompts(
             fn=partial(
                 transform_tortoise_to_pydantic,
                 pydantic_model=PromptOut,
-                vars_map={
-                    "id": "id",
-                    "name": "name",
-                    "objects": "objects",
-                    "prompt_text": "prompt_text",
-                    "max_output_token": "max_output_token",
-                    "temperature": "temperature",
-                    "top_k": "top_k",
-                    "top_p": "top_p",
-                },
+                vars_map=[
+                    ("id", "id"),
+                    ("name", "name"),
+                    ("prompt_text", "prompt_text"),
+                    ("max_output_token", "max_output_token"),
+                    ("temperature", "temperature"),
+                    ("top_k", "top_k"),
+                    ("top_p", "top_p"),
+                    ("objects", ("objects", get_objects)),
+                ],
             ),
         ),
     )
@@ -54,21 +61,24 @@ async def create_prompt(
 ) -> PromptOut:
     """Add a new prompt."""
     prompt = await Prompt.create(**prompt_.dict())
+    objects: List[str] = []
+    for object_ in await prompt.objects.all():
+        objects.append(object_.slug)
     return PromptOut(
         id=prompt.id,
         name=prompt.name,
-        objects=prompt.objects,
         prompt_text=prompt.prompt_text,
         max_output_token=prompt.max_output_token,
         temperature=prompt.temperature,
         top_k=prompt.top_k,
         top_p=prompt.top_p,
+        objects=objects,
     )
 
 
 @router.get("/{prompt_id}", response_model=PromptOut)
 async def get_prompt(
-    prompt_id: str,
+    prompt_id: UUID,
     _: Annotated[APICaller, Depends(get_caller)],  # TODO: Review permissions here
 ) -> PromptOut:
     """Get a prompt by id."""
@@ -77,21 +87,24 @@ async def get_prompt(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Prompt not found"
         )
+    objects: List[str] = []
+    for object_ in await prompt.objects.all():
+        objects.append(object_.slug)
     return PromptOut(
         id=prompt.id,
         name=prompt.name,
-        objects=prompt.objects,
         prompt_text=prompt.prompt_text,
         max_output_token=prompt.max_output_token,
         temperature=prompt.temperature,
         top_k=prompt.top_k,
         top_p=prompt.top_p,
+        objects=objects,
     )
 
 
 @router.put("/{prompt_id}", response_model=PromptOut)
 async def update_prompt(
-    prompt_id: str,
+    prompt_id: UUID,
     prompt_: PromptIn,
     _=Depends(is_admin),
 ) -> PromptOut:
@@ -102,21 +115,24 @@ async def update_prompt(
             status_code=status.HTTP_404_NOT_FOUND, detail="Prompt not found"
         )
     await prompt.update_from_dict(prompt_.dict()).save()
+    objects: List[str] = []
+    for object_ in await prompt.objects.all():
+        objects.append(object_.slug)
     return PromptOut(
         id=prompt.id,
         name=prompt.name,
-        objects=prompt.objects,
         prompt_text=prompt.prompt_text,
         max_output_token=prompt.max_output_token,
         temperature=prompt.temperature,
         top_k=prompt.top_k,
         top_p=prompt.top_p,
+        objects=objects,
     )
 
 
 @router.delete("/{prompt_id}")
 async def delete_prompt(
-    prompt_id: str,
+    prompt_id: UUID,
     _=Depends(is_admin),
 ) -> None:
     """Delete a prompt."""
@@ -130,7 +146,7 @@ async def delete_prompt(
 
 @router.get("/{prompt_id}/objects", response_model=List[ObjectOut])
 async def get_prompt_objects(
-    prompt_id: str,
+    prompt_id: UUID,
     _: Annotated[APICaller, Depends(get_caller)],  # TODO: Review permissions here
 ) -> List[ObjectOut]:
     """Get a prompt's objects."""
@@ -139,27 +155,20 @@ async def get_prompt_objects(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Prompt not found"
         )
-    return await tortoise_paginate(
-        prompt.objects,
-        transformer=partial(
-            apply_to_list,
-            fn=partial(
-                transform_tortoise_to_pydantic,
-                pydantic_model=ObjectOut,
-                vars_map={
-                    "id": "id",
-                    "name": "name",
-                    "slug": "slug",
-                },
-            ),
-        ),
-    )
+    return [
+        ObjectOut(
+            id=object_.id,
+            name=object_.name,
+            slug=object_.slug,
+        )
+        for object_ in await prompt.objects.all()
+    ]
 
 
 @router.post("/{prompt_id}/objects", response_model=ObjectOut)
 async def add_prompt_object(
-    prompt_id: str,
-    object_id: str,
+    prompt_id: UUID,
+    object_id: UUID,
     _=Depends(is_admin),
 ) -> ObjectOut:
     """Add an object to a prompt."""
@@ -183,8 +192,8 @@ async def add_prompt_object(
 
 @router.delete("/{prompt_id}/objects/{object_id}")
 async def remove_prompt_object(
-    prompt_id: str,
-    object_id: str,
+    prompt_id: UUID,
+    object_id: UUID,
     _=Depends(is_admin),
 ) -> None:
     """Remove an object from a prompt."""
@@ -201,7 +210,7 @@ async def remove_prompt_object(
     await prompt.objects.remove(object_)
 
 
-@router.get("/best_fit", response_model=PromptsResponse)
+@router.post("/best_fit", response_model=PromptsResponse)
 async def get_best_fit_prompts(
     request: PromptsRequest,
     _: Annotated[APICaller, Depends(get_caller)],  # TODO: Review permissions here
@@ -222,7 +231,7 @@ async def get_best_fit_prompts(
     prompt_scores = {}
     for prompt in prompts:
         for object_ in objects:
-            if object_ in prompt.objects:
+            if object_ in await prompt.objects.all():
                 prompt_scores[prompt.id] = prompt_scores.get(prompt.id, 0) + 1
     # Sort prompts by score
     prompt_scores = sorted(prompt_scores.items(), key=lambda x: x[1], reverse=True)
@@ -236,21 +245,26 @@ async def get_best_fit_prompts(
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Prompt not found"
             )
-        if not set(prompt.objects).intersection(set(covered_objects)):
+        if not set(await prompt.objects.all()).intersection(set(covered_objects)):
             final_prompts.append(prompt)
             covered_objects += list(await prompt.objects.all())
-    return PromptsResponse(
-        prompts=[
+    ret_prompts = []
+    for prompt in final_prompts:
+        objects = []
+        for object_ in await prompt.objects.all():
+            objects.append(object_.slug)
+        ret_prompts.append(
             PromptOut(
                 id=prompt.id,
                 name=prompt.name,
-                objects=prompt.objects,
+                objects=objects,
                 prompt_text=prompt.prompt_text,
                 max_output_token=prompt.max_output_token,
                 temperature=prompt.temperature,
                 top_k=prompt.top_k,
                 top_p=prompt.top_p,
             )
-            for prompt in final_prompts
-        ],
+        )
+    return PromptsResponse(
+        prompts=ret_prompts,
     )
