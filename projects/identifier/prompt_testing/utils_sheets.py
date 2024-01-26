@@ -1,17 +1,17 @@
 # -*- coding: utf-8 -*-
 import base64
-import json
 import hashlib
+import json
 import os
+import time
+from collections import OrderedDict
 from os import getenv
 from pathlib import Path
-import time
 from typing import List, Union
 
-from collections import OrderedDict
-from google.oauth2 import service_account
 import gspread
 import pandas as pd
+from google.oauth2 import service_account
 
 
 def inject_credential(
@@ -31,9 +31,7 @@ def get_hash_id(string):
     return str(int(hashlib.sha256(string.encode("utf-8")).hexdigest(), 16))[:16]
 
 
-def get_credentials_from_env(
-    key: str, scopes: List[str] = None
-) -> service_account.Credentials:
+def get_credentials_from_env(key: str, scopes: List[str] = None) -> service_account.Credentials:
     """
     Gets credentials from env vars
     """
@@ -41,9 +39,7 @@ def get_credentials_from_env(
     if env == "":
         raise ValueError(f'Enviroment variable "{key}" not set!')
     info: dict = json.loads(base64.b64decode(env))
-    cred: service_account.Credentials = (
-        service_account.Credentials.from_service_account_info(info)
-    )
+    cred: service_account.Credentials = service_account.Credentials.from_service_account_info(info)
     if scopes:
         cred = cred.with_scopes(scopes)
     return cred
@@ -83,11 +79,11 @@ def sheet_append_row(
         for column in first_row[0]:
             if column in data_rows:
                 new_first_row.append(column)
-        ## order dict in the same order as the header
+        # order dict in the same order as the header
         ordered_data = OrderedDict((key, data_dict[key]) for key in new_first_row)
     else:
         header = list(data_dict.keys())
-        ## append header
+        # append header
         worksheet.append_row(header)
         ordered_data = data_dict
 
@@ -214,7 +210,18 @@ def save_data_in_sheets(
             content_ids = dataframe["content_id"].tolist()
 
         content_str = json.dumps(data.get("content"), indent=4)
-        content_id = get_hash_id(string=content_str)
+        content_str_id = (
+            content_str
+            + "__"
+            + str(data.get("max_output_token", ""))
+            + "__"
+            + str(data.get("temperature", ""))
+            + "__"
+            + str(data.get("top_k", ""))
+            + "__"
+            + str(data.get("top_p", ""))
+        )
+        content_id = get_hash_id(string=content_str_id)
 
         if content_id not in content_ids:
             sheet_append_row(
