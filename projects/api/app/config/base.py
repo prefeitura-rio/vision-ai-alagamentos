@@ -18,9 +18,7 @@ OIDC_ISSUER_URL = getenv_or_action("OIDC_ISSUER_URL")
 OIDC_TOKEN_URL = getenv_or_action("OIDC_TOKEN_URL")
 
 # GCP
-GCP_SERVICE_ACCOUNT_CREDENTIALS = getenv_or_action(
-    "GCP_SERVICE_ACCOUNT_CREDENTIALS", action="warn"
-)
+GCP_SERVICE_ACCOUNT_CREDENTIALS = getenv_or_action("GCP_SERVICE_ACCOUNT_CREDENTIALS", action="warn")
 GCS_BUCKET_NAME = getenv_or_action("GCS_BUCKET_NAME", action="warn")
 GCS_BUCKET_PATH_PREFIX = getenv_or_action("GCS_BUCKET_PATH_PREFIX", action="warn")
 if GCS_BUCKET_PATH_PREFIX:

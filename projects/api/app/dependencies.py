@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
 from typing import Annotated
 
+from fastapi import Depends, HTTPException, Security, status
+
 from app.models import Agent
 from app.oidc import get_current_user
 from app.pydantic_models import APICaller, UserInfo
 from app.utils import slugify
-from fastapi import Depends, HTTPException, Security, status
 
 
 async def get_caller(

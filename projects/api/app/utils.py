@@ -9,13 +9,14 @@ from typing import Any, Callable, List, Tuple, Union
 from uuid import uuid4
 
 import nest_asyncio
-from app import config
 from google.cloud import storage
 from google.cloud.storage.blob import Blob
 from google.oauth2 import service_account
 from PIL import Image
 from pydantic import BaseModel
 from tortoise.models import Model
+
+from app import config
 
 
 def _to_task(future, as_task, loop):
@@ -132,9 +133,7 @@ def get_gcp_credentials(
     if not env:
         raise ValueError("GCP_SERVICE_ACCOUNT_CREDENTIALS env var not set!")
     info: dict = json.loads(base64.b64decode(env))
-    cred: service_account.Credentials = (
-        service_account.Credentials.from_service_account_info(info)
-    )
+    cred: service_account.Credentials = service_account.Credentials.from_service_account_info(info)
     if scopes:
         cred = cred.with_scopes(scopes)
     return cred
@@ -238,9 +237,7 @@ def upload_camera_snapshot_to_bucket(*, image_base64: str, camera_id: str) -> st
     return blob.public_url
 
 
-def upload_file_to_bucket(
-    bucket_name: str, file_path: str, destination_blob_name: str
-) -> "Blob":
+def upload_file_to_bucket(bucket_name: str, file_path: str, destination_blob_name: str) -> "Blob":
     """
     Uploads a file to the bucket.
     Mode needs to be "prod" or "staging"

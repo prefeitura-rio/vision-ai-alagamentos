@@ -1,0 +1,140 @@
+name: API
+
+on:
+  push:
+    paths:
+      - ".github/workflows/api*"
+      - "projects/api/**/*"
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: "3.11.x"
+
+      - name: Set up dependencies
+        run: |
+          cd projects/api/
+          pip install -U pip poetry
+          poetry config virtualenvs.create false
+          poetry install --with dev
+
+      - name: Run linters
+        run: |
+          cd projects/api/
+          task lint
+
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
+    container: python:3.11-slim
+    env:
+      INFISICAL_ADDRESS: ${{ secrets.INFISICAL_ADDRESS }}
+      INFISICAL_TOKEN: ${{ secrets.INFISICAL_TOKEN }}
+    services:
+      db:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set up dependencies
+        run: |
+          cd projects/api/
+          pip install -U pip poetry
+          poetry config virtualenvs.create false
+          poetry install --with dev
+
+      - name: Set up database
+        run: |
+          cd projects/api/
+          aerich init-db || true
+          aerich upgrade || true
+
+      - name: Run tests
+        run: |
+          cd projects/api/
+          task test
+
+  deploy:
+    name: Build and Deploy
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/development'
+    needs: [lint, tests]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v1
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v2
+        with:
+          context: api/
+          file: api/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:${{ github.ref == 'refs/heads/main' && 'latest' || github.ref == 'refs/heads/development' && 'latest-dev' || github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.event.repository.html_url }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
+
+      - name: Setup Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@v0.2.1
+        with:
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          export_default_credentials: true
+
+      - name: Get GKE credentials
+        uses: google-github-actions/get-gke-credentials@v0.2.1
+        with:
+          cluster_name: ${{ secrets.GKE_CLUSTER }}
+          location: ${{ secrets.GKE_ZONE }}
+          credentials: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Kustomize
+        run: |-
+          curl -sfLo kustomize https://github.com/kubernetes-sigs/kustomize/releases/download/v3.1.0/kustomize_3.1.0_linux_amd64
+          chmod u+x ./kustomize
+          mv ./kustomize api/
+
+      - name: Deploy (main)
+        if: github.ref == 'refs/heads/main'
+        run: |-
+          cd projects/api/
+          ./kustomize edit set image gcr.io/PROJECT_ID/IMAGE_NAME:TAG=ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:${{ github.sha }}
+          ./kustomize build . | kubectl apply -n unificacao-prontuarios-prod -f -
+          kubectl rollout status -w -n unificacao-prontuarios-prod deployment/unificacao-prontuarios
+
+      - name: Deploy (development)
+        if: github.ref == 'refs/heads/development'
+        run: |-
+          cd projects/api/
+          ./kustomize edit set image gcr.io/PROJECT_ID/IMAGE_NAME:TAG=ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:${{ github.sha }}
+          ./kustomize build . | kubectl apply -n unificacao-prontuarios-dev -f -
+          kubectl rollout status -w -n unificacao-prontuarios-dev deployment/unificacao-prontuarios

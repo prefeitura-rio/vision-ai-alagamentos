@@ -5,9 +5,7 @@ from httpx import AsyncClient
 
 @pytest.mark.anyio
 @pytest.mark.run(order=31)
-async def test_agents_get(
-    client: AsyncClient, authorization_header: dict, context: dict
-):
+async def test_agents_get(client: AsyncClient, authorization_header: dict, context: dict):
     response = await client.get("/agents", headers=authorization_header)
     assert response.status_code == 200
     assert "items" in response.json()
@@ -57,9 +55,7 @@ async def test_agents_get_cameras(client: AsyncClient, authorization_header: dic
 
 @pytest.mark.anyio
 @pytest.mark.run(order=33)
-async def test_agents_add_cameras(
-    client: AsyncClient, authorization_header: dict, context: dict
-):
+async def test_agents_add_cameras(client: AsyncClient, authorization_header: dict, context: dict):
     response = await client.post(
         f"/agents/{context['agent_id']}/cameras?camera_id=0001",
         headers=authorization_header,

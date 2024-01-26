@@ -3,6 +3,11 @@ from functools import partial
 from typing import Annotated, List
 from uuid import UUID
 
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi_pagination import Page
+from fastapi_pagination.ext.tortoise import paginate as tortoise_paginate
+from tortoise.fields import ReverseRelation
+
 from app.dependencies import get_caller, is_admin
 from app.models import Object, Prompt
 from app.pydantic_models import (
@@ -14,10 +19,6 @@ from app.pydantic_models import (
     PromptsResponse,
 )
 from app.utils import apply_to_list, transform_tortoise_to_pydantic
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi_pagination import Page
-from fastapi_pagination.ext.tortoise import paginate as tortoise_paginate
-from tortoise.fields import ReverseRelation
 
 router = APIRouter(prefix="/prompts", tags=["Prompts"])
 
@@ -84,9 +85,7 @@ async def get_prompt(
     """Get a prompt by id."""
     prompt = await Prompt.get_or_none(id=prompt_id)
     if prompt is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Prompt not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prompt not found")
     objects: List[str] = []
     for object_ in await prompt.objects.all():
         objects.append(object_.slug)
@@ -111,9 +110,7 @@ async def update_prompt(
     """Update a prompt."""
     prompt = await Prompt.get_or_none(id=prompt_id)
     if prompt is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Prompt not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prompt not found")
     await prompt.update_from_dict(prompt_.dict()).save()
     objects: List[str] = []
     for object_ in await prompt.objects.all():
@@ -138,9 +135,7 @@ async def delete_prompt(
     """Delete a prompt."""
     prompt = await Prompt.get_or_none(id=prompt_id)
     if prompt is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Prompt not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prompt not found")
     await prompt.delete()
 
 
@@ -152,9 +147,7 @@ async def get_prompt_objects(
     """Get a prompt's objects."""
     prompt = await Prompt.get_or_none(id=prompt_id)
     if prompt is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Prompt not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prompt not found")
     return [
         ObjectOut(
             id=object_.id,
@@ -174,14 +167,10 @@ async def add_prompt_object(
     """Add an object to a prompt."""
     prompt = await Prompt.get_or_none(id=prompt_id)
     if prompt is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Prompt not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prompt not found")
     object_ = await Object.get_or_none(id=object_id)
     if object_ is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Object not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Object not found")
     await prompt.objects.add(object_)
     return ObjectOut(
         id=object_.id,
@@ -199,14 +188,10 @@ async def remove_prompt_object(
     """Remove an object from a prompt."""
     prompt = await Prompt.get_or_none(id=prompt_id)
     if prompt is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Prompt not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prompt not found")
     object_ = await Object.get_or_none(id=object_id)
     if object_ is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Object not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Object not found")
     await prompt.objects.remove(object_)
 
 
@@ -222,9 +207,7 @@ async def get_best_fit_prompts(
     for object_slug in object_slugs:
         object_ = await Object.get_or_none(slug=object_slug)
         if object_ is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Object not found"
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Object not found")
         objects.append(object_)
         prompts += list(await Prompt.filter(objects__id=object_.id).all())
     # Rank prompts by number of objects in common
@@ -242,9 +225,7 @@ async def get_best_fit_prompts(
     for prompt_id, _ in prompt_scores:
         prompt = await Prompt.get_or_none(id=prompt_id)
         if prompt is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Prompt not found"
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prompt not found")
         if not set(await prompt.objects.all()).intersection(set(covered_objects)):
             final_prompts.append(prompt)
             covered_objects += list(await prompt.objects.all())

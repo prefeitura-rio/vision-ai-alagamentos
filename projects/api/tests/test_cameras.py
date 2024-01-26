@@ -39,20 +39,14 @@ async def test_cameras_get(client: AsyncClient, authorization_header: dict):
             assert "label" in identification
             assert isinstance(identification["object"], str)
             assert (
-                isinstance(identification["timestamp"], str)
-                or identification["timestamp"] is None
+                isinstance(identification["timestamp"], str) or identification["timestamp"] is None
             )
-            assert (
-                isinstance(identification["label"], bool)
-                or identification["label"] is None
-            )
+            assert isinstance(identification["label"], bool) or identification["label"] is None
 
 
 @pytest.mark.anyio
 @pytest.mark.run(order=22)
-async def test_cameras_create(
-    client: AsyncClient, authorization_header: dict, context: dict
-):
+async def test_cameras_create(client: AsyncClient, authorization_header: dict, context: dict):
     response = await client.post(
         "/cameras",
         headers=authorization_header,
@@ -89,21 +83,14 @@ async def test_cameras_create(
         assert "timestamp" in identification
         assert "label" in identification
         assert isinstance(identification["object"], str)
-        assert (
-            isinstance(identification["timestamp"], str)
-            or identification["timestamp"] is None
-        )
-        assert (
-            isinstance(identification["label"], bool) or identification["label"] is None
-        )
+        assert isinstance(identification["timestamp"], str) or identification["timestamp"] is None
+        assert isinstance(identification["label"], bool) or identification["label"] is None
     context["test_camera_id"] = response.json()["id"]
 
 
 @pytest.mark.anyio
 @pytest.mark.run(order=23)
-async def test_cameras_get_by_id(
-    client: AsyncClient, authorization_header: dict, context: dict
-):
+async def test_cameras_get_by_id(client: AsyncClient, authorization_header: dict, context: dict):
     response = await client.get(
         f"/cameras/{context['test_camera_id']}", headers=authorization_header
     )
@@ -131,21 +118,14 @@ async def test_cameras_get_by_id(
         assert "timestamp" in identification
         assert "label" in identification
         assert isinstance(identification["object"], str)
-        assert (
-            isinstance(identification["timestamp"], str)
-            or identification["timestamp"] is None
-        )
-        assert (
-            isinstance(identification["label"], bool) or identification["label"] is None
-        )
+        assert isinstance(identification["timestamp"], str) or identification["timestamp"] is None
+        assert isinstance(identification["label"], bool) or identification["label"] is None
     assert response.json()["id"] == context["test_camera_id"]
 
 
 @pytest.mark.anyio
 @pytest.mark.run(order=24)
-async def test_cameras_add_objects(
-    client: AsyncClient, authorization_header: dict, context: dict
-):
+async def test_cameras_add_objects(client: AsyncClient, authorization_header: dict, context: dict):
     response = await client.post(
         f"/cameras/{context['test_camera_id']}/objects?object_id={context['test_object_id']}",
         headers=authorization_header,
@@ -174,22 +154,15 @@ async def test_cameras_add_objects(
         assert "timestamp" in identification
         assert "label" in identification
         assert isinstance(identification["object"], str)
-        assert (
-            isinstance(identification["timestamp"], str)
-            or identification["timestamp"] is None
-        )
-        assert (
-            isinstance(identification["label"], bool) or identification["label"] is None
-        )
+        assert isinstance(identification["timestamp"], str) or identification["timestamp"] is None
+        assert isinstance(identification["label"], bool) or identification["label"] is None
     assert response.json()["id"] == context["test_camera_id"]
     assert response.json()["objects"] == [context["test_object_slug"]]
 
 
 @pytest.mark.anyio
 @pytest.mark.run(order=25)
-async def test_cameras_get_objects(
-    client: AsyncClient, authorization_header: dict, context: dict
-):
+async def test_cameras_get_objects(client: AsyncClient, authorization_header: dict, context: dict):
     response = await client.get(
         f"/cameras/{context['test_camera_id']}/objects", headers=authorization_header
     )
@@ -218,13 +191,8 @@ async def test_cameras_get_object_by_id(
     assert "timestamp" in response.json()
     assert "label" in response.json()
     assert isinstance(response.json()["object"], str)
-    assert (
-        isinstance(response.json()["timestamp"], str)
-        or response.json()["timestamp"] is None
-    )
-    assert (
-        isinstance(response.json()["label"], bool) or response.json()["label"] is None
-    )
+    assert isinstance(response.json()["timestamp"], str) or response.json()["timestamp"] is None
+    assert isinstance(response.json()["label"], bool) or response.json()["label"] is None
     assert response.json()["object"] == context["test_object_slug"]
 
 
@@ -282,9 +250,7 @@ async def test_cameras_post_snapshot(
 
 @pytest.mark.anyio
 @pytest.mark.run(order=30)
-async def test_cameras_get_snapshot(
-    client: AsyncClient, authorization_header: dict, context: dict
-):
+async def test_cameras_get_snapshot(client: AsyncClient, authorization_header: dict, context: dict):
     response = await client.get(
         f"/cameras/{context['test_camera_id']}/snapshot", headers=authorization_header
     )

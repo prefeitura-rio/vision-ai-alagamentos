@@ -213,9 +213,7 @@ async def test_prompts_delete_objects(
 
 @pytest.mark.anyio
 @pytest.mark.run(order=18)
-async def test_prompts_best_fit(
-    client: AsyncClient, authorization_header: dict
-) -> None:
+async def test_prompts_best_fit(client: AsyncClient, authorization_header: dict) -> None:
     response = await client.post(
         "/prompts/best_fit",
         headers=authorization_header,
