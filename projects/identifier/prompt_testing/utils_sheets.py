@@ -209,6 +209,13 @@ def save_data_in_sheets(
             dataframe.columns = new_header  # set the header row as the df header
             content_ids = dataframe["content_id"].tolist()
 
+        # content_parsed = []
+        # for d in data.get("content"):
+        #     new_d = {}
+        #     for key, value in d.items():
+        #         new_d[key] = json.dumps(value, indent=4)
+        #     content_parsed.append(new_d)
+
         content_str = json.dumps(data.get("content"), indent=4)
         content_str_id = (
             content_str
@@ -241,8 +248,7 @@ def save_data_in_sheets(
             "experiment_datetime": data.get("experiment_datetime", ""),
             "content_id": content_id,
             "true_object": data.get("true_object", ""),
-            "object": data.get("object", ""),
-            "explanation": data.get("explanation", ""),
+            "response": json.dumps(data.get("response", ""), indent=4),
             "image_url": data.get("image_url", ""),
             "image": data.get("image", ""),
         }
