@@ -6,7 +6,11 @@ from .base import *  # noqa: F401, F403
 LOG_LEVEL = getenv_or_action("LOG_LEVEL", action="ignore", default="INFO")
 
 # Database configuration
-DATABASE_URL = getenv_or_action("DATABASE_URL", action="raise")
+DATABASE_HOST = getenv_or_action("DATABASE_HOST", action="raise")
+DATABASE_PORT = getenv_or_action("DATABASE_PORT", action="raise")
+DATABASE_USER = getenv_or_action("DATABASE_USER", action="raise")
+DATABASE_PASSWORD = getenv_or_action("DATABASE_PASSWORD", action="raise")
+DATABASE_NAME = getenv_or_action("DATABASE_NAME", action="raise")
 
 # Password hashing configuration
 if getenv_or_action("PASSWORD_HASH_ALGORITHM", action="ignore"):
