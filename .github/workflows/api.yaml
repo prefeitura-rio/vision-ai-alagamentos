@@ -147,7 +147,7 @@ jobs:
           service: ${{ env.GCR_SERVICE }}-staging
           region: ${{ env.GCR_REGION }}
           image: docker.io/${{ env.DOCKERHUB_USERNAME }}/${{ env.DOCKERHUB_REPOSITORY }}:${{ github.sha }}
-          flags: '--add-cloudsql-instances=datario:us-central1:postgres-side --port=80 --allow-unauthenticated --concurrency=100'
+          flags: '--add-cloudsql-instances=datario:us-central1:postgres-side --port=80 --allow-unauthenticated --concurrency=10'
           secrets: |
             ENVIRONMENT=VISION_AI_API_STAGING_ENVIRONMENT:latest
             INFISICAL_ADDRESS=VISION_AI_API_STAGING_INFISICAL_ADDRESS:latest
