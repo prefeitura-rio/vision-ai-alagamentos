@@ -129,7 +129,6 @@ jobs:
 
       - name: Deploy to Google Cloud Run (Production)
         if: github.ref == 'refs/heads/main'
-        id: deploy
         uses: google-github-actions/deploy-cloudrun@v1
         with:
           service: ${{ env.GCR_SERVICE }}-production
@@ -143,7 +142,6 @@ jobs:
 
       - name: Deploy to Google Cloud Run (Staging)
         if: github.ref == 'refs/heads/development'
-        id: deploy
         uses: google-github-actions/deploy-cloudrun@v1
         with:
           service: ${{ env.GCR_SERVICE }}-staging
