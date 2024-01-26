@@ -3,11 +3,12 @@ import json
 from typing import Annotated
 from urllib.request import urlopen
 
-from app import config
-from app.pydantic_models import UserInfo
 from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer
 from jose import jwt
+
+from app import config
+from app.pydantic_models import UserInfo
 
 oidc_scheme = OAuth2PasswordBearer(
     tokenUrl=config.OIDC_TOKEN_URL,
@@ -64,9 +65,7 @@ async def get_current_user(authorization_header: Annotated[str, Depends(oidc_sch
             issuer=config.OIDC_ISSUER_URL,
         )
     except jwt.ExpiredSignatureError:
-        raise AuthError(
-            {"code": "token_expired", "description": "token is expired"}, 401
-        )
+        raise AuthError({"code": "token_expired", "description": "token is expired"}, 401)
     except jwt.JWTClaimsError:
         raise AuthError(
             {

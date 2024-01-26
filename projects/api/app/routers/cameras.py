@@ -4,6 +4,11 @@ from functools import partial
 from typing import Annotated, List
 from uuid import UUID
 
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi_pagination import Page
+from fastapi_pagination.ext.tortoise import paginate as tortoise_paginate
+from tortoise.fields import ReverseRelation
+
 from app.dependencies import get_caller, is_admin
 from app.models import Agent, Camera, CameraIdentification, Object
 from app.pydantic_models import (
@@ -20,10 +25,6 @@ from app.utils import (
     transform_tortoise_to_pydantic,
     upload_camera_snapshot_to_bucket,
 )
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi_pagination import Page
-from fastapi_pagination.ext.tortoise import paginate as tortoise_paginate
-from tortoise.fields import ReverseRelation
 
 router = APIRouter(prefix="/cameras", tags=["Cameras"])
 
@@ -33,17 +34,13 @@ async def get_cameras(_=Depends(is_admin)) -> Page[CameraOut]:
     """Get a list of all cameras."""
 
     async def get_objects(identifications_relation: ReverseRelation) -> List[str]:
-        identifications: List[
-            CameraIdentification
-        ] = await identifications_relation.all()
+        identifications: List[CameraIdentification] = await identifications_relation.all()
         return [(await item.object).slug for item in identifications]
 
     async def get_identifications(
         identifications_relation: ReverseRelation,
     ) -> List[IdentificationDetails]:
-        identifications: List[
-            CameraIdentification
-        ] = await identifications_relation.all()
+        identifications: List[CameraIdentification] = await identifications_relation.all()
         return [
             IdentificationDetails(
                 object=(await item.object).slug,
@@ -81,11 +78,13 @@ async def create_camera(camera_: CameraIn, _=Depends(is_admin)) -> CameraOut:
     camera = await Camera.create(**camera_.dict())
     return CameraOut(
         id=camera.id,
+        name=camera.name,
+        rtsp_url=camera.rtsp_url,
+        update_interval=camera.update_interval,
         latitude=camera.latitude,
         longitude=camera.longitude,
         objects=[
-            item.object.slug
-            for item in await CameraIdentification.filter(camera=camera).all()
+            item.object.slug for item in await CameraIdentification.filter(camera=camera).all()
         ],
         identifications=[
             IdentificationDetails(
@@ -150,14 +149,10 @@ async def create_camera_object(
     """Add an object to a camera."""
     camera = await Camera.get_or_none(id=camera_id)
     if not camera:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Camera not found."
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Camera not found.")
     object_ = await Object.get_or_none(id=object_id)
     if not object_:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Object not found."
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Object not found.")
     await CameraIdentification.create(camera=camera, object=object_)
     # TODO: check if CameraIdentification already exists before adding
     return CameraOut(
@@ -209,17 +204,11 @@ async def update_camera_object(
     """Update a camera object."""
     camera = await Camera.get_or_none(id=camera_id)
     if not camera:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Camera not found."
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Camera not found.")
     object_ = await Object.get_or_none(id=object_id)
     if not object_:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Object not found."
-        )
-    identification = await CameraIdentification.get_or_none(
-        camera=camera, object=object_
-    )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Object not found.")
+    identification = await CameraIdentification.get_or_none(camera=camera, object=object_)
     if not identification:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -244,27 +233,22 @@ async def delete_camera_object(
     """Delete a camera object."""
     camera = await Camera.get_or_none(id=camera_id)
     if not camera:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Camera not found."
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Camera not found.")
     object_ = await Object.get_or_none(id=object_id)
     if not object_:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Object not found."
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Object not found.")
     await CameraIdentification.filter(camera=camera, object=object_).delete()
 
 
-# TODO: testar endpoints de snapshot
 @router.get("/{camera_id}/snapshot", response_model=Snapshot)
 async def get_camera_snapshot(
-    camera_id: int,
+    camera_id: str,
     _: Annotated[APICaller, Depends(get_caller)],  # TODO: Review permissions here
 ) -> Snapshot:
     """Get a camera snapshot from the server."""
     camera = await Camera.get(id=camera_id)
     # TODO: Modify download for no-base64
-    snapshot = await download_camera_snapshot_from_bucket(camera.id)
+    snapshot = download_camera_snapshot_from_bucket(camera_id=camera.id)
     return Snapshot(image_base64=snapshot)
 
 
@@ -293,7 +277,7 @@ async def camera_snapshot(
             detail="Not allowed to post snapshots for this camera.",
         )
     camera = await Camera.get(id=camera_id)
-    await upload_camera_snapshot_to_bucket(  # TODO: Modify upload for no-base64
+    upload_camera_snapshot_to_bucket(  # TODO: Modify upload for no-base64
         image_base64=snapshot.image_base64, camera_id=camera.id
     )
     return SnapshotPostResponse(error=False, message="OK")

@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
+from tortoise import Tortoise, run_async
+
 from app.db import TORTOISE_ORM
 from app.models import Camera, CameraIdentification, Object, Prompt
-from tortoise import Tortoise, run_async
 
 
 async def run():

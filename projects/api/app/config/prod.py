@@ -6,15 +6,17 @@ from .base import *  # noqa: F401, F403
 LOG_LEVEL = getenv_or_action("LOG_LEVEL", action="ignore", default="INFO")
 
 # Database configuration
-DATABASE_URL = getenv_or_action("DATABASE_URL", action="raise")
+DATABASE_HOST = getenv_or_action("DATABASE_HOST", action="raise")
+DATABASE_PORT = getenv_or_action("DATABASE_PORT", action="raise")
+DATABASE_USER = getenv_or_action("DATABASE_USER", action="raise")
+DATABASE_PASSWORD = getenv_or_action("DATABASE_PASSWORD", action="raise")
+DATABASE_NAME = getenv_or_action("DATABASE_NAME", action="raise")
 
 # Password hashing configuration
 if getenv_or_action("PASSWORD_HASH_ALGORITHM", action="ignore"):
     PASSWORD_HASH_ALGORITHM = getenv_or_action("PASSWORD_HASH_ALGORITHM")
 if getenv_or_action("PASSWORD_HASH_NUMBER_OF_ITERATIONS", action="ignore"):
-    PASSWORD_HASH_NUMBER_OF_ITERATIONS = int(
-        getenv_or_action("PASSWORD_HASH_NUMBER_OF_ITERATIONS")
-    )
+    PASSWORD_HASH_NUMBER_OF_ITERATIONS = int(getenv_or_action("PASSWORD_HASH_NUMBER_OF_ITERATIONS"))
 
 # Timezone configuration
 if getenv_or_action("TIMEZONE", action="ignore"):
@@ -27,9 +29,7 @@ if not ALLOWED_ORIGINS and not ALLOWED_ORIGINS_REGEX:
     raise EnvironmentError("ALLOWED_ORIGINS or ALLOWED_ORIGINS_REGEX must be set.")
 ALLOWED_METHODS = getenv_list_or_action("ALLOWED_METHODS", action="raise")
 ALLOWED_HEADERS = getenv_list_or_action("ALLOWED_HEADERS", action="raise")
-ALLOW_CREDENTIALS = (
-    getenv_or_action("ALLOW_CREDENTIALS", action="raise").lower() == "true"
-)
+ALLOW_CREDENTIALS = getenv_or_action("ALLOW_CREDENTIALS", action="raise").lower() == "true"
 
 # Sentry
 SENTRY_ENABLE = getenv_or_action("SENTRY_ENABLE", action="ignore").lower() == "true"
