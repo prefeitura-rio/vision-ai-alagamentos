@@ -110,7 +110,7 @@ jobs:
         uses: docker/build-push-action@v2
         with:
           context: ./projects/api
-          file: ./Dockerfile
+          file: ./projects/api/Dockerfile
           push: true
           tags: |
             ${{ env.DOCKERHUB_USERNAME }}/${{ env.DOCKERHUB_REPOSITORY }}:${{ github.sha }}
