@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"encoding/base64"
@@ -15,29 +16,29 @@ import (
 func decrypt(key, nonce, tag, cipherText string) (string, error) {
 	nonceb64, err := base64.StdEncoding.DecodeString(nonce)
 	if err != nil {
-		return "", fmt.Errorf("Error decoding nonce: %w", err)
+		return "", fmt.Errorf("error decoding nonce: %w", err)
 	}
 	tagb64, err := base64.StdEncoding.DecodeString(tag)
 	if err != nil {
-		return "", fmt.Errorf("Error decoding tag: %w", err)
+		return "", fmt.Errorf("error decoding tag: %w", err)
 	}
 	cipherTextb64, err := base64.StdEncoding.DecodeString(cipherText)
 	if err != nil {
-		return "", fmt.Errorf("Error decoding cipher text: %w", err)
+		return "", fmt.Errorf("error decoding cipher text: %w", err)
 	}
 
 	block, err := aes.NewCipher([]byte(key))
 	if err != nil {
-		return "", fmt.Errorf("Error creating cipher block: %w", err)
+		return "", fmt.Errorf("error creating cipher block: %w", err)
 	}
 	aesgcm, err := cipher.NewGCMWithNonceSize(block, len(nonceb64))
 	if err != nil {
-		return "", fmt.Errorf("Error creating cipher: %w", err)
+		return "", fmt.Errorf("error creating cipher: %w", err)
 	}
 
 	plaintext, err := aesgcm.Open(nil, nonceb64, append(cipherTextb64, tagb64...), nil)
 	if err != nil {
-		return "", fmt.Errorf("Error decrypting cipher text: %w", err)
+		return "", fmt.Errorf("error decrypting cipher text: %w", err)
 	}
 
 	return string(plaintext), err
@@ -74,9 +75,9 @@ func getInfisicalSecrets(config infisicalConfig) (map[string]string, error) {
 	secretsRaw := SecretsRaw{}
 	secrets := map[string]string{}
 
-	err := httpGet(serviceTokenURL, token, &serviceToken)
+	err := httpGet(context.Background(), serviceTokenURL, token, &serviceToken)
 	if err != nil {
-		return secrets, fmt.Errorf("Error getting service token: %w", err)
+		return secrets, fmt.Errorf("error getting service token: %w", err)
 	}
 
 	projectKey, err := decrypt(
@@ -86,7 +87,7 @@ func getInfisicalSecrets(config infisicalConfig) (map[string]string, error) {
 		serviceToken.EncryptedKey,
 	)
 	if err != nil {
-		return secrets, fmt.Errorf("Error decrypting project key")
+		return secrets, fmt.Errorf("error decrypting project key")
 	}
 
 	secretURL := fmt.Sprintf(
@@ -95,9 +96,9 @@ func getInfisicalSecrets(config infisicalConfig) (map[string]string, error) {
 		config.environment,
 		serviceToken.WorkspaceID,
 	)
-	err = httpGet(secretURL, token, &secretsRaw)
+	err = httpGet(context.Background(), secretURL, token, &secretsRaw)
 	if err != nil {
-		return secrets, fmt.Errorf("Error getting secrets: %w", err)
+		return secrets, fmt.Errorf("error getting secrets: %w", err)
 	}
 
 	for _, secret := range secretsRaw.Secrets {
@@ -108,7 +109,7 @@ func getInfisicalSecrets(config infisicalConfig) (map[string]string, error) {
 			secret.SecretKeyCiphertext,
 		)
 		if err != nil {
-			return secrets, fmt.Errorf("Error getting key: %w", err)
+			return secrets, fmt.Errorf("error getting key: %w", err)
 		}
 
 		value, err := decrypt(
@@ -118,7 +119,7 @@ func getInfisicalSecrets(config infisicalConfig) (map[string]string, error) {
 			secret.SecretValueCiphertext,
 		)
 		if err != nil {
-			return secrets, fmt.Errorf("Error getting key: %w", err)
+			return secrets, fmt.Errorf("error getting key: %w", err)
 		}
 
 		secrets[key] = value
@@ -154,7 +155,7 @@ func getConfig() (config, error) {
 	match := (regex.FindStringSubmatch(os.Getenv("INFISICAL_TOKEN")))
 	secretIndex := regex.SubexpIndex("secret")
 	if secretIndex != 2 {
-		return config{}, fmt.Errorf("Invalid infisical token")
+		return config{}, fmt.Errorf("invalid infisical token")
 	}
 
 	infisicalConfig := infisicalConfig{
@@ -166,7 +167,7 @@ func getConfig() (config, error) {
 
 	secrets, err := getInfisicalSecrets(infisicalConfig)
 	if err != nil {
-		return config{}, fmt.Errorf("Error geting infisical secrets: %w", err)
+		return config{}, fmt.Errorf("error geting infisical secrets: %w", err)
 	}
 
 	secretsNames := []string{
@@ -193,7 +194,7 @@ func getConfig() (config, error) {
 
 	heartbeatSeconds, err := strconv.ParseInt(secrets["HEARTBEAT_SECONDS"], 10, 0)
 	if err != nil {
-		return config{}, fmt.Errorf("Error convert HEARTBEAT_SECONDS: %w", err)
+		return config{}, fmt.Errorf("error convert HEARTBEAT_SECONDS: %w", err)
 	}
 	if heartbeatSeconds <= 0 {
 		return config{}, fmt.Errorf("HEARTBEAT_SECONDS must be greater than zero")

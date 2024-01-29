@@ -52,92 +52,86 @@ type config struct {
 	heartbeat    time.Duration
 }
 
-func getAccessToken(credentials OIDCClientCredentials) (AccessToken, error) {
+func getAccessToken(ctx context.Context, credentials OIDCClientCredentials) (AccessToken, error) {
 	data := url.Values{
 		"grant_type": {"client_credentials"},
 		"client_id":  {credentials.ClientID},
 		"username":   {credentials.Username},
 		"password":   {credentials.Password},
+		"scope":      {"profile"},
 	}
 
 	body, err := httpPost(
+		ctx,
 		credentials.TokenURL,
 		AccessToken{},
 		"application/x-www-form-urlencoded",
 		strings.NewReader(data.Encode()),
 	)
 	if err != nil {
-		return AccessToken{}, fmt.Errorf("Error getting Access Token: %w", err)
+		return AccessToken{}, fmt.Errorf("error getting Access Token: %w", err)
 	}
 
 	accessToken := AccessToken{}
 	err = json.Unmarshal([]byte(body), &accessToken)
 	if err != nil {
-		return AccessToken{}, fmt.Errorf("Error parsing body: %w", err)
+		return AccessToken{}, fmt.Errorf("error parsing body: %w", err)
 	}
 
 	return accessToken, err
 }
 
-func getCameraSnapshot(url string) (string, error) {
-	webcam, err := gocv.OpenVideoCapture(url)
+func processSnapshot(
+	ctx context.Context,
+	rtspURL string,
+	snapshotURL string,
+	accessToken AccessToken,
+) error {
+	webcam, err := gocv.OpenVideoCapture(rtspURL)
 	if err != nil {
-		return "", fmt.Errorf("Error opening video capture device: %w", err)
+		return fmt.Errorf("error opening video capture device: %w", err)
 	}
 	defer webcam.Close()
 
-	img := gocv.NewMat()
-	defer img.Close()
+	mat := gocv.NewMat()
+	defer mat.Close()
 
-	ok := webcam.Read(&img)
+	ok := webcam.Read(&mat)
 	if !ok {
-		return "", fmt.Errorf("cannot read device %s", url)
+		return fmt.Errorf("cannot read device %s", rtspURL)
 	}
 
-	if img.Empty() {
-		return "", fmt.Errorf("no image on device %s", url)
+	if mat.Empty() {
+		return fmt.Errorf("no image on device %s", rtspURL)
 	}
 
-	return base64.StdEncoding.EncodeToString(img.ToBytes()), nil
-}
+	image, err := gocv.IMEncode(gocv.PNGFileExt, mat)
+	if err != nil {
+		return fmt.Errorf("error encoding image: %w", err)
+	}
 
-func sendSnapashot(cameraURL string, accessToken AccessToken, image string) error {
-	rawdata := struct {
+	rawBody := struct {
 		ImageBase64 string `json:"image_base64"`
 	}{
-		ImageBase64: image,
+		ImageBase64: base64.RawStdEncoding.EncodeToString(image.GetBytes()),
 	}
 
-	data, err := json.Marshal(rawdata)
+	body, err := json.Marshal(rawBody)
 	if err != nil {
-		return fmt.Errorf("Error creating JSON body: %w", err)
+		return fmt.Errorf("error encoding body: %w", err)
 	}
 
-	_, err = httpPost(cameraURL, accessToken, "application/json", bytes.NewReader(data))
+	_, err = httpPost(ctx, snapshotURL, accessToken, "application/json", bytes.NewReader(body))
 
 	return err
 }
 
-func processSnapshot(rtspURL string, snapshotURL string, accessToken AccessToken) error {
-	imageb64, err := getCameraSnapshot(rtspURL)
-	if err != nil {
-		return fmt.Errorf("Erro ao pegar captura: %s", err)
-	}
-
-	err = sendSnapashot(snapshotURL, accessToken, imageb64)
-	if err != nil {
-		return fmt.Errorf("Erro ao enviar captura: %s", err)
-	}
-
-	return nil
-}
-
-func logSnapshot(camera Camera, snapshotURL string, accessToken AccessToken) {
+func logSnapshot(ctx context.Context, camera Camera, snapshotURL string, accessToken AccessToken) {
 	initialTime := time.Now()
 
 	log.Printf("Realizando a captura da camera: %s\n", camera.ID)
 
-	err := processSnapshot(camera.RTSP_URL, snapshotURL, accessToken)
+	err := processSnapshot(ctx, camera.RTSP_URL, snapshotURL, accessToken)
 	if err != nil {
 		log.Printf("Erro ao realizar captura da camera '%s': %s\n", camera.ID, err)
 	} else {
@@ -162,22 +156,37 @@ func runCameraSnapshot(
 	defaultInterval := time.Second * time.Duration(camera.UpdateInterval)
 	ticker := time.NewTicker(defaultInterval)
 	snapshotURL := fmt.Sprintf("%s/%s/snapshot", cameraURL, camera.ID)
+	ctxSnaphot, cancelSnapshot := context.WithTimeout(ctx, defaultInterval/2)
+	wg := sync.WaitGroup{}
 
-	logSnapshot(camera, snapshotURL, accessToken)
+	wg.Add(1)
+	go func() {
+		logSnapshot(ctxSnaphot, camera, snapshotURL, accessToken)
+		wg.Done()
+	}()
 
 	for {
 		select {
 		case <-ctx.Done():
 			log.Printf("Finalizando a captura da camera: %s\n", camera.ID)
+			cancelSnapshot()
+			wg.Wait()
 			return
 
 		case <-ticker.C:
-			logSnapshot(camera, snapshotURL, accessToken)
+			cancelSnapshot()
+			wg.Wait()
+			ctxSnaphot, cancelSnapshot = context.WithTimeout(ctx, defaultInterval/2)
+			wg.Add(1)
+			go func() {
+				logSnapshot(ctxSnaphot, camera, snapshotURL, accessToken)
+				wg.Done()
+			}()
 		}
 	}
 }
 
-func getCameras(cameraURL string, accessToken AccessToken) ([]Camera, error) {
+func getCameras(ctx context.Context, cameraURL string, accessToken AccessToken) ([]Camera, error) {
 	type apiData struct {
 		Items []Camera `json:"items"`
 		Total int      `json:"total"`
@@ -187,9 +196,9 @@ func getCameras(cameraURL string, accessToken AccessToken) ([]Camera, error) {
 	}
 	data := apiData{}
 
-	err := httpGet(cameraURL, accessToken, &data)
+	err := httpGet(ctx, cameraURL, accessToken, &data)
 	if err != nil {
-		return []Camera{}, fmt.Errorf("Error getting cameras: %w", err)
+		return []Camera{}, fmt.Errorf("error getting cameras: %w", err)
 	}
 
 	return data.Items, err
@@ -201,15 +210,15 @@ func runCameras(
 	agentURL string,
 	cameraURL string,
 	credentials OIDCClientCredentials,
-) (time.Duration, error) {
-	accessToken, err := getAccessToken(credentials)
+) error {
+	accessToken, err := getAccessToken(ctx, credentials)
 	if err != nil {
-		return time.Second, fmt.Errorf("Error getting access token: %s\n", err)
+		return fmt.Errorf("error getting access token: %s\n", err)
 	}
 
-	cameras, err := getCameras(agentURL, accessToken)
+	cameras, err := getCameras(ctx, agentURL, accessToken)
 	if err != nil {
-		return time.Second, fmt.Errorf("Error getting cameras details: %w", err)
+		return fmt.Errorf("error getting cameras details: %w", err)
 	}
 
 	for _, camera := range cameras {
@@ -221,13 +230,18 @@ func runCameras(
 		}()
 	}
 
-	return time.Duration(accessToken.ExpiresIn/2) * time.Second, nil
+	return nil
 }
 
-func sendHeartbeat(heartbeatURL string, credentials OIDCClientCredentials, healthy bool) error {
-	accessToken, err := getAccessToken(credentials)
+func sendHeartbeat(
+	ctx context.Context,
+	heartbeatURL string,
+	credentials OIDCClientCredentials,
+	healthy bool,
+) error {
+	accessToken, err := getAccessToken(ctx, credentials)
 	if err != nil {
-		return fmt.Errorf("Error getting access token: %s\n", err)
+		return fmt.Errorf("error getting access token: %s\n", err)
 	}
 
 	rawdata := struct {
@@ -238,10 +252,10 @@ func sendHeartbeat(heartbeatURL string, credentials OIDCClientCredentials, healt
 
 	data, err := json.Marshal(rawdata)
 	if err != nil {
-		return fmt.Errorf("Error creating JSON body: %w", err)
+		return fmt.Errorf("error creating JSON body: %w", err)
 	}
 
-	_, err = httpPost(heartbeatURL, accessToken, "application/json", bytes.NewReader(data))
+	_, err = httpPost(ctx, heartbeatURL, accessToken, "application/json", bytes.NewReader(data))
 
 	return err
 }
@@ -263,34 +277,38 @@ func main() {
 	for {
 		ctxCameras, cancelCameras := context.WithCancel(context.Background())
 
-		expires, err := runCameras(
+		err := runCameras(
 			ctxCameras,
 			&wg,
 			config.agentURL,
 			config.cameraURL,
 			config.credentials,
 		)
-		ticker.Reset(min(expires, config.heartbeat))
 		if err != nil {
 			log.Printf("Erro ao rodar as cameras: %s\n", err)
 		}
 
-		err = sendHeartbeat(config.heartbeatURL, config.credentials, err == nil)
+		err = sendHeartbeat(
+			ctxCameras,
+			config.heartbeatURL,
+			config.credentials,
+			err == nil,
+		)
 		if err != nil {
 			log.Printf("Error sending heartbeat: %s\n", err)
 		}
 
 		select {
 		case <-osSignal:
-			cancelCameras()
 			log.Println("Esperando as capturas serem finalizadas")
+			cancelCameras()
 			wg.Wait()
 			log.Println("Capturas finalizadas com sucesso")
 
 			return
 		case <-ticker.C:
-			cancelCameras()
 			log.Println("Esperando as capturas serem finalizadas")
+			cancelCameras()
 			wg.Wait()
 		}
 	}
