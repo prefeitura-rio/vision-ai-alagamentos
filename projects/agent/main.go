@@ -81,15 +81,10 @@ func getAccessToken(ctx context.Context, credentials OIDCClientCredentials) (Acc
 	return accessToken, err
 }
 
-func processSnapshot(
-	ctx context.Context,
-	rtspURL string,
-	snapshotURL string,
-	accessToken AccessToken,
-) error {
+func getSnapshot(ctx context.Context, rtspURL string) ([]byte, error) {
 	webcam, err := gocv.OpenVideoCapture(rtspURL)
 	if err != nil {
-		return fmt.Errorf("error opening video capture device: %w", err)
+		return []byte{}, fmt.Errorf("error opening video capture device: %w", err)
 	}
 	defer webcam.Close()
 
@@ -98,22 +93,54 @@ func processSnapshot(
 
 	ok := webcam.Read(&mat)
 	if !ok {
-		return fmt.Errorf("cannot read device %s", rtspURL)
+		return []byte{}, fmt.Errorf("cannot read device %s", rtspURL)
 	}
 
 	if mat.Empty() {
-		return fmt.Errorf("no image on device %s", rtspURL)
+		return []byte{}, fmt.Errorf("no image on device %s", rtspURL)
 	}
 
 	image, err := gocv.IMEncode(gocv.PNGFileExt, mat)
 	if err != nil {
-		return fmt.Errorf("error encoding image: %w", err)
+		return []byte{}, fmt.Errorf("error encoding image: %w", err)
+	}
+
+	return image.GetBytes(), nil
+}
+
+func processSnapshot(
+	ctx context.Context,
+	rtspURL string,
+	snapshotURL string,
+	accessToken AccessToken,
+) error {
+	imagech := make(chan []byte)
+	errch := make(chan error)
+
+	var image []byte
+
+	go func() {
+		image, err := getSnapshot(ctx, rtspURL)
+		if err != nil {
+			errch <- err
+			return
+		}
+		imagech <- image
+	}()
+
+	select {
+	case <-ctx.Done():
+		return fmt.Errorf("timeout getting snapshot")
+	case recimage := <-imagech:
+		image = recimage
+	case err := <-errch:
+		return fmt.Errorf("error getting snapshot: %w", err)
 	}
 
 	rawBody := struct {
 		ImageBase64 string `json:"image_base64"`
 	}{
-		ImageBase64: base64.RawStdEncoding.EncodeToString(image.GetBytes()),
+		ImageBase64: base64.StdEncoding.EncodeToString(image),
 	}
 
 	body, err := json.Marshal(rawBody)
@@ -121,7 +148,13 @@ func processSnapshot(
 		return fmt.Errorf("error encoding body: %w", err)
 	}
 
-	_, err = httpPost(ctx, snapshotURL, accessToken, "application/json", bytes.NewReader(body))
+	_, err = httpPost(
+		context.Background(),
+		snapshotURL,
+		accessToken,
+		"application/json",
+		bytes.NewReader(body),
+	)
 
 	return err
 }
@@ -133,13 +166,13 @@ func logSnapshot(ctx context.Context, camera Camera, snapshotURL string, accessT
 
 	err := processSnapshot(ctx, camera.RTSP_URL, snapshotURL, accessToken)
 	if err != nil {
-		log.Printf("Erro ao realizar captura da camera '%s': %s\n", camera.ID, err)
+		log.Printf("Erro ao realizar captura da camera %s: %s\n", camera.ID, err)
 	} else {
-		log.Println("Captura realizada com sucesso")
+		log.Printf("Captura realizada com sucesso: %s", camera.ID)
 	}
 
 	log.Printf(
-		"Tempo de captura da camera '%s': %.2fs\n",
+		"Tempo de captura da camera %s: %.2fs\n",
 		camera.ID,
 		time.Since(initialTime).Seconds(),
 	)
@@ -156,7 +189,7 @@ func runCameraSnapshot(
 	defaultInterval := time.Second * time.Duration(camera.UpdateInterval)
 	ticker := time.NewTicker(defaultInterval)
 	snapshotURL := fmt.Sprintf("%s/%s/snapshot", cameraURL, camera.ID)
-	ctxSnaphot, cancelSnapshot := context.WithTimeout(ctx, defaultInterval/2)
+	ctxSnaphot, cancelSnapshot := context.WithTimeout(ctx, defaultInterval)
 	wg := sync.WaitGroup{}
 
 	wg.Add(1)
