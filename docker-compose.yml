@@ -32,6 +32,11 @@ services:
       api:
         condition: service_healthy
         restart: true
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 500m
   stream-server:
     image: bluenviron/mediamtx:latest
     ports: 

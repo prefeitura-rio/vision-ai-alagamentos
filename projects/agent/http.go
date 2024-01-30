@@ -1,15 +1,14 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 )
 
-func httpGet(ctx context.Context, url string, accessToken AccessToken, body any) error {
-	request, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+func httpGet(url string, accessToken AccessToken, body any) error {
+	request, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return fmt.Errorf("error creating request: %w", err)
 	}
@@ -41,13 +40,12 @@ func httpGet(ctx context.Context, url string, accessToken AccessToken, body any)
 }
 
 func httpPost(
-	ctx context.Context,
 	url string,
 	accessToken AccessToken,
 	contentType string,
 	requestBody io.Reader,
 ) (string, error) {
-	request, err := http.NewRequestWithContext(ctx, "POST", url, requestBody)
+	request, err := http.NewRequest("POST", url, requestBody)
 	if err != nil {
 		return "", fmt.Errorf("error creating request: %w", err)
 	}

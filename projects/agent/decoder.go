@@ -3,14 +3,9 @@ package main
 import (
 	"fmt"
 	"image"
-	"log"
 	"unsafe"
 
-	"github.com/bluenviron/gortsplib/v4"
-	"github.com/bluenviron/gortsplib/v4/pkg/description"
 	"github.com/bluenviron/gortsplib/v4/pkg/format"
-	"github.com/bluenviron/gortsplib/v4/pkg/format/rtph264"
-	"github.com/bluenviron/gortsplib/v4/pkg/format/rtph265"
 	"github.com/pion/rtp"
 )
 
@@ -19,6 +14,21 @@ import (
 // #include <libavutil/imgutils.h>
 // #include <libswscale/swscale.h>
 import "C"
+
+var errAllFrameEmpty error = fmt.Errorf("all frames is empty")
+
+type rtpDecoder interface {
+	Decode(*rtp.Packet) ([][]byte, error)
+}
+
+type frameDecoder interface {
+	decode([]byte) (image.Image, error)
+}
+
+type decoders struct {
+	rtp   map[string]rtpDecoder
+	frame map[string]frameDecoder
+}
 
 func frameData(frame *C.AVFrame) **C.uint8_t {
 	return (**C.uint8_t)(unsafe.Pointer(&frame.data[0]))
@@ -292,154 +302,33 @@ func (d *h265Decoder) decode(nalu []byte) (image.Image, error) {
 	}, nil
 }
 
-func addH264Decoder(
-	client *gortsplib.Client,
-	desc *description.Session,
-	imgch chan<- image.Image,
-) (*description.Media, error) {
-	var h264 *format.H264
-	media := desc.FindFormat(&h264)
-	if media == nil {
-		return nil, errMediaNotFound
+func decodeRTPPacket(forma format.Format, pkt *rtp.Packet, decs *decoders) (image.Image, error) {
+	rtp, ok := decs.rtp[forma.Codec()]
+	if !ok {
+		return image.Black, fmt.Errorf("RTP decoder not found: %s", forma.Codec())
+	}
+	frame, ok := decs.frame[forma.Codec()]
+	if !ok {
+		return image.Black, fmt.Errorf("Frame decoder not found: %s", forma.Codec())
 	}
 
-	rtpDecoder, err := h264.CreateDecoder()
+	au, err := rtp.Decode(pkt)
 	if err != nil {
-		return nil, fmt.Errorf("error creating decoder: %w", err)
+		return image.Black, err
 	}
 
-	frameDecoder := &h264Decoder{}
-	err = frameDecoder.initialize()
-	if err != nil {
-		return nil, fmt.Errorf("error initializing decoder: %w", err)
-	}
-
-	if h264.SPS != nil {
-		frameDecoder.decode(h264.SPS)
-	}
-	if h264.PPS != nil {
-		frameDecoder.decode(h264.PPS)
-	}
-
-	_, err = client.Setup(desc.BaseURL, media, 0, 0)
-	if err != nil {
-		return nil, fmt.Errorf("error setuping RTSP: %w", err)
-	}
-
-	client.OnPacketRTP(media, h264, func(pkt *rtp.Packet) {
-		defer func() {
-			if r := recover(); r != nil {
-				fmt.Printf("Recovered in %v", r)
-			}
-		}()
-		_, ok := client.PacketPTS(media, pkt)
-		if !ok {
-			return
-		}
-
-		au, err := rtpDecoder.Decode(pkt)
+	for _, nalu := range au {
+		img, err := frame.decode(nalu)
 		if err != nil {
-			if err != rtph264.ErrNonStartingPacketAndNoPrevious &&
-				err != rtph264.ErrMorePacketsNeeded {
-				log.Printf("error decoding packet: %s", err)
-			}
-			return
+			return image.Black, fmt.Errorf("error decoding frame: %w", err)
 		}
 
-		for _, nalu := range au {
-			img, err := frameDecoder.decode(nalu)
-			if err != nil {
-				log.Printf("error deconding frame: %s", err)
-				continue
-			}
-
-			if img == nil {
-				continue
-			}
-
-			imgch <- img
-
-			return
-		}
-	})
-
-	return media, nil
-}
-
-func addH265Decoder(
-	client *gortsplib.Client,
-	desc *description.Session,
-	imgch chan<- image.Image,
-) (*description.Media, error) {
-	var h265 *format.H265
-	media := desc.FindFormat(&h265)
-	if media == nil {
-		return nil, errMediaNotFound
-	}
-
-	rtpDecoder, err := h265.CreateDecoder()
-	if err != nil {
-		return nil, fmt.Errorf("error creating decoder: %w", err)
-	}
-
-	frameDecoder := &h265Decoder{}
-	err = frameDecoder.initialize()
-	if err != nil {
-		return nil, fmt.Errorf("error initializing decoder: %w", err)
-	}
-
-	if h265.VPS != nil {
-		frameDecoder.decode(h265.VPS)
-	}
-	if h265.SPS != nil {
-		frameDecoder.decode(h265.SPS)
-	}
-	if h265.PPS != nil {
-		frameDecoder.decode(h265.PPS)
-	}
-
-	_, err = client.Setup(desc.BaseURL, media, 0, 0)
-	if err != nil {
-		return nil, fmt.Errorf("error setuping RTSP: %w", err)
-	}
-
-	client.OnPacketRTP(media, h265, func(pkt *rtp.Packet) {
-		defer func() {
-			if r := recover(); r != nil {
-				fmt.Printf("Recovered in %v", r)
-			}
-		}()
-		_, ok := client.PacketPTS(media, pkt)
-		if !ok {
-			return
+		if img == nil {
+			continue
 		}
 
-		au, err := rtpDecoder.Decode(pkt)
-		if err != nil {
-			if err != rtph265.ErrNonStartingPacketAndNoPrevious &&
-				err != rtph265.ErrMorePacketsNeeded {
-				log.Printf("error decoding packet: %s", err)
-			}
-			return
-		}
+		return img, nil
+	}
 
-		for _, nalu := range au {
-			img, err := frameDecoder.decode(nalu)
-			if err != nil {
-				log.Printf("error deconding frame: %s", err)
-				continue
-			}
-
-			if img == nil {
-				continue
-			}
-
-			log.Println("wait channel")
-			imgch <- img
-
-			return
-		}
-	})
-
-	return media, nil
+	return image.Black, errAllFrameEmpty
 }

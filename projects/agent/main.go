@@ -5,9 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"image"
 	"image/png"
 	_ "image/png"
 	"log"
@@ -18,9 +16,6 @@ import (
 	"sync"
 	"syscall"
 	"time"
-
-	"github.com/bluenviron/gortsplib/v4"
-	"github.com/bluenviron/gortsplib/v4/pkg/base"
 )
 
 var errMediaNotFound error = fmt.Errorf("media not found")
@@ -38,12 +33,6 @@ type AccessToken struct {
 	ExpiresIn   int    `json:"expires_in"`
 }
 
-type Camera struct {
-	ID             string `json:"id"`
-	RTSP_URL       string `json:"rtsp_url"`
-	UpdateInterval int    `json:"update_interval"`
-}
-
 type infisicalConfig struct {
 	url         string
 	token       string
@@ -59,7 +48,7 @@ type config struct {
 	heartbeat    time.Duration
 }
 
-func getAccessToken(ctx context.Context, credentials OIDCClientCredentials) (AccessToken, error) {
+func getAccessToken(credentials OIDCClientCredentials) (AccessToken, error) {
 	data := url.Values{
 		"grant_type": {"client_credentials"},
 		"client_id":  {credentials.ClientID},
@@ -69,7 +58,6 @@ func getAccessToken(ctx context.Context, credentials OIDCClientCredentials) (Acc
 	}
 
 	body, err := httpPost(
-		ctx,
 		credentials.TokenURL,
 		AccessToken{},
 		"application/x-www-form-urlencoded",
@@ -88,186 +76,74 @@ func getAccessToken(ctx context.Context, credentials OIDCClientCredentials) (Acc
 	return accessToken, err
 }
 
-func getSnapshot(ctx context.Context, rtspURL string) ([]byte, error) {
-	client := gortsplib.Client{}
+func makeSnapshot(ctx context.Context, camera *Camera, accessToken AccessToken) {
+	initialTime := time.Now()
 
-	u, err := base.ParseURL(rtspURL)
-	if err != nil {
-		return []byte{}, fmt.Errorf("error parsing RTSP URL: %w", err)
-	}
-
-	err = client.Start(u.Scheme, u.Host)
-	if err != nil {
-		return []byte{}, fmt.Errorf("error connecting to se server: %w", err)
-	}
-	defer client.Close()
-
-	desc, _, err := client.Describe(u)
-	if err != nil {
-		return []byte{}, fmt.Errorf("error describing camera: %w", err)
-	}
-
-	imgch := make(chan image.Image)
-
-	h264, err := addH264Decoder(&client, desc, imgch)
-	if err != nil && !errors.Is(err, errMediaNotFound) {
-		return []byte{}, fmt.Errorf("error adding H264 decoder: %w", err)
-	}
-
-	h265, err := addH265Decoder(&client, desc, imgch)
-	if err != nil && !errors.Is(err, errMediaNotFound) {
-		return []byte{}, fmt.Errorf("error adding H265 decoder: %w", err)
-	}
-
-	if h264 == nil && h265 == nil {
-		return []byte{}, fmt.Errorf("media H264/H265 not found")
-	}
-
-	_, err = client.Play(nil)
-	if err != nil {
-		return nil, fmt.Errorf("error playing stream: %w", err)
-	}
-
-	select {
-	case <-ctx.Done():
-		return []byte{}, ctx.Err()
-	case img := <-imgch:
-		close(imgch)
-		client.Close()
-		buf := bytes.NewBuffer([]byte{})
-		err := png.Encode(buf, img)
-
-		return buf.Bytes(), err
-	}
-}
-
-func processSnapshot(
-	ctx context.Context,
-	rtspURL string,
-	snapshotURL string,
-	accessToken AccessToken,
-) error {
-	imagech := make(chan []byte)
-	errch := make(chan error)
-
-	var image []byte
-
-	go func() {
-		image, err := getSnapshot(ctx, rtspURL)
-		if err != nil {
-			errch <- err
-			return
-		}
-		imagech <- image
+	log.Printf("Realizando a captura da camera: %s", camera.id)
+	defer func() {
+		delta := time.Since(initialTime).Seconds()
+		log.Printf("Tempo de captura da camera %s: %.2fs", camera.id, delta)
 	}()
 
-	select {
-	case <-ctx.Done():
-		return fmt.Errorf("timeout getting snapshot")
-	case recimage := <-imagech:
-		image = recimage
-	case err := <-errch:
-		return fmt.Errorf("error getting snapshot: %w", err)
+	img, err := camera.getNextFrame(ctx)
+	if err != nil {
+		log.Printf("error getting frame: %s", err)
+		return
+	}
+
+	buf := bytes.NewBuffer([]byte{})
+	err = png.Encode(buf, img)
+	if err != nil {
+		log.Printf("error encoding image in png: %s", err)
+		return
 	}
 
 	rawBody := struct {
 		ImageBase64 string `json:"image_base64"`
 	}{
-		ImageBase64: base64.StdEncoding.EncodeToString(image),
+		ImageBase64: base64.StdEncoding.EncodeToString(buf.Bytes()),
 	}
 
 	body, err := json.Marshal(rawBody)
 	if err != nil {
-		return fmt.Errorf("error encoding body: %w", err)
+		log.Printf("error encoding body: %s", err)
+		return
 	}
 
-	_, err = httpPost(
-		context.Background(),
-		snapshotURL,
-		accessToken,
-		"application/json",
-		bytes.NewReader(body),
-	)
-
-	return err
-}
-
-func logSnapshot(ctx context.Context, camera Camera, snapshotURL string, accessToken AccessToken) {
-	initialTime := time.Now()
-
-	log.Printf("Realizando a captura da camera: %s\n", camera.ID)
-
-	err := processSnapshot(ctx, camera.RTSP_URL, snapshotURL, accessToken)
+	_, err = httpPost(camera.snapshotURL, accessToken, "application/json", bytes.NewReader(body))
 	if err != nil {
-		log.Printf("Erro ao realizar captura da camera %s: %s\n", camera.ID, err)
-	} else {
-		log.Printf("Captura realizada com sucesso: %s", camera.ID)
+		log.Printf("error seding snapshot: %s", err)
+		return
 	}
-
-	log.Printf(
-		"Tempo de captura da camera %s: %.2fs\n",
-		camera.ID,
-		time.Since(initialTime).Seconds(),
-	)
 }
 
-func runCameraSnapshot(
-	ctx context.Context,
-	cameraURL string,
-	camera Camera,
-	accessToken AccessToken,
-) {
-	log.Printf("Iniciando captura da camera: %s\n", camera.ID)
+func runSnapshot(ctx context.Context, camera *Camera, accessToken AccessToken) {
+	log.Printf("Iniciando captura da camera: %s", camera.id)
 
-	defaultInterval := time.Second * time.Duration(camera.UpdateInterval)
-	ticker := time.NewTicker(defaultInterval)
-	snapshotURL := fmt.Sprintf("%s/%s/snapshot", cameraURL, camera.ID)
-	ctxSnaphot, cancelSnapshot := context.WithTimeout(ctx, defaultInterval)
-	wg := sync.WaitGroup{}
+	ticker := time.NewTicker(camera.updateInterval)
+	ctxSnaphot, cancelSnapshot := context.WithTimeout(ctx, camera.updateInterval)
 
-	wg.Add(1)
-	go func() {
-		logSnapshot(ctxSnaphot, camera, snapshotURL, accessToken)
-		wg.Done()
-	}()
+	err := camera.start()
+	if err != nil {
+		log.Printf("error starting camera stream: %s", err)
+		return
+	}
+	defer camera.close()
+
+	makeSnapshot(ctxSnaphot, camera, accessToken)
 
 	for {
 		select {
 		case <-ctx.Done():
-			log.Printf("Finalizando a captura da camera: %s\n", camera.ID)
+			log.Printf("Finalizando a captura da camera: %s", camera.id)
 			cancelSnapshot()
-			wg.Wait()
 			return
 
 		case <-ticker.C:
-			cancelSnapshot()
-			wg.Wait()
-			ctxSnaphot, cancelSnapshot = context.WithTimeout(ctx, defaultInterval/2)
-			wg.Add(1)
-			go func() {
-				logSnapshot(ctxSnaphot, camera, snapshotURL, accessToken)
-				wg.Done()
-			}()
+			ctxSnaphot, cancelSnapshot = context.WithTimeout(ctx, camera.updateInterval)
+			makeSnapshot(ctxSnaphot, camera, accessToken)
 		}
 	}
-}
-
-func getCameras(ctx context.Context, cameraURL string, accessToken AccessToken) ([]Camera, error) {
-	type apiData struct {
-		Items []Camera `json:"items"`
-		Total int      `json:"total"`
-		Page  int      `json:"page"`
-		Size  int      `json:"size"`
-		Pages int      `json:"pages"`
-	}
-	data := apiData{}
-
-	err := httpGet(ctx, cameraURL, accessToken, &data)
-	if err != nil {
-		return []Camera{}, fmt.Errorf("error getting cameras: %w", err)
-	}
-
-	return data.Items, err
 }
 
 func runCameras(
@@ -277,21 +153,41 @@ func runCameras(
 	cameraURL string,
 	credentials OIDCClientCredentials,
 ) error {
-	accessToken, err := getAccessToken(ctx, credentials)
+	type apiData struct {
+		Items []CameraAPI `json:"items"`
+		Total int         `json:"total"`
+		Page  int         `json:"page"`
+		Size  int         `json:"size"`
+		Pages int         `json:"pages"`
+	}
+	data := apiData{}
+
+	accessToken, err := getAccessToken(credentials)
 	if err != nil {
 		return fmt.Errorf("error getting access token: %s\n", err)
 	}
 
-	cameras, err := getCameras(ctx, agentURL, accessToken)
+	err = httpGet(agentURL, accessToken, &data)
 	if err != nil {
-		return fmt.Errorf("error getting cameras details: %w", err)
+		return fmt.Errorf("error getting cameras: %w", err)
+	}
+
+	cameras := make([]*Camera, 0, len(data.Items))
+
+	for _, cameraAPI := range data.Items {
+		camera, err := NewCamera(cameraAPI, cameraURL)
+		if err != nil {
+			return fmt.Errorf("error creating new camera from API: %w", err)
+		}
+		cameras = append(cameras, camera)
+
 	}
 
 	for _, camera := range cameras {
 		camera := camera
 		wg.Add(1)
 		go func() {
-			runCameraSnapshot(ctx, cameraURL, camera, accessToken)
+			runSnapshot(ctx, camera, accessToken)
 			wg.Done()
 		}()
 	}
@@ -299,13 +195,8 @@ func runCameras(
 	return nil
 }
 
-func sendHeartbeat(
-	ctx context.Context,
-	heartbeatURL string,
-	credentials OIDCClientCredentials,
-	healthy bool,
-) error {
-	accessToken, err := getAccessToken(ctx, credentials)
+func sendHeartbeat(heartbeatURL string, credentials OIDCClientCredentials, healthy bool) error {
+	accessToken, err := getAccessToken(credentials)
 	if err != nil {
 		return fmt.Errorf("error getting access token: %s\n", err)
 	}
@@ -321,7 +212,7 @@ func sendHeartbeat(
 		return fmt.Errorf("error creating JSON body: %w", err)
 	}
 
-	_, err = httpPost(ctx, heartbeatURL, accessToken, "application/json", bytes.NewReader(data))
+	_, err = httpPost(heartbeatURL, accessToken, "application/json", bytes.NewReader(data))
 
 	return err
 }
@@ -329,7 +220,7 @@ func sendHeartbeat(
 func main() {
 	config, err := getConfig()
 	if err != nil {
-		log.Printf("%s", fmt.Errorf("error getting config: %w", err))
+		log.Printf("error getting config: %s", err)
 		return
 	}
 
@@ -343,25 +234,14 @@ func main() {
 	for {
 		ctxCameras, cancelCameras := context.WithCancel(context.Background())
 
-		err := runCameras(
-			ctxCameras,
-			&wg,
-			config.agentURL,
-			config.cameraURL,
-			config.credentials,
-		)
+		err := runCameras(ctxCameras, &wg, config.agentURL, config.cameraURL, config.credentials)
 		if err != nil {
-			log.Printf("Erro ao rodar as cameras: %s\n", err)
+			log.Printf("Erro ao rodar as cameras: %s", err)
 		}
 
-		err = sendHeartbeat(
-			ctxCameras,
-			config.heartbeatURL,
-			config.credentials,
-			err == nil,
-		)
+		err = sendHeartbeat(config.heartbeatURL, config.credentials, err == nil)
 		if err != nil {
-			log.Printf("Error sending heartbeat: %s\n", err)
+			log.Printf("Error sending heartbeat: %s", err)
 		}
 
 		select {
