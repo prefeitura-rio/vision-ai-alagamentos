@@ -18,4 +18,6 @@ else
   echo "Vídeo de teste já existe"
 fi
 
-ffmpeg -re -stream_loop -1 -i ${DATA_PATH}/video-1.mp4 -vcodec h264 -f rtsp rtsp://${STREAM_SERVER}:8554/video-1
+ffmpeg -re -stream_loop -1 -i ${DATA_PATH}/video-1.mp4 -vcodec libx264 -f rtsp rtsp://${STREAM_SERVER}:8554/video-1&
+ffmpeg -re -stream_loop -1 -i ${DATA_PATH}/video-1.mp4 -vcodec libx265 -f rtsp rtsp://${STREAM_SERVER}:8554/video-2&
+wait
