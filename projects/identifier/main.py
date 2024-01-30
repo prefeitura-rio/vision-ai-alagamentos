@@ -206,4 +206,4 @@ def predict(cloud_event: dict) -> None:
     )
 
     # Prints the response from updating camera object details
-    print(put_response)
+    print(f"camera_id:{camera_id}\nput_response: {put_response}")
