@@ -14,9 +14,12 @@ services:
     restart: unless-stopped
     env_file: .env
     ports:
-      - 8080:8080
+      - 8080:80
     depends_on:
       - postgres
+    healthcheck:
+      test: curl -f http://localhost:80/docs
+      interval: 5s
   agent:
     build:
       context: ./projects/agent
@@ -26,7 +29,9 @@ services:
     environment:
       DATABASE_URL: teste
     depends_on:
-      - api
+      api:
+        condition: service_healthy
+        restart: true
   stream-server:
     image: bluenviron/mediamtx:latest
     ports: 

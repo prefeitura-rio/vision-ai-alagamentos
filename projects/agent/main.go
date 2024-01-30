@@ -5,7 +5,11 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"image"
+	"image/png"
+	_ "image/png"
 	"log"
 	"net/url"
 	"os"
@@ -15,8 +19,11 @@ import (
 	"syscall"
 	"time"
 
-	"gocv.io/x/gocv"
+	"github.com/bluenviron/gortsplib/v4"
+	"github.com/bluenviron/gortsplib/v4/pkg/base"
 )
+
+var errMediaNotFound error = fmt.Errorf("media not found")
 
 type OIDCClientCredentials struct {
 	TokenURL string
@@ -82,30 +89,56 @@ func getAccessToken(ctx context.Context, credentials OIDCClientCredentials) (Acc
 }
 
 func getSnapshot(ctx context.Context, rtspURL string) ([]byte, error) {
-	webcam, err := gocv.OpenVideoCapture(rtspURL)
+	client := gortsplib.Client{}
+
+	u, err := base.ParseURL(rtspURL)
 	if err != nil {
-		return []byte{}, fmt.Errorf("error opening video capture device: %w", err)
-	}
-	defer webcam.Close()
-
-	mat := gocv.NewMat()
-	defer mat.Close()
-
-	ok := webcam.Read(&mat)
-	if !ok {
-		return []byte{}, fmt.Errorf("cannot read device %s", rtspURL)
+		return []byte{}, fmt.Errorf("error parsing RTSP URL: %w", err)
 	}
 
-	if mat.Empty() {
-		return []byte{}, fmt.Errorf("no image on device %s", rtspURL)
-	}
-
-	image, err := gocv.IMEncode(gocv.PNGFileExt, mat)
+	err = client.Start(u.Scheme, u.Host)
 	if err != nil {
-		return []byte{}, fmt.Errorf("error encoding image: %w", err)
+		return []byte{}, fmt.Errorf("error connecting to se server: %w", err)
+	}
+	defer client.Close()
+
+	desc, _, err := client.Describe(u)
+	if err != nil {
+		return []byte{}, fmt.Errorf("error describing camera: %w", err)
 	}
 
-	return image.GetBytes(), nil
+	imgch := make(chan image.Image)
+
+	h264, err := addH264Decoder(&client, desc, imgch)
+	if err != nil && !errors.Is(err, errMediaNotFound) {
+		return []byte{}, fmt.Errorf("error adding H264 decoder: %w", err)
+	}
+
+	h265, err := addH265Decoder(&client, desc, imgch)
+	if err != nil && !errors.Is(err, errMediaNotFound) {
+		return []byte{}, fmt.Errorf("error adding H265 decoder: %w", err)
+	}
+
+	if h264 == nil && h265 == nil {
+		return []byte{}, fmt.Errorf("media H264/H265 not found")
+	}
+
+	_, err = client.Play(nil)
+	if err != nil {
+		return nil, fmt.Errorf("error playing stream: %w", err)
+	}
+
+	select {
+	case <-ctx.Done():
+		return []byte{}, ctx.Err()
+	case img := <-imgch:
+		close(imgch)
+		client.Close()
+		buf := bytes.NewBuffer([]byte{})
+		err := png.Encode(buf, img)
+
+		return buf.Bytes(), err
+	}
 }
 
 func processSnapshot(

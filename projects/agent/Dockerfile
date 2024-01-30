@@ -1,11 +1,21 @@
-FROM ghcr.io/hybridgroup/opencv:4.8.1 as build
-
+FROM golang:1.21-bookworm AS builder
 WORKDIR /usr/src/app
+
+RUN apt update
+RUN apt install -y libavcodec-dev libavutil-dev libswscale-dev
 
 COPY go.mod go.sum ./
 RUN go mod download && go mod verify
 
-COPY *.go .
-RUN go build -v -o /usr/local/bin/app ./...
+COPY *.go ./
+RUN go build -o /usr/src/app/bin .
 
-ENTRYPOINT ["/usr/local/bin/app"]
+FROM debian:12
+WORKDIR /usr/src/app
+
+RUN apt update
+RUN apt install -y libswscale6 libavcodec59 libavutil57 ca-certificates
+
+COPY --from=builder /usr/src/app/bin /usr/src/app/bin
+
+ENTRYPOINT ["/usr/src/app/bin"]
