@@ -41,7 +41,16 @@ resource "google_compute_instance" "stream-server" {
     subnetwork = var.subnetwork
   }
   metadata_startup_script = <<SCRIPT
-  ${file("${path.module}/scripts/install-docker-ubuntu.sh")}
+  mkdir -p /scripts
+
+  echo '${file("${path.module}/scripts/install-docker-ubuntu.sh")}' > /scripts/install-docker.sh || exit 1
+  echo '${file("${path.module}/scripts/start-docker-compose.sh")}' > /scripts/start-docker-compose.sh || exit 1
+  echo '${file("${path.module}/docker/stream-server.docker-compose.yaml")}' > /home/ubuntu/docker-compose.yaml || exit 1
+
+  chmod +x /scripts/install-docker.sh /scripts/start-docker-compose.sh || exit 1
+
+  /scripts/install-docker.sh || exit 1
+  /scripts/start-docker-compose.sh || exit 1
   SCRIPT
 }
 

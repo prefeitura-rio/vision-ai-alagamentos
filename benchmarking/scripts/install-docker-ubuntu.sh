@@ -16,3 +16,6 @@ sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plug
 
 sudo systemctl enable docker.service || exit 1
 sudo systemctl enable containerd.service || exit 1
+
+sudo groupadd docker
+sudo usermod -aG docker ubuntu || exit 1
