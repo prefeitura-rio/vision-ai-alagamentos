@@ -102,7 +102,7 @@ jobs:
       - name: Copy libs to API directory
         run: |
           mkdir -p projects/api/libs
-          cp -r projects/libs/* projects/api/libs/
+          cp -r libs/* projects/api/libs/
 
       - name: Docker Auth
         id: docker-auth
