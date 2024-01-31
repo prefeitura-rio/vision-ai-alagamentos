@@ -99,8 +99,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Copy libs to API directory
+      - name: Remove soft link and copy libs to API directory
         run: |
+          rm -rf projects/api/libs
           mkdir -p projects/api/libs
           cp -r libs/* projects/api/libs/
 
