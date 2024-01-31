@@ -9,6 +9,7 @@ COPY poetry.lock pyproject.toml ./
 RUN poetry install --no-dev --no-interaction --no-ansi
 
 COPY ./app /code/app
+COPY ./libs /code/libs
 COPY ./migrations /code/migrations
 COPY ./compose-entrypoint.sh /code
 
