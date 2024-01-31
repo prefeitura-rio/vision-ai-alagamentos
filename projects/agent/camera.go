@@ -48,7 +48,9 @@ func NewCamera(api CameraAPI, cameraBaseURL string) (*Camera, error) {
 		getURL:         u,
 		snapshotURL:    fmt.Sprintf("%s/%s/snapshot", cameraBaseURL, api.ID),
 		updateInterval: time.Duration(api.UpdateInterval) * time.Second,
-		client:         &gortsplib.Client{},
+		client: &gortsplib.Client{
+			ReadTimeout: time.Duration(api.UpdateInterval) * time.Second / 2,
+		},
 	}, nil
 }
 
@@ -150,6 +152,12 @@ func (camera *Camera) setDecoders() error {
 	return nil
 }
 
+func (camera *Camera) closeDecoders() {
+	for _, decoder := range camera.decoders.frame {
+		decoder.close()
+	}
+}
+
 func (camera *Camera) start() error {
 	err := camera.client.Start(camera.getURL.Scheme, camera.getURL.Host)
 	if err != nil {
@@ -165,10 +173,11 @@ func (camera *Camera) start() error {
 }
 
 func (camera *Camera) close() {
+	camera.closeDecoders()
 	camera.client.Close()
 }
 
-func (camera *Camera) getNextFrame(ctx context.Context) (image.Image, error) {
+func (camera *Camera) getNextFrame(ctx context.Context) (image.Image, bool, error) {
 	imgch := make(chan image.Image)
 
 	camera.client.OnPacketRTPAny(func(m *description.Media, f format.Format, pkt *rtp.Packet) {
@@ -193,10 +202,20 @@ func (camera *Camera) getNextFrame(ctx context.Context) (image.Image, error) {
 			errAllFrameEmpty,
 		}
 
+		validErrsMessags := []string{
+			"invalid fragmentation unit (non-starting)",
+		}
+
 		img, err := decodeRTPPacket(f, pkt, camera.decoders)
 		if err != nil {
 			for _, validErr := range validErrs {
 				if errors.Is(err, validErr) {
+					return
+				}
+			}
+
+			for _, validMessage := range validErrsMessags {
+				if strings.Contains(err.Error(), validMessage) {
 					return
 				}
 			}
@@ -209,23 +228,25 @@ func (camera *Camera) getNextFrame(ctx context.Context) (image.Image, error) {
 
 	_, err := camera.client.Play(nil)
 	if err != nil {
-		return image.Black, fmt.Errorf("error playing stream: %w", err)
-	}
-	pause := func() {
-		camera.client.OnPacketRTPAny(func(m *description.Media, f format.Format, p *rtp.Packet) {})
-		_, err := camera.client.Pause()
-		if err != nil {
-			log.Printf("error pausing client: %s", err)
-		}
+		return nil, false, fmt.Errorf("error playing stream: %w", err)
 	}
 
 	select {
 	case <-ctx.Done():
-		pause()
-		return image.Black, ctx.Err()
-	case img := <-imgch:
+		camera.client.OnPacketRTPAny(func(m *description.Media, f format.Format, p *rtp.Packet) {})
 		close(imgch)
-		pause()
-		return img, nil
+		_, err := camera.client.Pause()
+		if err != nil {
+			return nil, false, fmt.Errorf("multiples errs: %w", errors.Join(ctx.Err(), err))
+		}
+		return nil, false, ctx.Err()
+	case img := <-imgch:
+		camera.client.OnPacketRTPAny(func(m *description.Media, f format.Format, p *rtp.Packet) {})
+		close(imgch)
+		_, err := camera.client.Pause()
+		if err != nil {
+			return img, true, fmt.Errorf("error pausing client: %s", err)
+		}
+		return img, true, nil
 	}
 }

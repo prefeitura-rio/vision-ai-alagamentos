@@ -2,13 +2,15 @@
 from datetime import datetime
 from functools import partial
 from typing import Annotated, List
-from uuid import UUID
+from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi_pagination import Page
 from fastapi_pagination.ext.tortoise import paginate as tortoise_paginate
+from nest_asyncio import os
 from tortoise.fields import ReverseRelation
 
+from app import config
 from app.dependencies import get_caller, is_admin
 from app.models import Agent, Camera, CameraIdentification, Object
 from app.pydantic_models import (
@@ -22,8 +24,9 @@ from app.pydantic_models import (
 from app.utils import (
     apply_to_list,
     download_camera_snapshot_from_bucket,
+    generate_blob_path,
     transform_tortoise_to_pydantic,
-    upload_camera_snapshot_to_bucket,
+    upload_file_to_bucket,
 )
 
 router = APIRouter(prefix="/cameras", tags=["Cameras"])
@@ -255,7 +258,7 @@ async def get_camera_snapshot(
 @router.post("/{camera_id}/snapshot", response_model=SnapshotPostResponse)
 async def camera_snapshot(
     camera_id: str,
-    snapshot: Snapshot,
+    file: Annotated[UploadFile, File(media_type="image/png")],
     caller: Annotated[APICaller, Depends(get_caller)],
 ) -> SnapshotPostResponse:
     """Post a camera snapshot to the server."""
@@ -277,7 +280,19 @@ async def camera_snapshot(
             detail="Not allowed to post snapshots for this camera.",
         )
     camera = await Camera.get(id=camera_id)
-    upload_camera_snapshot_to_bucket(  # TODO: Modify upload for no-base64
-        image_base64=snapshot.image_base64, camera_id=camera.id
+    tmp_fname = f"/tmp/{uuid4()}.png"
+    blob_path = generate_blob_path(camera.id)
+
+    with open(tmp_fname, "wb") as f:
+        while contents := file.file.read(1024 * 1024):
+            f.write(contents)
+
+    upload_file_to_bucket(
+        bucket_name=config.GCS_BUCKET_NAME,
+        file_path=tmp_fname,
+        destination_blob_name=blob_path,
     )
+
+    os.remove(tmp_fname)
+
     return SnapshotPostResponse(error=False, message="OK")
