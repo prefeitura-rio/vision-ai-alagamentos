@@ -50,6 +50,7 @@ async def test_prompts_create(
         headers=authorization_header,
         json={
             "name": "Test Prompt",
+            "model": "dalle-mini",
             "prompt_text": "Test Prompt Text",
             "max_output_token": 32,
             "temperature": 0.5,
@@ -60,6 +61,7 @@ async def test_prompts_create(
     assert response.status_code == 200
     assert "id" in response.json()
     assert "name" in response.json()
+    assert "model" in response.json()
     assert "prompt_text" in response.json()
     assert "max_output_token" in response.json()
     assert "temperature" in response.json()
@@ -68,6 +70,7 @@ async def test_prompts_create(
     assert "objects" in response.json()
     assert isinstance(response.json()["id"], str)
     assert isinstance(response.json()["name"], str)
+    assert isinstance(response.json()["model"], str)
     assert isinstance(response.json()["prompt_text"], str)
     assert isinstance(response.json()["max_output_token"], int)
     assert isinstance(response.json()["temperature"], float)
@@ -77,6 +80,7 @@ async def test_prompts_create(
     for obj in response.json()["objects"]:
         assert isinstance(obj, str)
     assert response.json()["name"] == "Test Prompt"
+    assert response.json()["model"] == "dalle-mini"
     assert response.json()["prompt_text"] == "Test Prompt Text"
     assert response.json()["max_output_token"] == 32
     assert response.json()["temperature"] == 0.5
@@ -130,6 +134,7 @@ async def test_prompts_update(
         headers=authorization_header,
         json={
             "name": "Test Prompt Updated",
+            "model": "dalle-mini",
             "prompt_text": "Test Prompt Text Updated",
             "max_output_token": 64,
             "temperature": 0.75,

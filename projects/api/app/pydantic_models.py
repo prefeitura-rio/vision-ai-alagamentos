@@ -92,6 +92,7 @@ class ObjectOut(BaseModel):
 
 class PromptIn(BaseModel):
     name: str
+    model: str
     prompt_text: str
     max_output_token: int
     temperature: float
@@ -102,6 +103,7 @@ class PromptIn(BaseModel):
 class PromptOut(BaseModel):
     id: UUID
     name: str
+    model: str
     prompt_text: str
     max_output_token: int
     temperature: float

@@ -9,14 +9,16 @@ from typing import Any, Callable, List, Tuple, Union
 from uuid import uuid4
 
 import nest_asyncio
+from app import config
+from app.models import Label, Object, Prompt
+from fastapi import HTTPException, status
 from google.cloud import storage
 from google.cloud.storage.blob import Blob
 from google.oauth2 import service_account
 from PIL import Image
 from pydantic import BaseModel
 from tortoise.models import Model
-
-from app import config
+from vision_ai.base.shared_models import Output, OutputFactory
 
 
 def _to_task(future, as_task, loop):
@@ -152,6 +154,119 @@ def get_gcs_client() -> storage.Client:
     """
     credentials = get_gcp_credentials()
     return storage.Client(credentials=credentials)
+
+
+async def get_objects_table(objects: List[Object]) -> str:
+    """
+    Fetches all `Label` objects for the provided `objects` and return
+    a markdown table with the following format:
+
+    | object | criteria | identification_guide | label |
+    | ------ | -------- | -------------------- | ----- |
+    | ...    | ...      | ...                  | ...   |
+
+    Args:
+        objects (List[Object]): The objects to fetch.
+
+    Returns:
+        str: The markdown table.
+    """
+    # Fetch all labels for the objects
+    labels = set()
+    for object_ in objects:
+        labels.update(await Label.filter(object__id=object_.id).all())
+
+    # Create the header
+    header = "| object | criteria | identification_guide | label |\n"
+    header += "| ------ | -------- | -------------------- | ----- |\n"
+
+    # Create the rows
+    rows = ""
+    for label in labels:
+        rows += f"| {(await label.object).slug} | {label.criteria} | {label.identification_guide} | {label.value} |\n"  # noqa
+
+    # Return the table
+    return header + rows
+
+
+def get_output_schema_and_sample() -> Tuple[str, str]:
+    """
+    Gets the output schema and sample for the vision AI model.
+
+    Returns:
+        Tuple[str, str]: The output schema and sample.
+    """
+    output_schema = Output.schema_json(indent=4)
+    output_sample = json.dumps(OutputFactory.generate_sample().dict(), indent=4)
+    return output_schema, output_sample
+
+
+async def get_prompt_formatted_text(prompt: Prompt, object_slugs: List[str]) -> str:
+    """
+    Gets the full text of a prompt.
+
+    Args:
+        prompt (Prompt): The prompt.
+
+    Returns:
+        str: The full text of the prompt.
+    """
+    # Filter object slugs that are in the prompt objects
+    object_slugs = [
+        slug
+        for slug in object_slugs
+        if slug in [object_.slug for object_ in await prompt.objects.all()]
+    ]
+    objects = await Object.filter(slug__in=object_slugs).all()
+    objects_table_md = await get_objects_table(objects)
+    output_schema, output_example = get_output_schema_and_sample()
+    template = prompt.prompt_text
+    template = template.format(
+        objects_table_md=objects_table_md,
+        output_schema=output_schema,
+        output_example=output_example,
+    )
+    return template
+
+
+async def get_prompts_best_fit(object_slugs: List[str]) -> List[Prompt]:
+    """
+    Gets the best fit prompts for a list of objects.
+
+    Args:
+        object_slugs (List[str]): The slugs for the objects.
+
+    Returns:
+        List[Prompt]: The best fit prompts.
+    """
+    prompts: List[Prompt] = []
+    objects: List[Object] = []
+    for object_slug in object_slugs:
+        object_ = await Object.get_or_none(slug=object_slug)
+        if object_ is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Object not found")
+        objects.append(object_)
+        prompts += list(await Prompt.filter(objects__id=object_.id).all())
+    # Rank prompts by number of objects in common
+    prompt_scores = {}
+    for prompt in prompts:
+        for object_ in objects:
+            if object_ in await prompt.objects.all():
+                prompt_scores[prompt.id] = prompt_scores.get(prompt.id, 0) + 1
+    # Sort prompts by score
+    prompt_scores = sorted(prompt_scores.items(), key=lambda x: x[1], reverse=True)
+    # Start a final list of prompts
+    final_prompts: List[Prompt] = []
+    covered_objects: List[Object] = []
+    # For each prompt, add it to the final list if its objects are not already covered
+    for prompt_id, _ in prompt_scores:
+        prompt = await Prompt.get_or_none(id=prompt_id)
+        if prompt is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prompt not found")
+        if not set(await prompt.objects.all()).intersection(set(covered_objects)):
+            final_prompts.append(prompt)
+            covered_objects += list(await prompt.objects.all())
+    return final_prompts
 
 
 def slugify(text: str) -> str:

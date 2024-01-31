@@ -14,5 +14,21 @@ class Object(BaseModel):
     )
 
 
+class ObjectFactory:
+    @classmethod
+    def generate_sample(cls) -> Object:
+        return Object(
+            object="<Object from objects table>",
+            label_explanation="<Visual description of the image given the object context>",
+            label="<Selected label from objects table>",
+        )
+
+
 class Output(BaseModel):
     objects: List[Object]
+
+
+class OutputFactory:
+    @classmethod
+    def generate_sample(cls) -> Output:
+        return Output(objects=[ObjectFactory.generate_sample()])

@@ -46,10 +46,11 @@ class Object(Model):
     slug = fields.CharField(max_length=255, unique=True)
 
 
-class Prompt(Model):
+class Prompt(Model):  # TODO: Add platform (GCP, OpenAI, etc.)
     id = fields.UUIDField(pk=True)
     name = fields.CharField(max_length=255, unique=True)
     objects = fields.ManyToManyField("app.Object", related_name="prompts")
+    model = fields.CharField(max_length=255)
     prompt_text = fields.TextField()
     max_output_token = fields.IntField()
     temperature = fields.FloatField()

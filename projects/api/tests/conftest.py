@@ -3,13 +3,12 @@ import asyncio
 from os import getenv
 
 import pytest
-from httpx import AsyncClient
-from loguru import logger
-from tortoise import Tortoise
-
 from app.db import TORTOISE_ORM
 from app.main import app
 from app.models import Agent, Camera, CameraIdentification, Label, Object, Prompt
+from httpx import AsyncClient
+from loguru import logger
+from tortoise import Tortoise
 
 
 @pytest.fixture(scope="session")
@@ -140,6 +139,7 @@ async def initialize_tests():
     prompt_data = [
         {
             "name": "Prompt 1",
+            "model": "dalle-mini",
             "prompt_text": "Prompt 1 text",
             "max_output_token": 100,
             "temperature": 0.5,
@@ -148,6 +148,7 @@ async def initialize_tests():
         },
         {
             "name": "Prompt 2",
+            "model": "dalle-mini",
             "prompt_text": "Prompt 2 text",
             "max_output_token": 100,
             "temperature": 0.5,
@@ -156,7 +157,8 @@ async def initialize_tests():
         },
         {
             "name": "Prompt 3",
-            "prompt_text": "Prompt 3 text",
+            "model": "dalle-mini",
+            "prompt_text": "Prompt 3 text \n {objects_table_md} \n\n\n {output_schema} \n\n\n {output_example}",  # noqa
             "max_output_token": 100,
             "temperature": 0.5,
             "top_k": 0,
