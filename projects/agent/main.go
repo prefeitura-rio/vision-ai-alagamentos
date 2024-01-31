@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"image"
 	"image/png"
 	"log"
 	"net/http"
@@ -79,6 +80,27 @@ func getAccessToken(credentials OIDCClientCredentials) (AccessToken, error) {
 	return accessToken, err
 }
 
+func saveImage(filename string, img image.Image) error {
+	file, err := os.Create(filename)
+	if err != nil {
+		return fmt.Errorf("error creating temp file: %w", err)
+	}
+
+	err = png.Encode(file, img)
+	if err != nil {
+		file.Close()
+
+		return fmt.Errorf("error encoding image to png: %w", err)
+	}
+
+	err = file.Close()
+	if err != nil && !errors.Is(err, os.ErrClosed) {
+		return fmt.Errorf("error closing temp file: %w", err)
+	}
+
+	return nil
+}
+
 func makeSnapshot(
 	ctx context.Context,
 	cameraAPI CameraAPI,
@@ -115,32 +137,29 @@ func makeSnapshot(
 	}
 
 	filename := fmt.Sprintf("/tmp/%s.png", uuid.NewString())
-	file, err := os.Create(filename)
-	if err != nil {
-		log.Printf("error creating temp file: %s", err)
-		return
-	}
-	defer func() {
-		err := file.Close()
-		if err != nil && !errors.Is(err, os.ErrClosed) {
-			log.Printf("error closing temp file: %s", err)
-		}
 
+	defer func() {
 		err = os.Remove(filename)
-		if err != nil {
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
 			log.Printf("error removing temp file: %s", err)
 		}
 	}()
 
-	err = png.Encode(file, img)
+	err = saveImage(filename, img)
 	if err != nil {
-		log.Printf("error encoding image to png: %s", err)
+		log.Printf("error saving image: %s", err)
 		return
 	}
 
-	_, err = httpPost(camera.snapshotURL, accessToken, "image/png", file)
+	contentType, body, err := bodyFile(filename)
 	if err != nil {
-		log.Printf("error seding snapshot: %s", err)
+		log.Printf("error creating body: %s", err)
+		return
+	}
+
+	_, err = httpPost(camera.snapshotURL, accessToken, contentType, body)
+	if err != nil {
+		log.Printf("error sending snapshot: %s", err)
 		return
 	}
 

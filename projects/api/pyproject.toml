@@ -25,6 +25,7 @@ python-jose = { extras = ["cryptography"], version = "^3.3.0" }
 sentry-sdk = { extras = ["fastapi"], version = "^1.39.2" }
 tortoise-orm = { extras = ["asyncpg"], version = "^0.20.0" }
 uvicorn = { extras = ["standard"], version = "^0.26.0" }
+python-multipart = "^0.0.6"
 
 
 [tool.poetry.group.dev.dependencies]

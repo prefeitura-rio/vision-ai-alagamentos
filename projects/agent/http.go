@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
+	"os"
 )
 
 func httpGet(url string, accessToken AccessToken, body any) error {
@@ -70,4 +73,29 @@ func httpPost(
 	}
 
 	return string(body), err
+}
+
+func bodyFile(filename string) (string, *bytes.Buffer, error) {
+	var b bytes.Buffer
+	w := multipart.NewWriter(&b)
+
+	file, err := os.Open(filename)
+	if err != nil {
+		return "", nil, fmt.Errorf("error opening file: %w", err)
+	}
+	defer file.Close()
+
+	fw, err := w.CreateFormFile("file", file.Name())
+	if err != nil {
+		return "", nil, fmt.Errorf("error creating form file")
+	}
+
+	_, err = io.Copy(fw, file)
+	if err != nil {
+		return "", nil, fmt.Errorf("error copying file to buffer")
+	}
+
+	w.Close()
+
+	return w.FormDataContentType(), &b, nil
 }
