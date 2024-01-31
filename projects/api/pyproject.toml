@@ -22,10 +22,11 @@ namesgenerator = "^0.3"
 nest-asyncio = "^1.6.0"
 pillow = "^10.2.0"
 python-jose = { extras = ["cryptography"], version = "^3.3.0" }
+python-multipart = "^0.0.6"
 sentry-sdk = { extras = ["fastapi"], version = "^1.39.2" }
 tortoise-orm = { extras = ["asyncpg"], version = "^0.20.0" }
 uvicorn = { extras = ["standard"], version = "^0.26.0" }
-python-multipart = "^0.0.6"
+vision-ai-base = { path = "../../libs/base", develop = true }
 
 
 [tool.poetry.group.dev.dependencies]
