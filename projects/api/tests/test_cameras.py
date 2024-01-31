@@ -239,7 +239,7 @@ async def test_cameras_post_snapshot(
         f"/cameras/{context['test_camera_id']}/snapshot",
         headers=authorization_header,
         files={
-            "file": base64.b64decode(image_base64).decode(),
+            "file": base64.b64decode(image_base64),
         },
         json={
             "image_base64": image_base64,
