@@ -260,6 +260,7 @@ async def test_cameras_get_snapshot(client: AsyncClient, authorization_header: d
         f"/cameras/{context['test_camera_id']}/snapshot", headers=authorization_header
     )
     assert response.status_code == 200
-    assert "image_base64" in response.json()
-    assert isinstance(response.json()["image_base64"], str)
-    assert len(response.json()["image_base64"]) > 0
+    assert "image_url" in response.json()
+    assert "timestamp" in response.json()
+    assert isinstance(response.json()["image_url"], str)
+    assert isinstance(response.json()["timestamp"], str)

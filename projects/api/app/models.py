@@ -19,6 +19,8 @@ class Camera(Model):
     update_interval = fields.IntField()
     latitude = fields.FloatField()
     longitude = fields.FloatField()
+    snapshot_url = fields.CharField(max_length=255, null=True)
+    snapshot_timestamp = fields.DatetimeField(null=True)
 
 
 class CameraIdentification(Model):

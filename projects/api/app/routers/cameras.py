@@ -23,7 +23,6 @@ from app.pydantic_models import (
 )
 from app.utils import (
     apply_to_list,
-    download_camera_snapshot_from_bucket,
     generate_blob_path,
     transform_tortoise_to_pydantic,
     upload_file_to_bucket,
@@ -260,9 +259,12 @@ async def get_camera_snapshot(
 ) -> Snapshot:
     """Get a camera snapshot from the server."""
     camera = await Camera.get(id=camera_id)
-    # TODO: Modify download for no-base64
-    snapshot = download_camera_snapshot_from_bucket(camera_id=camera.id)
-    return Snapshot(image_base64=snapshot)
+    if not camera.snapshot_url:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Camera snapshot not found.",
+        )
+    return Snapshot(image_url=camera.snapshot_url, timestamp=camera.snapshot_timestamp)
 
 
 @router.post("/{camera_id}/snapshot", response_model=SnapshotPostResponse)
@@ -297,11 +299,14 @@ async def camera_snapshot(
         while contents := file.file.read(1024 * 1024):
             f.write(contents)
 
-    upload_file_to_bucket(
+    blob = upload_file_to_bucket(
         bucket_name=config.GCS_BUCKET_NAME,
         file_path=tmp_fname,
         destination_blob_name=blob_path,
     )
+    camera.snapshot_url = blob.public_url
+    camera.snapshot_timestamp = datetime.now()
+    await camera.save()
 
     os.remove(tmp_fname)
 

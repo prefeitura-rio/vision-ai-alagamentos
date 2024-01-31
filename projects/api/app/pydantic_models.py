@@ -121,7 +121,8 @@ class PromptsResponse(BaseModel):
 
 
 class Snapshot(BaseModel):
-    image_base64: str
+    image_url: str
+    timestamp: datetime
 
 
 class SnapshotPostResponse(BaseModel):

@@ -9,8 +9,6 @@ from typing import Any, Callable, List, Tuple, Union
 from uuid import uuid4
 
 import nest_asyncio
-from app import config
-from app.models import Label, Object, Prompt
 from fastapi import HTTPException, status
 from google.cloud import storage
 from google.cloud.storage.blob import Blob
@@ -19,6 +17,9 @@ from PIL import Image
 from pydantic import BaseModel
 from tortoise.models import Model
 from vision_ai.base.shared_models import Output, OutputFactory
+
+from app import config
+from app.models import Label, Object, Prompt
 
 
 def _to_task(future, as_task, loop):
@@ -123,6 +124,24 @@ def generate_blob_path(camera_id: str) -> str:
         str: The blob path.
     """
     return f"{config.GCS_BUCKET_PATH_PREFIX}/{camera_id}.png"
+
+
+def get_camera_snapshot_blob_url(*, camera_id: str) -> str:
+    """
+    Gets the blob URL for a camera snapshot.
+
+    Args:
+        camera_id (str): The camera id.
+
+    Returns:
+        str: The blob URL.
+    """
+    blob_path = generate_blob_path(camera_id)
+    bucket_name = config.GCS_BUCKET_NAME
+    storage_client = get_gcs_client()
+    bucket = storage_client.bucket(bucket_name)
+    blob = bucket.blob(blob_path)
+    return blob.public_url
 
 
 def get_gcp_credentials(
