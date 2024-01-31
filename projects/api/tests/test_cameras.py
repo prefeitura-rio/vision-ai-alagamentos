@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+import base64
+
 import pytest
 from httpx import AsyncClient
 
@@ -236,6 +238,9 @@ async def test_cameras_post_snapshot(
     response = await client.post(
         f"/cameras/{context['test_camera_id']}/snapshot",
         headers=authorization_header,
+        files={
+            "file": base64.b64decode(image_base64).decode(),
+        },
         json={
             "image_base64": image_base64,
         },
