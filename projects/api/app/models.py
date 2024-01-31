@@ -24,12 +24,20 @@ class Camera(Model):
 class CameraIdentification(Model):
     id = fields.UUIDField(pk=True)
     camera = fields.ForeignKeyField("app.Camera", related_name="identifications")
-    object = fields.ForeignKeyField("app.Object", related_name="identifications")
     timestamp = fields.DatetimeField(null=True)
-    label = fields.BooleanField(null=True)
+    object = fields.ForeignKeyField("app.Object", related_name="identifications", null=True)
+    label = fields.ForeignKeyField("app.Label", related_name="identifications", null=True)
+
+
+class Label(Model):
+    id = fields.UUIDField(pk=True)
+    object = fields.ForeignKeyField("app.Object", related_name="labels")
+    value = fields.CharField(max_length=255)
+    criteria = fields.TextField()
+    identification_guide = fields.TextField()
 
     class Meta:
-        unique_together = (("camera", "object"),)
+        unique_together = (("object", "value"),)
 
 
 class Object(Model):

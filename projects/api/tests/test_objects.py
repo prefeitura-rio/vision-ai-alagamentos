@@ -18,9 +18,20 @@ async def test_objects_get(client: AsyncClient, authorization_header: dict) -> N
         assert "id" in item
         assert "name" in item
         assert "slug" in item
+        assert "labels" in item
         assert isinstance(item["id"], str)
         assert isinstance(item["name"], str)
         assert isinstance(item["slug"], str)
+        assert isinstance(item["labels"], list)
+        for label in item["labels"]:
+            assert "id" in label
+            assert "value" in label
+            assert "criteria" in label
+            assert "identification_guide" in label
+            assert isinstance(label["id"], str)
+            assert isinstance(label["value"], str)
+            assert isinstance(label["criteria"], str)
+            assert isinstance(label["identification_guide"], str)
     assert response.json()["total"] == 3
     assert response.json()["page"] == 1
     assert response.json()["size"] == 50
@@ -51,7 +62,161 @@ async def test_objects_create(
 
 
 @pytest.mark.anyio
+@pytest.mark.run(order=3)
+async def test_object_add_labels(
+    client: AsyncClient, authorization_header: dict, context: dict
+) -> None:
+    object_id = context["test_object_id"]
+    label_value = "test-label"
+    response = await client.post(
+        f"/objects/{object_id}/labels",
+        headers=authorization_header,
+        json={
+            "value": label_value,
+            "criteria": "Test Criteria",
+            "identification_guide": "Test Identification Guide",
+        },
+    )
+    assert response.status_code == 200
+    assert "id" in response.json()
+    assert "value" in response.json()
+    assert "criteria" in response.json()
+    assert "identification_guide" in response.json()
+    assert isinstance(response.json()["id"], str)
+    assert isinstance(response.json()["value"], str)
+    assert isinstance(response.json()["criteria"], str)
+    assert isinstance(response.json()["identification_guide"], str)
+    assert response.json()["value"] == label_value
+    assert response.json()["criteria"] == "Test Criteria"
+    assert response.json()["identification_guide"] == "Test Identification Guide"
+    context["test_label_id"] = response.json()["id"]
+    context["test_label_value"] = response.json()["value"]
+
+
+@pytest.mark.anyio
+@pytest.mark.run(order=4)
+async def test_object_get_labels(
+    client: AsyncClient, authorization_header: dict, context: dict
+) -> None:
+    object_id = context["test_object_id"]
+    response = await client.get(
+        f"/objects/{object_id}/labels",
+        headers=authorization_header,
+    )
+    assert response.status_code == 200
+    assert "items" in response.json()
+    assert "total" in response.json()
+    assert "page" in response.json()
+    assert "size" in response.json()
+    assert "pages" in response.json()
+    assert len(response.json()["items"]) == 1
+    for item in response.json()["items"]:
+        assert "id" in item
+        assert "value" in item
+        assert "criteria" in item
+        assert "identification_guide" in item
+        assert isinstance(item["id"], str)
+        assert isinstance(item["value"], str)
+        assert isinstance(item["criteria"], str)
+        assert isinstance(item["identification_guide"], str)
+        assert item["id"] == context["test_label_id"]
+        assert item["value"] == context["test_label_value"]
+        assert item["criteria"] == "Test Criteria"
+        assert item["identification_guide"] == "Test Identification Guide"
+    assert response.json()["total"] == 1
+    assert response.json()["page"] == 1
+    assert response.json()["size"] == 50
+    assert response.json()["pages"] == 1
+
+
+@pytest.mark.anyio
+@pytest.mark.run(order=5)
+async def test_object_update_label_by_value(
+    client: AsyncClient, authorization_header: dict, context: dict
+) -> None:
+    object_id = context["test_object_id"]
+    label_value = context["test_label_value"]
+    response = await client.put(
+        f"/objects/{object_id}/labels/{label_value}",
+        headers=authorization_header,
+        json={
+            "value": "test-label3",
+            "criteria": "Test Criteria3",
+            "identification_guide": "Test Identification Guide3",
+        },
+    )
+    assert response.status_code == 200
+    assert "id" in response.json()
+    assert "value" in response.json()
+    assert "criteria" in response.json()
+    assert "identification_guide" in response.json()
+    assert isinstance(response.json()["id"], str)
+    assert isinstance(response.json()["value"], str)
+    assert isinstance(response.json()["criteria"], str)
+    assert isinstance(response.json()["identification_guide"], str)
+    assert response.json()["id"] == context["test_label_id"]
+    assert response.json()["value"] == "test-label3"
+    assert response.json()["criteria"] == "Test Criteria3"
+    assert response.json()["identification_guide"] == "Test Identification Guide3"
+    context["test_label_value"] = response.json()["value"]
+
+
+@pytest.mark.anyio
+@pytest.mark.run(order=6)
+async def test_object_update_label_by_id(
+    client: AsyncClient, authorization_header: dict, context: dict
+) -> None:
+    object_id = context["test_object_id"]
+    label_id = context["test_label_id"]
+    response = await client.put(
+        f"/objects/{object_id}/labels/{label_id}",
+        headers=authorization_header,
+        json={
+            "value": "test-label2",
+            "criteria": "Test Criteria2",
+            "identification_guide": "Test Identification Guide2",
+        },
+    )
+    assert response.status_code == 200
+    assert "id" in response.json()
+    assert "value" in response.json()
+    assert "criteria" in response.json()
+    assert "identification_guide" in response.json()
+    assert isinstance(response.json()["id"], str)
+    assert isinstance(response.json()["value"], str)
+    assert isinstance(response.json()["criteria"], str)
+    assert isinstance(response.json()["identification_guide"], str)
+    assert response.json()["id"] == context["test_label_id"]
+    assert response.json()["value"] == "test-label2"
+    assert response.json()["criteria"] == "Test Criteria2"
+    assert response.json()["identification_guide"] == "Test Identification Guide2"
+    context["test_label_value"] = response.json()["value"]
+
+
+@pytest.mark.anyio
 @pytest.mark.run(order=999)
+async def test_object_delete_label_by_id(
+    client: AsyncClient, authorization_header: dict, context: dict
+) -> None:
+    object_id = context["test_object_id"]
+    label_id = context["test_label_id"]
+    response = await client.delete(
+        f"/objects/{object_id}/labels/{label_id}",
+        headers=authorization_header,
+    )
+    assert response.status_code == 200
+    assert "id" in response.json()
+    assert "value" in response.json()
+    assert "criteria" in response.json()
+    assert "identification_guide" in response.json()
+    assert isinstance(response.json()["id"], str)
+    assert isinstance(response.json()["value"], str)
+    assert isinstance(response.json()["criteria"], str)
+    assert isinstance(response.json()["identification_guide"], str)
+
+
+@pytest.mark.anyio
+@pytest.mark.run(order=1000)
 async def test_objects_delete(
     client: AsyncClient, authorization_header: dict, context: dict
 ) -> None:
