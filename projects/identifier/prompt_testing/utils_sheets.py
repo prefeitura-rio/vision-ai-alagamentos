@@ -167,7 +167,7 @@ def save_data_in_sheets(
     save_data: bool = False,
     data: dict = {},
     data_url: str = None,
-    content_url: str = None,
+    prompt_url: str = None,
     google_sheet_credential_env_name: str = "GCP_SERVICE_ACCOUNT",
 ):
     """
@@ -180,7 +180,7 @@ def save_data_in_sheets(
                 "experiment_datetime": str,
                 "object"             : str,
                 "explanation"        : str,
-                "content"            : List[dict],
+                "prompt"            : List[dict],
                 "image_url"          : str,
                 "image"              : str,
             }
@@ -192,33 +192,33 @@ def save_data_in_sheets(
         return None
 
     gspread_sheet = get_gspread_sheet(
-        sheet_url=data_url or content_url,
+        sheet_url=data_url or prompt_url,
         google_sheet_credential_env_name=google_sheet_credential_env_name,
     )
     #################################################################
-    # Save Content Prompts
-    content_id = ""
-    if content_url is not None:
-        content_gid = int(content_url.split("gid=")[-1])
-        content_worksheet = gspread_sheet.get_worksheet_by_id(content_gid)
-        content_ids = content_worksheet.get_values("A:A")
-        if content_ids != []:
-            dataframe = pd.DataFrame(content_ids)
+    # Save prompt Prompts
+    prompt_id = ""
+    if prompt_url is not None:
+        prompt_gid = int(prompt_url.split("gid=")[-1])
+        prompt_worksheet = gspread_sheet.get_worksheet_by_id(prompt_gid)
+        prompt_ids = prompt_worksheet.get_values("A:A")
+        if prompt_ids != []:
+            dataframe = pd.DataFrame(prompt_ids)
             new_header = dataframe.iloc[0]  # grab the first row for the header
             dataframe = dataframe[1:]  # take the data less the header row
             dataframe.columns = new_header  # set the header row as the df header
-            content_ids = dataframe["content_id"].tolist()
+            prompt_ids = dataframe["prompt_id"].tolist()
 
-        # content_parsed = []
-        # for d in data.get("content"):
+        # prompt_parsed = []
+        # for d in data.get("prompt"):
         #     new_d = {}
         #     for key, value in d.items():
         #         new_d[key] = json.dumps(value, indent=4)
-        #     content_parsed.append(new_d)
+        #     prompt_parsed.append(new_d)
 
-        content_str = json.dumps(data.get("content"), indent=4)
-        content_str_id = (
-            content_str
+        prompt_str = json.dumps(data.get("prompt"), indent=4)
+        prompt_str_id = (
+            prompt_str
             + "__"
             + str(data.get("max_output_token", ""))
             + "__"
@@ -228,14 +228,14 @@ def save_data_in_sheets(
             + "__"
             + str(data.get("top_p", ""))
         )
-        content_id = get_hash_id(string=content_str_id)
+        prompt_id = get_hash_id(string=prompt_str_id)
 
-        if content_id not in content_ids:
+        if prompt_id not in prompt_ids:
             sheet_append_row(
-                worksheet=content_worksheet,
+                worksheet=prompt_worksheet,
                 data_dict={
-                    "content_id": content_id,
-                    "content": content_str,
+                    "prompt_id": prompt_id,
+                    "prompt": prompt_str,
                     "max_output_token": data.get("max_output_token", ""),
                     "temperature": data.get("temperature", ""),
                     "top_k": data.get("top_k", ""),
@@ -246,7 +246,7 @@ def save_data_in_sheets(
         save_data = {
             "experiment_name": data.get("experiment_name", ""),
             "experiment_datetime": data.get("experiment_datetime", ""),
-            "content_id": content_id,
+            "prompt_id": prompt_id,
             "true_object": data.get("true_object", ""),
             "response": json.dumps(data.get("response", ""), indent=4),
             "image_url": data.get("image_url", ""),
