@@ -1,11 +1,11 @@
 #!/bin/sh
 
-if [ -z "$DATA_PATH" ]; then 
+if [ -z "$DATA_PATH" ]; then
   echo '$DATA_PATH is empty'
   exit 1
 fi
 
-if [ -z "$STREAM_SERVER" ]; then 
+if [ -z "$STREAM_SERVER" ]; then
   echo '$STREAM_SERVER is empty'
   exit 1
 fi

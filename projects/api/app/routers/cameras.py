@@ -9,8 +9,8 @@ from fastapi_pagination import Page
 from fastapi_pagination.ext.tortoise import paginate as tortoise_paginate
 from nest_asyncio import os
 from tortoise.fields import ReverseRelation
-from app import config
 
+from app import config
 from app.dependencies import get_caller, is_admin
 from app.models import Agent, Camera, CameraIdentification, Object
 from app.pydantic_models import (
@@ -26,7 +26,6 @@ from app.utils import (
     download_camera_snapshot_from_bucket,
     generate_blob_path,
     transform_tortoise_to_pydantic,
-    upload_camera_snapshot_to_bucket,
     upload_file_to_bucket,
 )
 
@@ -284,8 +283,8 @@ async def camera_snapshot(
     tmp_fname = f"/tmp/{uuid4()}.png"
     blob_path = generate_blob_path(camera.id)
 
-    with open(tmp_fname, 'wb') as f:
-        while contents := file.file.read(1024*1024):
+    with open(tmp_fname, "wb") as f:
+        while contents := file.file.read(1024 * 1024):
             f.write(contents)
 
     upload_file_to_bucket(

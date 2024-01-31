@@ -39,7 +39,7 @@ services:
           memory: 2048m
   stream-server:
     image: bluenviron/mediamtx:latest
-    ports: 
+    ports:
       - 8888:8888
   send-stream:
     build:
