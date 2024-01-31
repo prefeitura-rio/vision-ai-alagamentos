@@ -26,8 +26,8 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     env_file: .env
-    environment:
-      DATABASE_URL: teste
+    ports:
+      - 6060:6060
     depends_on:
       api:
         condition: service_healthy
@@ -35,8 +35,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '1'
-          memory: 500m
+          cpus: '4'
+          memory: 2048m
   stream-server:
     image: bluenviron/mediamtx:latest
     ports: 

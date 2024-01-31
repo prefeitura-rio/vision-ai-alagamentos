@@ -3,8 +3,8 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"image/png"
 	"log"
@@ -17,6 +17,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 var errMediaNotFound error = fmt.Errorf("media not found")
@@ -112,26 +114,31 @@ func makeSnapshot(
 		return
 	}
 
-	avgSize := float64(img.Bounds().Dy()*img.Bounds().Dy()) * 1.25
-	buf := bytes.NewBuffer(make([]byte, 0, int(avgSize)))
-
-	err = png.Encode(buf, img)
+	filename := fmt.Sprintf("/tmp/%s.png", uuid.NewString())
+	file, err := os.Create(filename)
 	if err != nil {
-		log.Printf("error encoding image in png: %s", err)
+		log.Printf("error creating temp file: %s", err)
+		return
+	}
+	defer func() {
+		err := file.Close()
+		if err != nil && !errors.Is(err, os.ErrClosed) {
+			log.Printf("error closing temp file: %s", err)
+		}
+
+		err = os.Remove(filename)
+		if err != nil {
+			log.Printf("error removing temp file: %s", err)
+		}
+	}()
+
+	err = png.Encode(file, img)
+	if err != nil {
+		log.Printf("error encoding image to png: %s", err)
 		return
 	}
 
-	rawBody := map[string]string{
-		"image_base64": base64.StdEncoding.EncodeToString(buf.Bytes()),
-	}
-
-	body, err := json.Marshal(rawBody)
-	if err != nil {
-		log.Printf("error encoding body: %s", err)
-		return
-	}
-
-	_, err = httpPost(camera.snapshotURL, accessToken, "application/json", bytes.NewReader(body))
+	_, err = httpPost(camera.snapshotURL, accessToken, "image/png", file)
 	if err != nil {
 		log.Printf("error seding snapshot: %s", err)
 		return
