@@ -23,6 +23,7 @@ type rtpDecoder interface {
 
 type frameDecoder interface {
 	decode([]byte) (image.Image, error)
+	close()
 }
 
 type decoders struct {
@@ -305,22 +306,22 @@ func (d *h265Decoder) decode(nalu []byte) (image.Image, error) {
 func decodeRTPPacket(forma format.Format, pkt *rtp.Packet, decs *decoders) (image.Image, error) {
 	rtp, ok := decs.rtp[forma.Codec()]
 	if !ok {
-		return image.Black, fmt.Errorf("RTP decoder not found: %s", forma.Codec())
+		return nil, fmt.Errorf("RTP decoder not found: %s", forma.Codec())
 	}
 	frame, ok := decs.frame[forma.Codec()]
 	if !ok {
-		return image.Black, fmt.Errorf("Frame decoder not found: %s", forma.Codec())
+		return nil, fmt.Errorf("Frame decoder not found: %s", forma.Codec())
 	}
 
 	au, err := rtp.Decode(pkt)
 	if err != nil {
-		return image.Black, err
+		return nil, err
 	}
 
 	for _, nalu := range au {
 		img, err := frame.decode(nalu)
 		if err != nil {
-			return image.Black, fmt.Errorf("error decoding frame: %w", err)
+			return nil, fmt.Errorf("error decoding frame: %w", err)
 		}
 
 		if img == nil {
@@ -330,5 +331,5 @@ func decodeRTPPacket(forma format.Format, pkt *rtp.Packet, decs *decoders) (imag
 		return img, nil
 	}
 
-	return image.Black, errAllFrameEmpty
+	return nil, errAllFrameEmpty
 }
