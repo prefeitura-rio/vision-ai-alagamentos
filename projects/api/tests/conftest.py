@@ -9,7 +9,7 @@ from tortoise import Tortoise
 
 from app.db import TORTOISE_ORM
 from app.main import app
-from app.models import Agent, Camera, CameraIdentification, Object, Prompt
+from app.models import Agent, Camera, CameraIdentification, Label, Object, Prompt
 
 
 @pytest.fixture(scope="session")
@@ -43,6 +43,7 @@ async def initialize_tests():
     await Agent.all().delete()
     await Camera.all().delete()
     await CameraIdentification.all().delete()
+    await Label.all().delete()
     await Object.all().delete()
     await Prompt.all().delete()
     agent_data = [
@@ -93,6 +94,48 @@ async def initialize_tests():
     objects = []
     for object in object_data:
         objects.append(await Object.create(**object))
+
+    label_data = [
+        {
+            "object": objects[0],
+            "value": "found",
+            "criteria": "There is a person in the frame",
+            "identification_guide": "Description",
+        },
+        {
+            "object": objects[0],
+            "value": "not-found",
+            "criteria": "There is no person in the frame",
+            "identification_guide": "Description",
+        },
+        {
+            "object": objects[1],
+            "value": "found",
+            "criteria": "There is a car in the frame",
+            "identification_guide": "Description",
+        },
+        {
+            "object": objects[1],
+            "value": "not-found",
+            "criteria": "There is no car in the frame",
+            "identification_guide": "Description",
+        },
+        {
+            "object": objects[2],
+            "value": "found",
+            "criteria": "There is a bicycle in the frame",
+            "identification_guide": "Description",
+        },
+        {
+            "object": objects[2],
+            "value": "not-found",
+            "criteria": "There is no bicycle in the frame",
+            "identification_guide": "Description",
+        },
+    ]
+    labels = []
+    for label in label_data:
+        labels.append(await Label.create(**label))
 
     prompt_data = [
         {

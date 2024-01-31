@@ -56,7 +56,26 @@ class HeartbeatResponse(BaseModel):
 class IdentificationDetails(BaseModel):
     object: str
     timestamp: Optional[datetime]
-    label: Optional[bool]
+    label: Optional[str]
+
+
+class LabelIn(BaseModel):
+    value: str
+    criteria: str
+    identification_guide: str
+
+
+class LabelOut(BaseModel):
+    id: UUID
+    value: str
+    criteria: str
+    identification_guide: str
+
+
+class LabelUpdate(BaseModel):
+    value: Optional[str]
+    criteria: Optional[str]
+    identification_guide: Optional[str]
 
 
 class ObjectIn(BaseModel):
@@ -68,6 +87,7 @@ class ObjectOut(BaseModel):
     id: UUID
     name: str
     slug: str
+    labels: List[LabelOut]
 
 
 class PromptIn(BaseModel):

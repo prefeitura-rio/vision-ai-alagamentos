@@ -12,7 +12,7 @@ from tortoise.fields import ReverseRelation
 
 from app import config
 from app.dependencies import get_caller, is_admin
-from app.models import Agent, Camera, CameraIdentification, Object
+from app.models import Agent, Camera, CameraIdentification, Label, Object
 from app.pydantic_models import (
     APICaller,
     CameraIn,
@@ -48,7 +48,7 @@ async def get_cameras(_=Depends(is_admin)) -> Page[CameraOut]:
             IdentificationDetails(
                 object=(await item.object).slug,
                 timestamp=item.timestamp,
-                label=item.label,
+                label=(await item.label).value if item.label else None,
             )
             for item in identifications
         ]
@@ -91,7 +91,9 @@ async def create_camera(camera_: CameraIn, _=Depends(is_admin)) -> CameraOut:
         ],
         identifications=[
             IdentificationDetails(
-                object=item.object.slug, timestamp=item.timestamp, label=item.label
+                object=item.object.slug,
+                timestamp=item.timestamp,
+                label=(await item.label).value if item.label else None,
             )
             for item in await CameraIdentification.filter(camera=camera).all()
         ],
@@ -120,7 +122,7 @@ async def get_camera(
             IdentificationDetails(
                 object=(await item.object).slug,
                 timestamp=item.timestamp,
-                label=item.label,
+                label=(await item.label).value if item.label else None,
             )
             for item in await CameraIdentification.filter(camera=camera).all()
         ],
@@ -137,7 +139,9 @@ async def get_camera_objects(
     camera = await Camera.get(id=camera_id)
     return [
         IdentificationDetails(
-            object=(await item.object).slug, timestamp=item.timestamp, label=item.label
+            object=(await item.object).slug,
+            timestamp=item.timestamp,
+            label=(await item.label).value if item.label else None,
         )
         for item in await CameraIdentification.filter(camera=camera).all()
     ]
@@ -173,7 +177,7 @@ async def create_camera_object(
             IdentificationDetails(
                 object=(await item.object).slug,
                 timestamp=item.timestamp,
-                label=item.label,
+                label=(await item.label).value if item.label else None,
             )
             for item in await CameraIdentification.filter(camera=camera).all()
         ],
@@ -193,7 +197,7 @@ async def get_camera_object(
     return IdentificationDetails(
         object=(await identification.object).slug,
         timestamp=identification.timestamp,
-        label=identification.label,
+        label=(await identification.label).value if identification.label else None,
     )
 
 
@@ -201,7 +205,7 @@ async def get_camera_object(
 async def update_camera_object(
     camera_id: str,
     object_id: UUID,
-    label: bool,
+    label: str,
     _=Depends(is_admin),  # TODO: Review permissions here
 ) -> IdentificationDetails:
     """Update a camera object."""
@@ -217,13 +221,19 @@ async def update_camera_object(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Camera object not found.",
         )
-    identification.label = label
+    label_obj = await Label.get_or_none(object=object_, value=label)
+    if not label_obj:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Label not found.",
+        )
+    identification.label = label_obj
     identification.timestamp = datetime.now()
     await identification.save()
     return IdentificationDetails(
         object=(await identification.object).slug,
         timestamp=identification.timestamp,
-        label=identification.label,
+        label=(await identification.label).value if identification.label else None,
     )
 
 

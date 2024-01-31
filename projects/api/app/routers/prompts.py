@@ -12,6 +12,7 @@ from app.dependencies import get_caller, is_admin
 from app.models import Object, Prompt
 from app.pydantic_models import (
     APICaller,
+    LabelOut,
     ObjectOut,
     PromptIn,
     PromptOut,
@@ -153,6 +154,15 @@ async def get_prompt_objects(
             id=object_.id,
             name=object_.name,
             slug=object_.slug,
+            labels=[
+                LabelOut(
+                    id=label.id,
+                    value=label.value,
+                    criteria=label.criteria,
+                    identification_guide=label.identification_guide,
+                )
+                for label in await object_.labels.all()
+            ],
         )
         for object_ in await prompt.objects.all()
     ]
@@ -176,6 +186,15 @@ async def add_prompt_object(
         id=object_.id,
         name=object_.name,
         slug=object_.slug,
+        labels=[
+            LabelOut(
+                id=label.id,
+                value=label.value,
+                criteria=label.criteria,
+                identification_guide=label.identification_guide,
+            )
+            for label in await object_.labels.all()
+        ],
     )
 
 

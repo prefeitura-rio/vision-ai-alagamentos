@@ -1,15 +1,23 @@
 # -*- coding: utf-8 -*-
 from functools import partial
-from typing import Annotated
+from typing import Annotated, List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi_pagination import Page
 from fastapi_pagination.ext.tortoise import paginate as tortoise_paginate
+from tortoise.fields import ReverseRelation
 
 from app.dependencies import get_caller, is_admin
-from app.models import Object
-from app.pydantic_models import APICaller, ObjectIn, ObjectOut
+from app.models import Label, Object
+from app.pydantic_models import (
+    APICaller,
+    LabelIn,
+    LabelOut,
+    LabelUpdate,
+    ObjectIn,
+    ObjectOut,
+)
 from app.utils import apply_to_list, transform_tortoise_to_pydantic
 
 router = APIRouter(prefix="/objects", tags=["Objects"])
@@ -20,6 +28,19 @@ async def get_objects(
     _: Annotated[APICaller, Depends(get_caller)],  # TODO: Review permissions here
 ) -> Page[ObjectOut]:
     """Get a list of all objects."""
+
+    async def get_labels(labels_relation: ReverseRelation) -> List[LabelOut]:
+        labels: List[Label] = await labels_relation.all()
+        return [
+            LabelOut(
+                id=label.id,
+                value=label.value,
+                criteria=label.criteria,
+                identification_guide=label.identification_guide,
+            )
+            for label in labels
+        ]
+
     return await tortoise_paginate(
         Object,
         transformer=partial(
@@ -31,6 +52,7 @@ async def get_objects(
                     ("id", "id"),
                     ("name", "name"),
                     ("slug", "slug"),
+                    ("labels", ("labels", get_labels)),
                 ],
             ),
         ),
@@ -48,6 +70,15 @@ async def create_object(
         id=object.id,
         name=object.name,
         slug=object.slug,
+        labels=[
+            LabelOut(
+                id=label.id,
+                value=label.value,
+                criteria=label.criteria,
+                identification_guide=label.identification_guide,
+            )
+            for label in await object.labels.all()
+        ],
     )
 
 
@@ -68,4 +99,147 @@ async def delete_object(
         id=object.id,
         name=object.name,
         slug=object.slug,
+        labels=[
+            LabelOut(
+                id=label.id,
+                value=label.value,
+                criteria=label.criteria,
+                identification_guide=label.identification_guide,
+            )
+            for label in await object.labels.all()
+        ],
+    )
+
+
+@router.get("/{object_id}/labels", response_model=Page[LabelOut])
+async def get_object_labels(
+    object_id: UUID,
+    _=Depends(is_admin),
+) -> Page[LabelOut]:
+    """Get a list of all labels for an object."""
+    object = await Object.get_or_none(id=object_id)
+    if object is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Object not found",
+        )
+
+    return await tortoise_paginate(
+        object.labels,
+        transformer=partial(
+            apply_to_list,
+            fn=partial(
+                transform_tortoise_to_pydantic,
+                pydantic_model=LabelOut,
+                vars_map=[
+                    ("id", "id"),
+                    ("value", "value"),
+                    ("criteria", "criteria"),
+                    ("identification_guide", "identification_guide"),
+                ],
+            ),
+        ),
+    )
+
+
+@router.post("/{object_id}/labels", response_model=LabelOut)
+async def add_label_to_object(
+    object_id: UUID,
+    label: LabelIn,
+    _=Depends(is_admin),
+) -> LabelOut:
+    """Add a label to an object."""
+    object = await Object.get_or_none(id=object_id)
+    if object is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Object not found",
+        )
+    label = await Label.create(object=object, **label.dict())
+    return LabelOut(
+        id=label.id,
+        value=label.value,
+        criteria=label.criteria,
+        identification_guide=label.identification_guide,
+    )
+
+
+@router.put("/{object_id}/labels/{label}", response_model=LabelOut)
+async def update_object_label(
+    object_id: UUID,
+    label: str | UUID,
+    label_: LabelUpdate,
+    _=Depends(is_admin),
+) -> LabelOut:
+    """Update a label for an object."""
+    # If `label` is a valid UUID, it's the label ID, otherwise it's the label value
+    try:
+        label_id = UUID(label)
+        label_value = None
+    except ValueError:
+        label_id = None
+        label_value = label
+    if label_id:
+        label_obj = await Label.get_or_none(id=label_id)
+    elif label_value:
+        label_obj = await Label.get_or_none(value=label_value, object_id=object_id)
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid label",
+        )
+    if label_obj is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Label not found",
+        )
+    if label_.value:
+        label_obj.value = label_.value
+    if label_.criteria:
+        label_obj.criteria = label_.criteria
+    if label_.identification_guide:
+        label_obj.identification_guide = label_.identification_guide
+    await label_obj.save()
+    return LabelOut(
+        id=label_obj.id,
+        value=label_obj.value,
+        criteria=label_obj.criteria,
+        identification_guide=label_obj.identification_guide,
+    )
+
+
+@router.delete("/{object_id}/labels/{label}", response_model=LabelOut)
+async def delete_object_label(
+    object_id: UUID,
+    label: str | UUID,
+    _=Depends(is_admin),
+) -> LabelOut:
+    """Delete a label from an object."""
+    # If `label` is a valid UUID, it's the label ID, otherwise it's the label value
+    try:
+        label_id = UUID(label)
+        label_value = None
+    except ValueError:
+        label_id = None
+        label_value = label
+    if label_id:
+        label_obj = await Label.get_or_none(id=label_id)
+    elif label_value:
+        label_obj = await Label.get_or_none(value=label_value, object_id=object_id)
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid label",
+        )
+    if label_obj is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Label not found",
+        )
+    await label_obj.delete()
+    return LabelOut(
+        id=label_obj.id,
+        value=label_obj.value,
+        criteria=label_obj.criteria,
+        identification_guide=label_obj.identification_guide,
     )
