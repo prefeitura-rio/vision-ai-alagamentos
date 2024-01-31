@@ -99,6 +99,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
+      - name: Copy libs to API directory
+        run: |
+          mkdir -p projects/api/libs
+          cp -r projects/libs/* projects/api/libs/
+
       - name: Docker Auth
         id: docker-auth
         uses: docker/login-action@v2
