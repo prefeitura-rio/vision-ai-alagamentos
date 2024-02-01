@@ -29,6 +29,7 @@ class CameraIdentification(Model):
     timestamp = fields.DatetimeField(null=True)
     object = fields.ForeignKeyField("app.Object", related_name="identifications", null=True)
     label = fields.ForeignKeyField("app.Label", related_name="identifications", null=True)
+    label_explanation = fields.TextField(null=True)
 
 
 class Label(Model):

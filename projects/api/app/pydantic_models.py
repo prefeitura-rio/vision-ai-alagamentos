@@ -57,6 +57,7 @@ class IdentificationDetails(BaseModel):
     object: str
     timestamp: Optional[datetime]
     label: Optional[str]
+    label_explanation: Optional[str]
 
 
 class LabelIn(BaseModel):

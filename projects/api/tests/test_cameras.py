@@ -205,16 +205,18 @@ async def test_cameras_update_object(
     client: AsyncClient, authorization_header: dict, context: dict
 ):
     response = await client.put(
-        f"/cameras/{context['test_camera_id']}/objects/{context['test_object_id']}?label={context['test_label_value']}",  # noqa
+        f"/cameras/{context['test_camera_id']}/objects/{context['test_object_id']}?label={context['test_label_value']}&label_explanation=something",  # noqa
         headers=authorization_header,
     )
     assert response.status_code == 200
     assert "object" in response.json()
     assert "timestamp" in response.json()
     assert "label" in response.json()
+    assert "label_explanation" in response.json()
     assert isinstance(response.json()["object"], str)
     assert isinstance(response.json()["timestamp"], str)
     assert isinstance(response.json()["label"], str)
+    assert isinstance(response.json()["label_explanation"], str)
     assert response.json()["object"] == context["test_object_slug"]
     assert response.json()["label"] == context["test_label_value"]
 

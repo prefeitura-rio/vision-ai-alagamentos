@@ -304,8 +304,8 @@ def get_pubsub_client() -> pubsub.PublisherClient:
 def publish_message(
     *,
     data: Dict[str, str],
-    project_id: str,
-    topic: str,
+    project_id: str = config.GCP_PUBSUB_PROJECT_ID,
+    topic: str = config.GCP_PUBSUB_TOPIC_NAME,
 ):
     """
     Publishes a message to a PubSub topic.

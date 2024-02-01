@@ -24,6 +24,9 @@ from app.pydantic_models import (
 from app.utils import (
     apply_to_list,
     generate_blob_path,
+    get_prompt_formatted_text,
+    get_prompts_best_fit,
+    publish_message,
     transform_tortoise_to_pydantic,
     upload_file_to_bucket,
 )
@@ -48,6 +51,7 @@ async def get_cameras(_=Depends(is_admin)) -> Page[CameraOut]:
                 object=(await item.object).slug,
                 timestamp=item.timestamp,
                 label=(await item.label).value if item.label else None,
+                label_explanation=item.label_explanation,
             )
             for item in identifications
         ]
@@ -93,6 +97,7 @@ async def create_camera(camera_: CameraIn, _=Depends(is_admin)) -> CameraOut:
                 object=item.object.slug,
                 timestamp=item.timestamp,
                 label=(await item.label).value if item.label else None,
+                label_explanation=item.label_explanation,
             )
             for item in await CameraIdentification.filter(camera=camera).all()
         ],
@@ -145,6 +150,7 @@ async def get_camera(
                 object=(await item.object).slug,
                 timestamp=item.timestamp,
                 label=(await item.label).value if item.label else None,
+                label_explanation=item.label_explanation,
             )
             for item in await CameraIdentification.filter(camera=camera).all()
         ],
@@ -164,6 +170,7 @@ async def get_camera_objects(
             object=(await item.object).slug,
             timestamp=item.timestamp,
             label=(await item.label).value if item.label else None,
+            label_explanation=item.label_explanation,
         )
         for item in await CameraIdentification.filter(camera=camera).all()
     ]
@@ -182,8 +189,13 @@ async def create_camera_object(
     object_ = await Object.get_or_none(id=object_id)
     if not object_:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Object not found.")
+    # Check if CameraIdentification already exists before adding
+    if await CameraIdentification.get_or_none(camera=camera, object=object_):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Camera object already exists.",
+        )
     await CameraIdentification.create(camera=camera, object=object_)
-    # TODO: check if CameraIdentification already exists before adding
     return CameraOut(
         id=camera.id,
         name=camera.name,
@@ -200,6 +212,7 @@ async def create_camera_object(
                 object=(await item.object).slug,
                 timestamp=item.timestamp,
                 label=(await item.label).value if item.label else None,
+                label_explanation=item.label_explanation,
             )
             for item in await CameraIdentification.filter(camera=camera).all()
         ],
@@ -220,6 +233,7 @@ async def get_camera_object(
         object=(await identification.object).slug,
         timestamp=identification.timestamp,
         label=(await identification.label).value if identification.label else None,
+        label_explanation=identification.label_explanation,
     )
 
 
@@ -228,6 +242,7 @@ async def update_camera_object(
     camera_id: str,
     object_id: UUID,
     label: str,
+    label_explanation: str,
     _=Depends(is_admin),  # TODO: Review permissions here
 ) -> IdentificationDetails:
     """Update a camera object."""
@@ -250,12 +265,14 @@ async def update_camera_object(
             detail="Label not found.",
         )
     identification.label = label_obj
+    identification.label_explanation = label_explanation
     identification.timestamp = datetime.now()
     await identification.save()
     return IdentificationDetails(
         object=(await identification.object).slug,
         timestamp=identification.timestamp,
         label=(await identification.label).value if identification.label else None,
+        label_explanation=identification.label_explanation,
     )
 
 
@@ -299,16 +316,6 @@ async def camera_snapshot(
     caller: Annotated[APICaller, Depends(get_caller)],
 ) -> SnapshotPostResponse:
     """Post a camera snapshot to the server."""
-    # TODO: publish data to pubsub
-    # {
-    #     "image_url": "http...",
-    #     "prompt_text": "str",
-    #     "model": "str",
-    #     "max_output_tokens": 123,
-    #     "temperature": 0.1,
-    #     "top_k": 1,
-    #     "top_p": 1,
-    # }
     # Caller must be an agent that has access to the camera.
     if not caller.agent:
         raise HTTPException(
@@ -344,5 +351,33 @@ async def camera_snapshot(
     await camera.save()
 
     os.remove(tmp_fname)
+
+    # Publish data to Pub/Sub
+    camera_object_ids = [
+        str((await item.object).id)
+        for item in await CameraIdentification.filter(camera=camera).all()
+    ]
+    camera_object_slugs = [
+        (await item.object).slug for item in await CameraIdentification.filter(camera=camera).all()
+    ]
+    if len(camera_object_slugs):
+        prompts = await get_prompts_best_fit(object_slugs=camera_object_slugs)
+        prompt = prompts[0]  # TODO: generalize this
+        formatted_text = await get_prompt_formatted_text(
+            prompt=prompt, object_slugs=camera_object_slugs
+        )
+        message = {
+            "camera_id": camera.id,
+            "image_url": blob.public_url,
+            "prompt_text": formatted_text,
+            "object_ids": camera_object_ids,
+            "object_slugs": camera_object_slugs,
+            "model": prompt.model,
+            "max_output_tokens": prompt.max_output_token,
+            "temperature": prompt.temperature,
+            "top_k": prompt.top_k,
+            "top_p": prompt.top_p,
+        }
+        publish_message(data=message)
 
     return SnapshotPostResponse(error=False, message="OK")

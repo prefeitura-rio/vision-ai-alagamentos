@@ -206,18 +206,6 @@ async def test_prompts_get_objects(
 
 @pytest.mark.anyio
 @pytest.mark.run(order=17)
-async def test_prompts_delete_objects(
-    client: AsyncClient, authorization_header: dict, context: dict
-) -> None:
-    response = await client.delete(
-        f"/prompts/{context['test_prompt_id']}/objects/{context['test_object_id']}",
-        headers=authorization_header,
-    )
-    assert response.status_code == 200
-
-
-@pytest.mark.anyio
-@pytest.mark.run(order=18)
 async def test_prompts_best_fit(client: AsyncClient, authorization_header: dict) -> None:
     response = await client.post(
         "/prompts/best_fit",
@@ -276,6 +264,18 @@ async def test_prompts_best_fit(client: AsyncClient, authorization_header: dict)
     for obj in response.json()["prompts"][0]["objects"]:
         assert isinstance(obj, str)
     assert response.json()["prompts"][0]["name"] == "Prompt 3"
+
+
+@pytest.mark.anyio
+@pytest.mark.run(order=998)
+async def test_prompts_delete_objects(
+    client: AsyncClient, authorization_header: dict, context: dict
+) -> None:
+    response = await client.delete(
+        f"/prompts/{context['test_prompt_id']}/objects/{context['test_object_id']}",
+        headers=authorization_header,
+    )
+    assert response.status_code == 200
 
 
 @pytest.mark.anyio
