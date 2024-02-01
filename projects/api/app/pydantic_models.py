@@ -41,6 +41,8 @@ class CameraOut(BaseModel):
     update_interval: int
     latitude: float
     longitude: float
+    snapshot_url: Optional[str]
+    snapshot_timestamp: Optional[datetime]
     objects: List[str]
     identifications: List["IdentificationDetails"]
 
