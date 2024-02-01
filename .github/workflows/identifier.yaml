@@ -84,7 +84,7 @@ jobs:
           timeout: ${{ env.GCF_TIMEOUT }}
           min_instances: ${{ env.GCF_MIN_INSTANCES }}
           max_instances: ${{ env.GCF_MAX_INSTANCES }}
-          event_trigger_type: google.cloud.pubsub.topic.v1.messagePublished
+          event_trigger_type: google.pubsub.topic.publish
           event_trigger_resource: projects/${{ env.GCF_PROJECT_ID }}/topics/${{ env.GCF_TOPIC }}-production
 
       - name: Deploy to Google Cloud Functions (Staging)
@@ -103,5 +103,5 @@ jobs:
           timeout: ${{ env.GCF_TIMEOUT }}
           min_instances: ${{ env.GCF_MIN_INSTANCES }}
           max_instances: ${{ env.GCF_MAX_INSTANCES }}
-          event_trigger_type: google.cloud.pubsub.topic.v1.messagePublished
+          event_trigger_type: google.pubsub.topic.publish
           event_trigger_resource: projects/${{ env.GCF_PROJECT_ID }}/topics/${{ env.GCF_TOPIC }}-staging
