@@ -6,6 +6,7 @@ from typing import List, Union
 
 import functions_framework
 import requests
+import sentry_sdk
 from google.cloud import secretmanager
 from langchain.output_parsers import PydanticOutputParser
 from langchain_core.messages import HumanMessage
@@ -21,16 +22,6 @@ class Object(BaseModel):
     label: Union[bool, str] = Field(
         description="Label indicating the condition or characteristic of the object"
     )
-
-
-class ObjectFactory:
-    @classmethod
-    def generate_sample(cls) -> Object:
-        return Object(
-            object="<Object from objects table>",
-            label_explanation="<Visual description of the image given the object context>",
-            label="<Selected label from objects table>",
-        )
 
 
 class Output(BaseModel):
@@ -104,6 +95,7 @@ def get_secret(secret_id: str) -> str:
 
 
 def get_prediction(
+    data: dict,
     image_url: str,
     prompt_text: str,
     google_api_key: str,
@@ -127,8 +119,20 @@ def get_prediction(
 
     message = HumanMessage(content=content)
     response = llm.invoke([message])
+    response_ai = response.content
     output_parser = PydanticOutputParser(pydantic_object=Output)
-    response_parsed = output_parser.parse(response.content)
+
+    try:
+        response_parsed = output_parser.parse(response_ai)
+    except Exception:
+        msg = f"""
+            CLOUD FUNCTION ERROR
+            response_ai:{response_ai}
+            panload_data:{data}
+
+        """
+        raise Exception(msg.replace("            ", ""))
+
     return response_parsed.dict()
 
 
@@ -146,6 +150,8 @@ def predict(cloud_event: dict) -> None:
     vision_ai_api_secrets = get_secret("vision-ai-api-secrets-cloud-functions")
     vision_ai_api_secrets = json.loads(vision_ai_api_secrets)
 
+    sentry_sdk.init(vision_ai_api_secrets["sentry_dns"])
+
     # Initializes the Vision AI API client
     vision_ai_api = APIVisionAI(
         username=vision_ai_api_secrets["username"],
@@ -156,6 +162,7 @@ def predict(cloud_event: dict) -> None:
 
     # Generates a prediction using the Google Generative AI model
     ai_response_parsed = get_prediction(
+        data=data,
         image_url=data["image_url"],
         prompt_text=data["prompt_text"],
         google_api_key=google_api_key,
@@ -170,12 +177,15 @@ def predict(cloud_event: dict) -> None:
     camera_objects_from_api = dict(zip(data["object_slugs"], data["object_ids"]))
     for item in ai_response_parsed["objects"]:
         object_id = camera_objects_from_api.get(item["object"], None)
+        label_explanation = item["label_explanation"]
+        label = item["label"]
+        label = str(label).lower()
         if object_id is not None:
             r = vision_ai_api.put_camera_object(
                 camera_id=camera_id,
                 object_id=object_id,
-                label_explanation=item["label_explanation"],
-                label=item["label"],
+                label_explanation=label_explanation,
+                label=label,
             )
 
             if (
