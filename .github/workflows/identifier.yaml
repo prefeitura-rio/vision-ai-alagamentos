@@ -80,9 +80,9 @@ jobs:
           region: ${{ env.GCF_REGION }}
           source_dir: projects/identifier/
           project_id: ${{ env.GCF_PROJECT_ID }}
-          secret_volumes: |
-            /projects/rj-escritorio-dev/secrets/gemini-api-key-cloud-functions/gemini-api-key-cloud-functions=/projects/rj-escritorio-dev/secrets/gemini-api-key-cloud-functions/latest
-            /projects/rj-escritorio-dev/secrets/vision-ai-api-secrets-cloud-functions/vision-ai-api-secrets-cloud-functions=/projects/rj-escritorio-dev/secrets/vision-ai-api-secrets-cloud-functions/latest
+          secret_environment_variables: |
+            GEMINI_API_KEY=/projects/rj-escritorio-dev/secrets/gemini-api-key-cloud-functions/latest
+            VISION_AI_API_SECRETS=/projects/rj-escritorio-dev/secrets/vision-ai-api-secrets-cloud-functions/latest
           timeout: ${{ env.GCF_TIMEOUT }}
           min_instances: ${{ env.GCF_MIN_INSTANCES }}
           max_instances: ${{ env.GCF_MAX_INSTANCES }}
@@ -100,9 +100,9 @@ jobs:
           region: ${{ env.GCF_REGION }}
           source_dir: projects/identifier/
           project_id: ${{ env.GCF_PROJECT_ID }}
-          secret_volumes: |
-            /projects/rj-escritorio-dev/secrets/gemini-api-key-cloud-functions/gemini-api-key-cloud-functions=/projects/rj-escritorio-dev/secrets/gemini-api-key-cloud-functions/latest
-            /projects/rj-escritorio-dev/secrets/vision-ai-api-secrets-cloud-functions/vision-ai-api-secrets-cloud-functions=/projects/rj-escritorio-dev/secrets/vision-ai-api-secrets-cloud-functions/latest
+          secret_environment_variables: |
+            GEMINI_API_KEY=/projects/rj-escritorio-dev/secrets/gemini-api-key-cloud-functions/latest
+            VISION_AI_API_SECRETS=/projects/rj-escritorio-dev/secrets/vision-ai-api-secrets-cloud-functions/latest
           timeout: ${{ env.GCF_TIMEOUT }}
           min_instances: ${{ env.GCF_MIN_INSTANCES }}
           max_instances: ${{ env.GCF_MAX_INSTANCES }}
