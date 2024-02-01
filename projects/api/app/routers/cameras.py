@@ -99,6 +99,29 @@ async def create_camera(camera_: CameraIn, _=Depends(is_admin)) -> CameraOut:
     )
 
 
+@router.get("/latest_snapshots", response_model=Page[Snapshot])
+async def get_latest_snapshots(
+    after: datetime,
+    _: Annotated[APICaller, Depends(get_caller)],  # TODO: Review permissions here
+) -> Page[Snapshot]:
+    """Get snapshots after a treshold datetime."""
+    return await tortoise_paginate(
+        Camera.filter(snapshot_timestamp__gte=after),
+        transformer=partial(
+            apply_to_list,
+            fn=partial(
+                transform_tortoise_to_pydantic,
+                pydantic_model=Snapshot,
+                vars_map=[
+                    ("id", "camera_id"),
+                    ("snapshot_url", "image_url"),
+                    ("snapshot_timestamp", "timestamp"),
+                ],
+            ),
+        ),
+    )
+
+
 @router.get("/{camera_id}", response_model=CameraOut)
 async def get_camera(
     camera_id: str,
@@ -264,7 +287,9 @@ async def get_camera_snapshot(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Camera snapshot not found.",
         )
-    return Snapshot(image_url=camera.snapshot_url, timestamp=camera.snapshot_timestamp)
+    return Snapshot(
+        camera_id=camera.id, image_url=camera.snapshot_url, timestamp=camera.snapshot_timestamp
+    )
 
 
 @router.post("/{camera_id}/snapshot", response_model=SnapshotPostResponse)
@@ -274,6 +299,16 @@ async def camera_snapshot(
     caller: Annotated[APICaller, Depends(get_caller)],
 ) -> SnapshotPostResponse:
     """Post a camera snapshot to the server."""
+    # TODO: publish data to pubsub
+    # {
+    #     "image_url": "http...",
+    #     "prompt_text": "str",
+    #     "model": "str",
+    #     "max_output_tokens": 123,
+    #     "temperature": 0.1,
+    #     "top_k": 1,
+    #     "top_p": 1,
+    # }
     # Caller must be an agent that has access to the camera.
     if not caller.agent:
         raise HTTPException(

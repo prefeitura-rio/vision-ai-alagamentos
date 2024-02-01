@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import base64
+from datetime import datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
@@ -264,3 +265,26 @@ async def test_cameras_get_snapshot(client: AsyncClient, authorization_header: d
     assert "timestamp" in response.json()
     assert isinstance(response.json()["image_url"], str)
     assert isinstance(response.json()["timestamp"], str)
+
+
+@pytest.mark.anyio
+@pytest.mark.run(order=31)
+async def test_cameras_latest_snapshots(
+    client: AsyncClient, authorization_header: dict, context: dict
+):
+    response = await client.get(
+        f"/cameras/latest_snapshots?after={(datetime.utcnow() - timedelta(minutes=10)).isoformat()}",  # noqa
+        headers=authorization_header,
+    )
+    assert response.status_code == 200
+    assert "items" in response.json()
+    assert "total" in response.json()
+    assert "page" in response.json()
+    assert "size" in response.json()
+    assert "pages" in response.json()
+    assert len(response.json()["items"]) == 1
+    for item in response.json()["items"]:
+        assert "image_url" in item
+        assert "timestamp" in item
+        assert isinstance(item["image_url"], str)
+        assert isinstance(item["timestamp"], str)

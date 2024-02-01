@@ -5,12 +5,12 @@ import inspect
 import io
 import json
 from asyncio import Task
-from typing import Any, Callable, List, Tuple, Union
+from typing import Any, Callable, Dict, List, Tuple, Union
 from uuid import uuid4
 
 import nest_asyncio
 from fastapi import HTTPException, status
-from google.cloud import storage
+from google.cloud import pubsub, storage
 from google.cloud.storage.blob import Blob
 from google.oauth2 import service_account
 from PIL import Image
@@ -163,7 +163,6 @@ def get_gcp_credentials(
 def get_gcs_client() -> storage.Client:
     """
     Get a GCS client with the credentials from the environment.
-    Mode needs to be "prod" or "staging"
 
     Args:
         mode (str): The mode to filter by (prod or staging).
@@ -286,6 +285,41 @@ async def get_prompts_best_fit(object_slugs: List[str]) -> List[Prompt]:
             final_prompts.append(prompt)
             covered_objects += list(await prompt.objects.all())
     return final_prompts
+
+
+def get_pubsub_client() -> pubsub.PublisherClient:
+    """
+    Get a PubSub client with the credentials from the environment.
+
+    Args:
+        mode (str): The mode to filter by (prod or staging).
+
+    Returns:
+        storage.Client: The GCS client.
+    """
+    credentials = get_gcp_credentials(scopes=["https://www.googleapis.com/auth/pubsub"])
+    return pubsub.PublisherClient(credentials=credentials)
+
+
+def publish_message(
+    *,
+    data: Dict[str, str],
+    project_id: str,
+    topic: str,
+):
+    """
+    Publishes a message to a PubSub topic.
+
+    Args:
+        data (Dict[str, str]): The data to publish.
+        project_id (str): The project id.
+        topic (str): The topic name.
+    """
+    client = get_pubsub_client()
+    topic_name = f"projects/{project_id}/topics/{topic}"
+    byte_data = json.dumps(data).encode("utf-8")
+    future = client.publish(topic_name, byte_data)
+    return future.result()
 
 
 def slugify(text: str) -> str:

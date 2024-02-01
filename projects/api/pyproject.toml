@@ -27,6 +27,7 @@ sentry-sdk = { extras = ["fastapi"], version = "^1.39.2" }
 tortoise-orm = { extras = ["asyncpg"], version = "^0.20.0" }
 uvicorn = { extras = ["standard"], version = "^0.26.0" }
 vision-ai-base = { path = "libs/base", develop = true }
+google-cloud-pubsub = "^2.19.0"
 
 
 [tool.poetry.group.dev.dependencies]

@@ -121,6 +121,7 @@ class PromptsResponse(BaseModel):
 
 
 class Snapshot(BaseModel):
+    camera_id: str
     image_url: str
     timestamp: datetime
 

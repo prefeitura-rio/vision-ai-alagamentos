@@ -3,12 +3,13 @@ import asyncio
 from os import getenv
 
 import pytest
-from app.db import TORTOISE_ORM
-from app.main import app
-from app.models import Agent, Camera, CameraIdentification, Label, Object, Prompt
 from httpx import AsyncClient
 from loguru import logger
 from tortoise import Tortoise
+
+from app.db import TORTOISE_ORM
+from app.main import app
+from app.models import Agent, Camera, CameraIdentification, Label, Object, Prompt
 
 
 @pytest.fixture(scope="session")

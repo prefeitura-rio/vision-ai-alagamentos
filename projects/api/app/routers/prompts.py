@@ -3,6 +3,11 @@ from functools import partial
 from typing import Annotated, List
 from uuid import UUID
 
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi_pagination import Page
+from fastapi_pagination.ext.tortoise import paginate as tortoise_paginate
+from tortoise.fields import ReverseRelation
+
 from app.dependencies import get_caller, is_admin
 from app.models import Object, Prompt
 from app.pydantic_models import (
@@ -20,10 +25,6 @@ from app.utils import (
     get_prompts_best_fit,
     transform_tortoise_to_pydantic,
 )
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi_pagination import Page
-from fastapi_pagination.ext.tortoise import paginate as tortoise_paginate
-from tortoise.fields import ReverseRelation
 
 router = APIRouter(prefix="/prompts", tags=["Prompts"])
 

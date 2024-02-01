@@ -23,3 +23,5 @@ GCS_BUCKET_NAME = getenv_or_action("GCS_BUCKET_NAME", action="warn")
 GCS_BUCKET_PATH_PREFIX = getenv_or_action("GCS_BUCKET_PATH_PREFIX", action="warn")
 if GCS_BUCKET_PATH_PREFIX:
     GCS_BUCKET_PATH_PREFIX = GCS_BUCKET_PATH_PREFIX.rstrip("/")
+GCP_PUBSUB_PROJECT_ID = getenv_or_action("GCP_PUBSUB_PROJECT_ID", action="warn")
+GCP_PUBSUB_TOPIC_NAME = getenv_or_action("GCP_PUBSUB_TOPIC_NAME", action="warn")
