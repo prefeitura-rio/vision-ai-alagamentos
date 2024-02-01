@@ -2,27 +2,51 @@
 import base64
 import json
 import time
+from typing import List, Union
 
 import functions_framework
 import requests
 from google.cloud import secretmanager
+from langchain.output_parsers import PydanticOutputParser
 from langchain_core.messages import HumanMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
+from pydantic import BaseModel, Field
+
+
+class Object(BaseModel):
+    object: str = Field(description="The object from the objects table")
+    label_explanation: str = Field(
+        description="Highly detailed visual description of the image given the object context"
+    )
+    label: Union[bool, str] = Field(
+        description="Label indicating the condition or characteristic of the object"
+    )
+
+
+class ObjectFactory:
+    @classmethod
+    def generate_sample(cls) -> Object:
+        return Object(
+            object="<Object from objects table>",
+            label_explanation="<Visual description of the image given the object context>",
+            label="<Selected label from objects table>",
+        )
+
+
+class Output(BaseModel):
+    objects: List[Object]
 
 
 class APIVisionAI:
-    def __init__(self, username: str, password: str, client_id: str, client_secret: str):
+    def __init__(self, username, password, client_id, client_secret):
         self.BASE_URL = "https://vision-ai-api-staging-ahcsotxvgq-uc.a.run.app"
         self.username = username
         self.password = password
         self.client_id = client_id
         self.client_secret = client_secret
-        self.token: str
-        self.token_renewal_time: float
-        self.token, self.token_renewal_time = self._get_token()
+        self.headers, self.token_renewal_time = self._get_headers()
 
-    def _get_token(self) -> tuple[str, float]:
-        # Obtains and returns an access token along with the time of token retrieval
+    def _get_headers(self):
         access_token_response = requests.post(
             "https://authentik.dados.rio/application/o/token/",
             data={
@@ -34,67 +58,38 @@ class APIVisionAI:
                 "scope": "profile",
             },
         ).json()
-        return access_token_response["access_token"], time.time()
+        token = access_token_response["access_token"]
+        return {"Authorization": f"Bearer {token}"}, time.time()
 
-    def _refresh_token_if_needed(self) -> None:
-        # Refreshes the token if it has expired
+    def _refresh_token_if_needed(self):
         if time.time() - self.token_renewal_time >= 60:
-            self.token, self.token_renewal_time = self._get_token()
+            self.header, self.token_renewal_time = self._get_headers()
 
-    def _get(self, path: str) -> dict:
-        # Performs a GET request with a refreshed token
+    def _get(self, path):
         self._refresh_token_if_needed()
-        response = requests.get(
-            f"{self.BASE_URL}{path}", headers={"Authorization": f"Bearer {self.token}"}
-        )
+        response = requests.get(f"{self.BASE_URL}{path}", headers=self.headers)
         return response.json()
 
-    def _put(self, path: str, json_data: dict = None) -> dict:
-        # Performs a PUT request with a refreshed token
+    def _put(self, path):
         self._refresh_token_if_needed()
         response = requests.put(
             f"{self.BASE_URL}{path}",
-            json=json_data,
-            headers={"Authorization": f"Bearer {self.token}"},
+            headers=self.headers,
         )
-        return response.json()
+        return response
 
-    def _post(self, path: str, json_data: dict = None) -> dict:
-        # Performs a POST request with a refreshed token
+    def _post(self, path):
         self._refresh_token_if_needed()
         response = requests.post(
             f"{self.BASE_URL}{path}",
-            json=json_data,
-            headers={"Authorization": f"Bearer {self.token}"},
+            headers=self.headers,
         )
         return response.json()
 
-    def get_prompt(self) -> dict:
-        # Retrieves a prompt from the Vision AI API
-        return self._get("/prompts?page=1&size=100").get("items")[0]
-
-    def get_snapshot(self, camera_id: str) -> str:
-        # Retrieves a snapshot image in base64 format from the Vision AI API
-        return self._get(f"/cameras/{camera_id}/snapshot")["image_base64"]
-
-    def get_object_id(self, name: str) -> str:
-        # Retrieves the object ID based on the object name from the Vision AI API
-        return self._get(f"/objects?name={name}")["items"][0]["id"]
-
-    def put_camera_object_details(self, camera_id: str, object_id: str, label: str) -> dict:
-        # Updates camera object details using a PUT request
+    def put_camera_object(self, camera_id, object_id, label_explanation, label):
         return self._put(
-            path=f"/cameras/{camera_id}/objects/{object_id}?label={str(label).lower()}",
-            json_data={"label": label},
+            path=f"/cameras/{camera_id}/objects/{object_id}?label={label}&label_explanation={label_explanation}",  # noqa
         )
-
-    def get_camera_object_details(self, camera_id: str, object_id: str) -> dict:
-        # Retrieves camera object details using a GET request
-        return self._get(path=f"/cameras/{camera_id}/objects/{object_id}")
-
-    def post_camera_object(self, camera_id: str, object_id: str) -> dict:
-        # Creates a new camera object using a POST request
-        return self._post(path=f"/cameras/{camera_id}/objects?object_id={object_id}")
 
 
 def get_secret(secret_id: str) -> str:
@@ -108,16 +103,8 @@ def get_secret(secret_id: str) -> str:
     return secret
 
 
-def get_content(prompt_text: str, image_base64: str) -> list[dict]:
-    # Constructs and returns content for the prediction request
-    return [
-        {"type": "text", "text": prompt_text},
-        {"type": "image_url", "image_url": "data:image/png;base64," + image_base64},
-    ]
-
-
 def get_prediction(
-    image_base64: str,
+    image_url: str,
     prompt_text: str,
     google_api_key: str,
     google_api_model: str = "gemini-pro-vision",
@@ -135,12 +122,14 @@ def get_prediction(
         top_k=top_k,
         top_p=top_p,
     )
-    content = get_content(prompt_text=prompt_text, image_base64=image_base64)
+
+    content = [{"type": "text", "text": prompt_text}, {"type": "image_url", "image_url": image_url}]
 
     message = HumanMessage(content=content)
     response = llm.invoke([message])
-    json_string = response.content.replace("```json\n", "").replace("\n```", "").replace("'", '"')
-    return json.loads(json_string)
+    output_parser = PydanticOutputParser(pydantic_object=Output)
+    response_parsed = output_parser.parse(response.content)
+    return response_parsed.dict()
 
 
 @functions_framework.cloud_event
@@ -153,7 +142,6 @@ def predict(cloud_event: dict) -> None:
     data = json.loads(data_bytes.decode("utf-8"))
 
     # Extracts relevant information from the Cloud Event data
-    camera_id = data.get("camera_id")
     google_api_key = get_secret("gemini-api-key-cloud-functions")
     vision_ai_api_secrets = get_secret("vision-ai-api-secrets-cloud-functions")
     vision_ai_api_secrets = json.loads(vision_ai_api_secrets)
@@ -166,44 +154,37 @@ def predict(cloud_event: dict) -> None:
         client_secret=vision_ai_api_secrets["client_secret"],
     )
 
-    # Obtains a snapshot image in base64 format from the Vision AI API
-    image_base64 = vision_ai_api.get_snapshot(camera_id=camera_id)
-
-    # Retrieves prompt parameters from the Vision AI API
-    prompt_parameters = vision_ai_api.get_prompt()
-
     # Generates a prediction using the Google Generative AI model
-    label = get_prediction(
-        image_base64=image_base64,
-        prompt_text=prompt_parameters.get("prompt_text"),
+    ai_response_parsed = get_prediction(
+        image_url=data["image_url"],
+        prompt_text=data["prompt_text"],
         google_api_key=google_api_key,
-        google_api_model="gemini-pro-vision",
-        max_output_tokens=prompt_parameters.get("max_output_tokens"),
-        temperature=prompt_parameters.get("temperature"),
-        top_k=prompt_parameters.get("top_k"),
-        top_p=prompt_parameters.get("top_p"),
+        google_api_model=data["model"],
+        max_output_tokens=data["max_output_tokens"],
+        temperature=data["temperature"],
+        top_k=data["top_k"],
+        top_p=data["top_p"],
     )
 
-    # Obtains the object ID for "alagamento"
-    object_id = vision_ai_api.get_object_id(name="alagamento")
+    camera_id = data.get("camera_id")
+    camera_objects_from_api = dict(zip(data["object_slugs"], data["object_ids"]))
+    for item in ai_response_parsed["objects"]:
+        object_id = camera_objects_from_api.get(item["object"], None)
+        if object_id is not None:
+            r = vision_ai_api.put_camera_object(
+                camera_id=camera_id,
+                object_id=object_id,
+                label_explanation=item["label_explanation"],
+                label=item["label"],
+            )
 
-    # Retrieves camera object details
-    camera_object_detail = vision_ai_api.get_camera_object_details(
-        camera_id=camera_id,
-        object_id=object_id,
-    )
-
-    # If the label is not present in camera object details, create a new camera object
-    if "label" not in camera_object_detail:
-        vision_ai_api.post_camera_object(
-            camera_id=camera_id,
-            object_id=object_id,
-        )
-
-    # Updates camera object details with the predicted label
-    put_response = vision_ai_api.put_camera_object_details(
-        camera_id=camera_id, object_id=object_id, label=label["label"]
-    )
-
-    # Prints the response from updating camera object details
-    print(f"camera_id:{camera_id}\nput_response: {put_response}")
+            if (
+                r.status_code != 200
+            ):  # TODO pensar o que fazer com o label que nao existem, criar ou so ignora?
+                # raise Exception(f"Error: {r.status_code}\n{r}")
+                print(camera_id)
+                print(item["object"], ": ", item["label"])
+                print(f"Error: {r.status_code}\n{r.json()}\n\n")
+            # else:
+            #     print(camera_id)
+            #     print(f"{r.json()}\n\n")
