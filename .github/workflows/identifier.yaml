@@ -86,7 +86,7 @@ jobs:
             --entry-point=${{ env.GCF_ENTRY_POINT }} \
             --memory=${{ env.GCF_MEMORY_MB }}MB \
             --timeout=${{ env.GCF_TIMEOUT }}s \
-            --trigger-topic=projects/${{ env.GCF_PROJECT_ID }}/topics/${{ env.GCF_TOPIC }}-production \
+            --trigger-topic=${{ env.GCF_TOPIC }}-production \
             --trigger-event=google.pubsub.topic.publish \
             --min-instances=${{ env.GCF_MIN_INSTANCES }} \
             --max-instances=${{ env.GCF_MAX_INSTANCES }} \
@@ -104,7 +104,7 @@ jobs:
             --entry-point=${{ env.GCF_ENTRY_POINT }} \
             --memory=${{ env.GCF_MEMORY_MB }}MB \
             --timeout=${{ env.GCF_TIMEOUT }}s \
-            --trigger-topic=projects/${{ env.GCF_PROJECT_ID }}/topics/${{ env.GCF_TOPIC }}-staging \
+            --trigger-topic=${{ env.GCF_TOPIC }}-staging \
             --trigger-event=google.pubsub.topic.publish \
             --min-instances=${{ env.GCF_MIN_INSTANCES }} \
             --max-instances=${{ env.GCF_MAX_INSTANCES }} \
