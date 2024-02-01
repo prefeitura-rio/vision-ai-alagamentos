@@ -358,6 +358,7 @@ async def camera_snapshot(
             prompt=prompt, object_slugs=camera_object_slugs
         )
         message = {
+            "camera_id": camera.id,
             "image_url": blob.public_url,
             "prompt_text": formatted_text,
             "object_ids": camera_object_ids,
