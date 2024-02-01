@@ -51,6 +51,7 @@ async def get_cameras(_=Depends(is_admin)) -> Page[CameraOut]:
                 object=(await item.object).slug,
                 timestamp=item.timestamp,
                 label=(await item.label).value if item.label else None,
+                label_explanation=item.label_explanation,
             )
             for item in identifications
         ]
@@ -96,6 +97,7 @@ async def create_camera(camera_: CameraIn, _=Depends(is_admin)) -> CameraOut:
                 object=item.object.slug,
                 timestamp=item.timestamp,
                 label=(await item.label).value if item.label else None,
+                label_explanation=item.label_explanation,
             )
             for item in await CameraIdentification.filter(camera=camera).all()
         ],
@@ -148,6 +150,7 @@ async def get_camera(
                 object=(await item.object).slug,
                 timestamp=item.timestamp,
                 label=(await item.label).value if item.label else None,
+                label_explanation=item.label_explanation,
             )
             for item in await CameraIdentification.filter(camera=camera).all()
         ],
@@ -167,6 +170,7 @@ async def get_camera_objects(
             object=(await item.object).slug,
             timestamp=item.timestamp,
             label=(await item.label).value if item.label else None,
+            label_explanation=item.label_explanation,
         )
         for item in await CameraIdentification.filter(camera=camera).all()
     ]
@@ -208,6 +212,7 @@ async def create_camera_object(
                 object=(await item.object).slug,
                 timestamp=item.timestamp,
                 label=(await item.label).value if item.label else None,
+                label_explanation=item.label_explanation,
             )
             for item in await CameraIdentification.filter(camera=camera).all()
         ],
@@ -228,6 +233,7 @@ async def get_camera_object(
         object=(await identification.object).slug,
         timestamp=identification.timestamp,
         label=(await identification.label).value if identification.label else None,
+        label_explanation=identification.label_explanation,
     )
 
 
@@ -236,6 +242,7 @@ async def update_camera_object(
     camera_id: str,
     object_id: UUID,
     label: str,
+    label_explanation: str,
     _=Depends(is_admin),  # TODO: Review permissions here
 ) -> IdentificationDetails:
     """Update a camera object."""
@@ -258,12 +265,14 @@ async def update_camera_object(
             detail="Label not found.",
         )
     identification.label = label_obj
+    identification.label_explanation = label_explanation
     identification.timestamp = datetime.now()
     await identification.save()
     return IdentificationDetails(
         object=(await identification.object).slug,
         timestamp=identification.timestamp,
         label=(await identification.label).value if identification.label else None,
+        label_explanation=identification.label_explanation,
     )
 
 
