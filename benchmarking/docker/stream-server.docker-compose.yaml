@@ -1,0 +1,5 @@
+services:
+  stream-server:
+    image: bluenviron/mediamtx:latest
+    restart: always
+    network_mode: "host"
