@@ -70,6 +70,8 @@ async def get_cameras(_=Depends(is_admin)) -> Page[CameraOut]:
                     ("update_interval", "update_interval"),
                     ("latitude", "latitude"),
                     ("longitude", "longitude"),
+                    ("snapshot_url", "snapshot_url"),
+                    ("snapshot_timestamp", "snapshot_timestamp"),
                     ("identifications", ("objects", get_objects)),
                     ("identifications", ("identifications", get_identifications)),
                 ],
@@ -89,6 +91,8 @@ async def create_camera(camera_: CameraIn, _=Depends(is_admin)) -> CameraOut:
         update_interval=camera.update_interval,
         latitude=camera.latitude,
         longitude=camera.longitude,
+        snapshot_url=camera.snapshot_url,
+        snapshot_timestamp=camera.snapshot_timestamp,
         objects=[
             item.object.slug for item in await CameraIdentification.filter(camera=camera).all()
         ],
@@ -141,6 +145,8 @@ async def get_camera(
         update_interval=camera.update_interval,
         latitude=camera.latitude,
         longitude=camera.longitude,
+        snapshot_url=camera.snapshot_url,
+        snapshot_timestamp=camera.snapshot_timestamp,
         objects=[
             (await item.object).slug
             for item in await CameraIdentification.filter(camera=camera).all()
@@ -203,6 +209,8 @@ async def create_camera_object(
         update_interval=camera.update_interval,
         latitude=camera.latitude,
         longitude=camera.longitude,
+        snapshot_url=camera.snapshot_url,
+        snapshot_timestamp=camera.snapshot_timestamp,
         objects=[
             (await item.object).slug
             for item in await CameraIdentification.filter(camera=camera).all()
