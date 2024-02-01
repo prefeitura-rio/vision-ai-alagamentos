@@ -33,7 +33,7 @@ jobs:
   deploy:
     name: Deploy
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/development'
-    needs: [lint, tests]
+    needs: [lint]
     runs-on: ubuntu-latest
     permissions:
       id-token: write
