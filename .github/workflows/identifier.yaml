@@ -1,0 +1,107 @@
+name: Identifier
+
+on:
+  push:
+    paths:
+      - ".github/workflows/identifier*"
+      - "projects/identifier/**/*"
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: "3.11.x"
+
+      - name: Set up dependencies
+        run: |
+          cd projects/identifier/
+          pip install -U pip
+          pip install -r requirements-dev.txt
+
+      - name: Run linters
+        run: |
+          cd projects/identifier/
+          black . && isort . && flake8 .
+
+  deploy:
+    name: Deploy
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/development'
+    needs: [lint, tests]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+      GCF_PROJECT_ID: ${{ secrets.GCF_PROJECT_ID }}
+      GCF_NAME: vision-ai-function
+      GCF_RUNTIME: python311
+      GCF_MEMORY_MB: 256
+      GCF_REGION: us-central1
+      GCF_TIMEOUT: 60
+      GCF_MIN_INSTANCES: 0
+      GCF_MAX_INSTANCES: 100
+      GCF_TOPIC: vision-ai
+
+    environment:
+      name: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Remove soft link and copy libs to API directory
+        run: |
+          rm projects/identifier/libs
+          mkdir -p projects/identifier/libs
+          cp -r libs/* projects/identifier/libs/
+
+      - name: Google Auth
+        id: auth
+        uses: 'google-github-actions/auth@v2'
+        with:
+          credentials_json: '${{ env.GCP_SA_KEY }}'
+
+      - name: Deploy to Google Cloud Functions (Production)
+        if: github.ref == 'refs/heads/main'
+        uses: google-github-actions/deploy-cloud-functions@v2
+        with:
+          name: ${{ env.GCF_NAME }}-production
+          runtime: ${{ env.GCF_RUNTIME }}
+          memory_mb: ${{ env.GCF_MEMORY_MB }}
+          region: ${{ env.GCF_REGION }}
+          source_dir: projects/identifier/
+          project_id: ${{ env.GCF_PROJECT_ID }}
+          secret_volumes: |
+            /projects/rj-escritorio-dev/secrets/gemini-api-key-cloud-functions/gemini-api-key-cloud-functions=gemini-api-key-cloud-functions:latest
+            /projects/rj-escritorio-dev/secrets/vision-ai-api-secrets-cloud-functions/vision-ai-api-secrets-cloud-functions=vision-ai-api-secrets-cloud-functions:latest
+          timeout: ${{ env.GCF_TIMEOUT }}
+          min_instances: ${{ env.GCF_MIN_INSTANCES }}
+          max_instances: ${{ env.GCF_MAX_INSTANCES }}
+          event_trigger_type: google.cloud.pubsub.topic.v1.messagePublished
+          event_trigger_resource: projects/${{ env.GCF_PROJECT_ID }}/topics/${{ env.GCF_TOPIC }}-production
+
+      - name: Deploy to Google Cloud Functions (Staging)
+        if: github.ref == 'refs/heads/development'
+        uses: google-github-actions/deploy-cloud-functions@v2
+        with:
+          name: ${{ env.GCF_NAME }}-staging
+          runtime: ${{ env.GCF_RUNTIME }}
+          memory_mb: ${{ env.GCF_MEMORY_MB }}
+          region: ${{ env.GCF_REGION }}
+          source_dir: projects/identifier/
+          project_id: ${{ env.GCF_PROJECT_ID }}
+          secret_volumes: |
+            /projects/rj-escritorio-dev/secrets/gemini-api-key-cloud-functions/gemini-api-key-cloud-functions=gemini-api-key-cloud-functions:latest
+            /projects/rj-escritorio-dev/secrets/vision-ai-api-secrets-cloud-functions/vision-ai-api-secrets-cloud-functions=vision-ai-api-secrets-cloud-functions:latest
+          timeout: ${{ env.GCF_TIMEOUT }}
+          min_instances: ${{ env.GCF_MIN_INSTANCES }}
+          max_instances: ${{ env.GCF_MAX_INSTANCES }}
+          event_trigger_type: google.cloud.pubsub.topic.v1.messagePublished
+          event_trigger_resource: projects/${{ env.GCF_PROJECT_ID }}/topics/${{ env.GCF_TOPIC }}-staging
