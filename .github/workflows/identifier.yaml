@@ -69,42 +69,43 @@ jobs:
         with:
           credentials_json: '${{ env.GCP_SA_KEY }}'
 
+      - name: 'Set up Cloud SDK'
+        uses: 'google-github-actions/setup-gcloud@v1'
+        with:
+          version: '>= 363.0.0'
+
       - name: Deploy to Google Cloud Functions (Production)
         if: github.ref == 'refs/heads/main'
-        uses: google-github-actions/deploy-cloud-functions@v2
-        with:
-          name: ${{ env.GCF_NAME }}-production
-          runtime: ${{ env.GCF_RUNTIME }}
-          entry_point: ${{ env.GCF_ENTRY_POINT }}
-          memory_mb: ${{ env.GCF_MEMORY_MB }}
-          region: ${{ env.GCF_REGION }}
-          source_dir: projects/identifier/
-          project_id: ${{ env.GCF_PROJECT_ID }}
-          secret_environment_variables: |
-            GEMINI_API_KEY=/projects/rj-escritorio-dev/secrets/gemini-api-key-cloud-functions/latest
-            VISION_AI_API_SECRETS=/projects/rj-escritorio-dev/secrets/vision-ai-api-secrets-cloud-functions/latest
-          timeout: ${{ env.GCF_TIMEOUT }}
-          min_instances: ${{ env.GCF_MIN_INSTANCES }}
-          max_instances: ${{ env.GCF_MAX_INSTANCES }}
-          event_trigger_type: google.pubsub.topic.publish
-          event_trigger_resource: projects/${{ env.GCF_PROJECT_ID }}/topics/${{ env.GCF_TOPIC }}-production
+        run: |
+          gcloud functions deploy ${{ env.GCF_NAME }}-production \
+            --project=${{ env.GCF_PROJECT_ID }} \
+            --gen2 \
+            --runtime=${{ env.GCF_RUNTIME }} \
+            --region=${{ env.GCF_REGION }} \
+            --source=projects/identifier/ \
+            --entry-point=${{ env.GCF_ENTRY_POINT }} \
+            --memory=${{ env.GCF_MEMORY_MB }}MB \
+            --timeout=${{ env.GCF_TIMEOUT }}s \
+            --trigger-topic=projects/${{ env.GCF_PROJECT_ID }}/topics/${{ env.GCF_TOPIC }}-production \
+            --trigger-event=google.pubsub.topic.publish \
+            --min-instances=${{ env.GCF_MIN_INSTANCES }} \
+            --max-instances=${{ env.GCF_MAX_INSTANCES }} \
+            --set-secrets=GEMINI_API_KEY=gemini-api-key-cloud-functions:latest,VISION_AI_API_SECRETS=vision-ai-api-secrets-cloud-functions:latest
 
       - name: Deploy to Google Cloud Functions (Staging)
         if: github.ref == 'refs/heads/development'
-        uses: google-github-actions/deploy-cloud-functions@v2
-        with:
-          name: ${{ env.GCF_NAME }}-staging
-          runtime: ${{ env.GCF_RUNTIME }}
-          entry_point: ${{ env.GCF_ENTRY_POINT }}
-          memory_mb: ${{ env.GCF_MEMORY_MB }}
-          region: ${{ env.GCF_REGION }}
-          source_dir: projects/identifier/
-          project_id: ${{ env.GCF_PROJECT_ID }}
-          secret_environment_variables: |
-            GEMINI_API_KEY=/projects/rj-escritorio-dev/secrets/gemini-api-key-cloud-functions/latest
-            VISION_AI_API_SECRETS=/projects/rj-escritorio-dev/secrets/vision-ai-api-secrets-cloud-functions/latest
-          timeout: ${{ env.GCF_TIMEOUT }}
-          min_instances: ${{ env.GCF_MIN_INSTANCES }}
-          max_instances: ${{ env.GCF_MAX_INSTANCES }}
-          event_trigger_type: google.pubsub.topic.publish
-          event_trigger_resource: projects/${{ env.GCF_PROJECT_ID }}/topics/${{ env.GCF_TOPIC }}-staging
+        run: |
+          gcloud functions deploy ${{ env.GCF_NAME }}-staging \
+            --project=${{ env.GCF_PROJECT_ID }} \
+            --gen2 \
+            --runtime=${{ env.GCF_RUNTIME }} \
+            --region=${{ env.GCF_REGION }} \
+            --source=projects/identifier/ \
+            --entry-point=${{ env.GCF_ENTRY_POINT }} \
+            --memory=${{ env.GCF_MEMORY_MB }}MB \
+            --timeout=${{ env.GCF_TIMEOUT }}s \
+            --trigger-topic=projects/${{ env.GCF_PROJECT_ID }}/topics/${{ env.GCF_TOPIC }}-staging \
+            --trigger-event=google.pubsub.topic.publish \
+            --min-instances=${{ env.GCF_MIN_INSTANCES }} \
+            --max-instances=${{ env.GCF_MAX_INSTANCES }} \
+            --set-secrets=GEMINI_API_KEY=gemini-api-key-cloud-functions:latest,VISION_AI_API_SECRETS=vision-ai-api-secrets-cloud-functions:latest
