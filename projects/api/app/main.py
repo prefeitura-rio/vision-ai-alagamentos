@@ -12,7 +12,7 @@ from tortoise.contrib.fastapi import register_tortoise
 from app import config
 from app.db import TORTOISE_ORM
 from app.oidc import AuthError
-from app.routers import agents, cameras, objects, prompts
+from app.routers import agents, auth, cameras, objects, prompts
 
 logger.remove()
 logger.add(sys.stdout, level=config.LOG_LEVEL)
@@ -45,6 +45,7 @@ app.add_middleware(
     allow_credentials=config.ALLOW_CREDENTIALS,
 )
 
+app.include_router(auth.router)
 app.include_router(agents.router)
 app.include_router(cameras.router)
 app.include_router(objects.router)

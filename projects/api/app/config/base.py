@@ -14,6 +14,7 @@ SENTRY_ENVIRONMENT = None
 
 # OIDC
 OIDC_CLIENT_ID = getenv_or_action("OIDC_CLIENT_ID")
+OIDC_CLIENT_SECRET = getenv_or_action("OIDC_CLIENT_SECRET")
 OIDC_ISSUER_URL = getenv_or_action("OIDC_ISSUER_URL")
 OIDC_TOKEN_URL = getenv_or_action("OIDC_TOKEN_URL")
 

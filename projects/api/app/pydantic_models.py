@@ -134,6 +134,11 @@ class SnapshotPostResponse(BaseModel):
     message: Optional[str]
 
 
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+
 class UserInfo(BaseModel):
     iss: str
     sub: str

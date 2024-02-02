@@ -4,22 +4,38 @@ from typing import Annotated
 from urllib.request import urlopen
 
 from fastapi import Depends
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from httpx import AsyncClient
 from jose import jwt
 
 from app import config
-from app.pydantic_models import UserInfo
+from app.pydantic_models import Token, UserInfo
 
-oidc_scheme = OAuth2PasswordBearer(
-    tokenUrl=config.OIDC_TOKEN_URL,
-    scopes={"openid": "openid", "email": "email", "profile": "profile"},
-)
+oidc_scheme = OAuth2PasswordBearer(tokenUrl="auth/token")
 
 
 class AuthError(Exception):
     def __init__(self, error, status_code):
         self.error = error
         self.status_code = status_code
+
+
+async def authenticate_user(form_data: OAuth2PasswordRequestForm) -> Token:
+    async with AsyncClient() as client:
+        response = await client.post(
+            config.OIDC_TOKEN_URL,
+            data={
+                "grant_type": "password",
+                "username": form_data.username,
+                "password": form_data.password,
+                "client_id": config.OIDC_CLIENT_ID,
+                "client_secret": config.OIDC_CLIENT_SECRET,
+                "scope": "profile",
+            },
+        )
+        if response.status_code != 200:
+            raise AuthError(response.json(), response.status_code)
+        return Token(**response.json())
 
 
 async def get_current_user(authorization_header: Annotated[str, Depends(oidc_scheme)]):
