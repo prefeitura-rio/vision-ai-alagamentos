@@ -39,8 +39,9 @@ type Camera struct {
 	getURL         *base.URL
 	updateInterval time.Duration
 	client         *gortsplib.Client
-	decoders       *decoders
 	accessToken    *AccessToken
+	rtpDecoder     rtpDecoder
+	frameDecoder   *h26xDecoder
 }
 
 func NewCamera(api CameraAPI) (*Camera, error) {
@@ -70,121 +71,84 @@ func (camera *Camera) setDecoders() error {
 		return fmt.Errorf("error describing camera: %w", err)
 	}
 
-	medias := []*description.Media{}
-	rtpDecoders := map[string]rtpDecoder{}
-	frameDecoders := map[string]frameDecoder{}
+	codecName := ""
+	media := &description.Media{}
+	initFrames := [][]byte{}
 
 	var h265 *format.H265
 	var h264 *format.H264
 
-	media264 := desc.FindFormat(&h264)
-	if media264 != nil {
+	if media264 := desc.FindFormat(&h264); media264 != nil {
 		rtpDecoder, err := h264.CreateDecoder()
 		if err != nil {
 			return fmt.Errorf("error creating H264 decoder: %w", err)
 		}
 
-		frameDecoder := &h264Decoder{}
-		err = frameDecoder.initialize()
-		if err != nil {
-			return fmt.Errorf("error initializing decoder: %w", err)
-		}
-
-		if h264.SPS != nil {
-			_, err = frameDecoder.decode(h264.SPS)
-			if err != nil {
-				return fmt.Errorf("error setting H264 SPS: %w", err)
-			}
-		}
-		if h264.PPS != nil {
-			_, err = frameDecoder.decode(h264.PPS)
-			if err != nil {
-				return fmt.Errorf("error setting H264 PPS: %w", err)
-			}
-		}
-
-		medias = append(medias, media264)
-		rtpDecoders["H264"] = rtpDecoder
-		frameDecoders["H264"] = frameDecoder
-	}
-
-	media265 := desc.FindFormat(&h265)
-	if media265 != nil {
+		codecName = "H264"
+		media = media264
+		initFrames = append(initFrames, h264.SPS, h264.PPS)
+		camera.rtpDecoder = rtpDecoder
+	} else if media265 := desc.FindFormat(&h265); media265 != nil {
 		rtpDecoder, err := h265.CreateDecoder()
 		if err != nil {
 			return fmt.Errorf("error creating H265 decoder: %w", err)
 		}
 
-		frameDecoder := &h265Decoder{}
-		err = frameDecoder.initialize()
-		if err != nil {
-			return fmt.Errorf("error initializing H265 decoder: %w", err)
-		}
-
-		if h265.VPS != nil {
-			_, err = frameDecoder.decode(h265.VPS)
-			if err != nil {
-				return fmt.Errorf("error setting H265 VPS: %w", err)
-			}
-		}
-		if h265.SPS != nil {
-			_, err = frameDecoder.decode(h265.SPS)
-			if err != nil {
-				return fmt.Errorf("error setting H265 SPS: %w", err)
-			}
-		}
-		if h265.PPS != nil {
-			_, err = frameDecoder.decode(h265.PPS)
-			if err != nil {
-				return fmt.Errorf("error setting H265 PPS: %w", err)
-			}
-		}
-
-		medias = append(medias, media265)
-		rtpDecoders["H265"] = rtpDecoder
-		frameDecoders["H265"] = frameDecoder
-	}
-
-	if len(medias) == 0 {
+		codecName = "H265"
+		media = media265
+		initFrames = append(initFrames, h265.VPS, h265.SPS, h265.PPS)
+		camera.rtpDecoder = rtpDecoder
+	} else {
 		return ErrMediaNotFound
 	}
 
-	err = camera.client.SetupAll(desc.BaseURL, medias)
+	camera.frameDecoder = &h26xDecoder{}
+	err = camera.frameDecoder.initialize(codecName)
 	if err != nil {
-		return fmt.Errorf("error setuping medias: %w", err)
+		return fmt.Errorf("error initializing H265 decoder: %w", err)
 	}
 
-	camera.decoders = &decoders{
-		rtp:   rtpDecoders,
-		frame: frameDecoders,
+	for _, frame := range initFrames {
+		if frame != nil {
+			_, err = camera.frameDecoder.decode(frame)
+			if err != nil {
+				return fmt.Errorf("error adding initial frames: %w", err)
+			}
+		}
+	}
+
+	_, err = camera.client.Setup(desc.BaseURL, media, 0, 0)
+	if err != nil {
+		return fmt.Errorf("error setuping medias: %w", err)
 	}
 
 	return nil
 }
 
 func (camera *Camera) closeDecoders() {
-	for _, decoder := range camera.decoders.frame {
-		decoder.close()
-	}
+	camera.frameDecoder.close()
 }
 
-func (camera *Camera) start() error {
-	err := camera.client.Start(camera.getURL.Scheme, camera.getURL.Host)
+func (camera *Camera) decodeRTPPacket(forma format.Format, pkt *rtp.Packet) (image.Image, error) {
+	au, err := camera.rtpDecoder.Decode(pkt)
 	if err != nil {
-		return fmt.Errorf("error connecting to the server: %w", err)
+		return nil, err
 	}
 
-	err = camera.setDecoders()
-	if err != nil {
-		return fmt.Errorf("error set decoders: %w", err)
+	for _, nalu := range au {
+		img, err := camera.frameDecoder.decode(nalu)
+		if err != nil {
+			return nil, fmt.Errorf("error decoding frame: %w", err)
+		}
+
+		if img == nil {
+			continue
+		}
+
+		return img, nil
 	}
 
-	return nil
-}
-
-func (camera *Camera) close() {
-	camera.closeDecoders()
-	camera.client.Close()
+	return nil, errAllFrameEmpty
 }
 
 func (camera *Camera) getNextFrame() (image.Image, error) {
@@ -217,7 +181,7 @@ func (camera *Camera) getNextFrame() (image.Image, error) {
 			return
 		}
 
-		img, err := decodeRTPPacket(f, pkt, camera.decoders)
+		img, err := camera.decodeRTPPacket(f, pkt)
 		if err != nil {
 			for _, validErr := range validErrs {
 				if errors.Is(err, validErr) {
@@ -268,6 +232,25 @@ func (camera *Camera) getNextFrame() (image.Image, error) {
 
 		return img, nil
 	}
+}
+
+func (camera *Camera) start() error {
+	err := camera.client.Start(camera.getURL.Scheme, camera.getURL.Host)
+	if err != nil {
+		return fmt.Errorf("error connecting to the server: %w", err)
+	}
+
+	err = camera.setDecoders()
+	if err != nil {
+		return fmt.Errorf("error set decoders: %w", err)
+	}
+
+	return nil
+}
+
+func (camera *Camera) close() {
+	camera.closeDecoders()
+	camera.client.Close()
 }
 
 type camerasByUpdateInterval struct {

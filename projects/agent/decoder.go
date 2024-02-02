@@ -5,7 +5,6 @@ import (
 	"image"
 	"unsafe"
 
-	"github.com/bluenviron/gortsplib/v4/pkg/format"
 	"github.com/pion/rtp"
 )
 
@@ -21,16 +20,6 @@ type rtpDecoder interface {
 	Decode(*rtp.Packet) ([][]byte, error)
 }
 
-type frameDecoder interface {
-	decode([]byte) (image.Image, error)
-	close()
-}
-
-type decoders struct {
-	rtp   map[string]rtpDecoder
-	frame map[string]frameDecoder
-}
-
 func frameData(frame *C.AVFrame) **C.uint8_t {
 	return (**C.uint8_t)(unsafe.Pointer(&frame.data[0]))
 }
@@ -39,36 +28,45 @@ func frameLineSize(frame *C.AVFrame) *C.int {
 	return (*C.int)(unsafe.Pointer(&frame.linesize[0]))
 }
 
-// h264Decoder is a wrapper around FFmpeg's H264 decoder.
-type h264Decoder struct {
-	codecCtx    *C.AVCodecContext
-	srcFrame    *C.AVFrame
-	swsCtx      *C.struct_SwsContext
-	dstFrame    *C.AVFrame
-	dstFramePtr []uint8
+// h26xDecoder is a wrapper around FFmpeg's H264/H265 decoder.
+type h26xDecoder struct {
+	videoCodecCtx *C.AVCodecContext
+	naluFrame     *C.AVFrame
+	videoSwsCtx   *C.struct_SwsContext
+	avFrame       *C.AVFrame
+	avFrameData   []uint8
 }
 
-// initialize initializes a h264Decoder.
-func (d *h264Decoder) initialize() error {
-	codec := C.avcodec_find_decoder(C.AV_CODEC_ID_H264)
+// initialize initializes a h26xDecoder.
+func (d *h26xDecoder) initialize(codecName string) error {
+	codecCode := uint32(C.AV_CODEC_ID_NONE)
+	if codecName == "H264" {
+		codecCode = uint32(C.AV_CODEC_ID_H264)
+	} else if codecName == "H265" {
+		codecCode = uint32(C.AV_CODEC_ID_H265)
+	} else {
+		return fmt.Errorf("codec not found")
+	}
+
+	codec := C.avcodec_find_decoder(codecCode)
 	if codec == nil {
 		return fmt.Errorf("avcodec_find_decoder() failed")
 	}
 
-	d.codecCtx = C.avcodec_alloc_context3(codec)
-	if d.codecCtx == nil {
+	d.videoCodecCtx = C.avcodec_alloc_context3(codec)
+	if d.videoCodecCtx == nil {
 		return fmt.Errorf("avcodec_alloc_context3() failed")
 	}
 
-	res := C.avcodec_open2(d.codecCtx, codec, nil)
+	res := C.avcodec_open2(d.videoCodecCtx, codec, nil)
 	if res < 0 {
-		C.avcodec_close(d.codecCtx)
+		C.avcodec_close(d.videoCodecCtx)
 		return fmt.Errorf("avcodec_open2() failed")
 	}
 
-	d.srcFrame = C.av_frame_alloc()
-	if d.srcFrame == nil {
-		C.avcodec_close(d.codecCtx)
+	d.naluFrame = C.av_frame_alloc()
+	if d.naluFrame == nil {
+		C.avcodec_close(d.videoCodecCtx)
 		return fmt.Errorf("av_frame_alloc() failed")
 	}
 
@@ -76,20 +74,20 @@ func (d *h264Decoder) initialize() error {
 }
 
 // close closes the decoder.
-func (d *h264Decoder) close() {
-	if d.dstFrame != nil {
-		C.av_frame_free(&d.dstFrame)
+func (d *h26xDecoder) close() {
+	if d.avFrame != nil {
+		C.av_frame_free(&d.avFrame)
 	}
 
-	if d.swsCtx != nil {
-		C.sws_freeContext(d.swsCtx)
+	if d.videoSwsCtx != nil {
+		C.sws_freeContext(d.videoSwsCtx)
 	}
 
-	C.av_frame_free(&d.srcFrame)
-	C.avcodec_close(d.codecCtx)
+	C.av_frame_free(&d.naluFrame)
+	C.avcodec_close(d.videoCodecCtx)
 }
 
-func (d *h264Decoder) decode(nalu []byte) (image.Image, error) {
+func (d *h26xDecoder) decode(nalu []byte) (image.Image, error) {
 	nalu = append([]uint8{0x00, 0x00, 0x00, 0x01}, []uint8(nalu)...)
 
 	// send NALU to decoder
@@ -97,239 +95,76 @@ func (d *h264Decoder) decode(nalu []byte) (image.Image, error) {
 	avPacket.data = (*C.uint8_t)(C.CBytes(nalu))
 	defer C.free(unsafe.Pointer(avPacket.data))
 	avPacket.size = C.int(len(nalu))
-	res := C.avcodec_send_packet(d.codecCtx, &avPacket)
+	res := C.avcodec_send_packet(d.videoCodecCtx, &avPacket)
 	if res < 0 {
 		return nil, nil
 	}
 
 	// receive frame if available
-	res = C.avcodec_receive_frame(d.codecCtx, d.srcFrame)
+	res = C.avcodec_receive_frame(d.videoCodecCtx, d.naluFrame)
 	if res < 0 {
 		return nil, nil
 	}
 
 	// if frame size has changed, allocate needed objects
-	if d.dstFrame == nil || d.dstFrame.width != d.srcFrame.width ||
-		d.dstFrame.height != d.srcFrame.height {
-		if d.dstFrame != nil {
-			C.av_frame_free(&d.dstFrame)
+	if d.avFrame == nil || d.avFrame.width != d.naluFrame.width ||
+		d.avFrame.height != d.naluFrame.height {
+		if d.avFrame != nil {
+			C.av_frame_free(&d.avFrame)
 		}
 
-		if d.swsCtx != nil {
-			C.sws_freeContext(d.swsCtx)
+		if d.videoSwsCtx != nil {
+			C.sws_freeContext(d.videoSwsCtx)
 		}
 
-		d.dstFrame = C.av_frame_alloc()
-		d.dstFrame.format = C.AV_PIX_FMT_RGBA
-		d.dstFrame.width = d.srcFrame.width
-		d.dstFrame.height = d.srcFrame.height
-		d.dstFrame.color_range = C.AVCOL_RANGE_JPEG
-		res = C.av_frame_get_buffer(d.dstFrame, 1)
+		d.avFrame = C.av_frame_alloc()
+		d.avFrame.format = C.AV_PIX_FMT_RGBA
+		d.avFrame.width = d.naluFrame.width
+		d.avFrame.height = d.naluFrame.height
+		d.avFrame.color_range = C.AVCOL_RANGE_JPEG
+		res = C.av_frame_get_buffer(d.avFrame, 1)
 		if res < 0 {
 			return nil, fmt.Errorf("av_frame_get_buffer() failed")
 		}
 
-		d.swsCtx = C.sws_getContext(
-			d.srcFrame.width,
-			d.srcFrame.height,
+		d.videoSwsCtx = C.sws_getContext(
+			d.naluFrame.width,
+			d.naluFrame.height,
 			C.AV_PIX_FMT_YUV420P,
-			d.dstFrame.width,
-			d.dstFrame.height,
-			(int32)(d.dstFrame.format),
+			d.avFrame.width,
+			d.avFrame.height,
+			(int32)(d.avFrame.format),
 			C.SWS_BILINEAR,
 			nil,
 			nil,
 			nil,
 		)
-		if d.swsCtx == nil {
+		if d.videoSwsCtx == nil {
 			return nil, fmt.Errorf("sws_getContext() failed")
 		}
 
 		dstFrameSize := C.av_image_get_buffer_size(
-			(int32)(d.dstFrame.format),
-			d.dstFrame.width,
-			d.dstFrame.height,
+			(int32)(d.avFrame.format),
+			d.avFrame.width,
+			d.avFrame.height,
 			1,
 		)
-		d.dstFramePtr = (*[1 << 30]uint8)(unsafe.Pointer(d.dstFrame.data[0]))[:dstFrameSize:dstFrameSize]
+		d.avFrameData = (*[1 << 30]uint8)(unsafe.Pointer(d.avFrame.data[0]))[:dstFrameSize:dstFrameSize]
 	}
 
 	// convert color space from YUV420 to RGBA
-	res = C.sws_scale(d.swsCtx, frameData(d.srcFrame), frameLineSize(d.srcFrame),
-		0, d.srcFrame.height, frameData(d.dstFrame), frameLineSize(d.dstFrame))
+	res = C.sws_scale(d.videoSwsCtx, frameData(d.naluFrame), frameLineSize(d.naluFrame),
+		0, d.naluFrame.height, frameData(d.avFrame), frameLineSize(d.avFrame))
 	if res < 0 {
 		return nil, fmt.Errorf("sws_scale() failed")
 	}
 
 	// embed frame into an image.Image
 	return &image.RGBA{
-		Pix:    d.dstFramePtr,
-		Stride: 4 * (int)(d.dstFrame.width),
+		Pix:    d.avFrameData,
+		Stride: 4 * (int)(d.avFrame.width),
 		Rect: image.Rectangle{
-			Max: image.Point{(int)(d.dstFrame.width), (int)(d.dstFrame.height)},
+			Max: image.Point{(int)(d.avFrame.width), (int)(d.avFrame.height)},
 		},
 	}, nil
-}
-
-// h265Decoder is a wrapper around FFmpeg's H265 decoder.
-type h265Decoder struct {
-	codecCtx    *C.AVCodecContext
-	srcFrame    *C.AVFrame
-	swsCtx      *C.struct_SwsContext
-	dstFrame    *C.AVFrame
-	dstFramePtr []uint8
-}
-
-// initialize initializes a h265Decoder.
-func (d *h265Decoder) initialize() error {
-	codec := C.avcodec_find_decoder(C.AV_CODEC_ID_H265)
-	if codec == nil {
-		return fmt.Errorf("avcodec_find_decoder() failed")
-	}
-
-	d.codecCtx = C.avcodec_alloc_context3(codec)
-	if d.codecCtx == nil {
-		return fmt.Errorf("avcodec_alloc_context3() failed")
-	}
-
-	res := C.avcodec_open2(d.codecCtx, codec, nil)
-	if res < 0 {
-		C.avcodec_close(d.codecCtx)
-		return fmt.Errorf("avcodec_open2() failed")
-	}
-
-	d.srcFrame = C.av_frame_alloc()
-	if d.srcFrame == nil {
-		C.avcodec_close(d.codecCtx)
-		return fmt.Errorf("av_frame_alloc() failed")
-	}
-
-	return nil
-}
-
-// close closes the decoder.
-func (d *h265Decoder) close() {
-	if d.dstFrame != nil {
-		C.av_frame_free(&d.dstFrame)
-	}
-
-	if d.swsCtx != nil {
-		C.sws_freeContext(d.swsCtx)
-	}
-
-	C.av_frame_free(&d.srcFrame)
-	C.avcodec_close(d.codecCtx)
-}
-
-func (d *h265Decoder) decode(nalu []byte) (image.Image, error) {
-	nalu = append([]uint8{0x00, 0x00, 0x00, 0x01}, []uint8(nalu)...)
-
-	// send NALU to decoder
-	var avPacket C.AVPacket
-	avPacket.data = (*C.uint8_t)(C.CBytes(nalu))
-	defer C.free(unsafe.Pointer(avPacket.data))
-	avPacket.size = C.int(len(nalu))
-	res := C.avcodec_send_packet(d.codecCtx, &avPacket)
-	if res < 0 {
-		return nil, nil
-	}
-
-	// receive frame if available
-	res = C.avcodec_receive_frame(d.codecCtx, d.srcFrame)
-	if res < 0 {
-		return nil, nil
-	}
-
-	// if frame size has changed, allocate needed objects
-	if d.dstFrame == nil || d.dstFrame.width != d.srcFrame.width ||
-		d.dstFrame.height != d.srcFrame.height {
-		if d.dstFrame != nil {
-			C.av_frame_free(&d.dstFrame)
-		}
-
-		if d.swsCtx != nil {
-			C.sws_freeContext(d.swsCtx)
-		}
-
-		d.dstFrame = C.av_frame_alloc()
-		d.dstFrame.format = C.AV_PIX_FMT_RGBA
-		d.dstFrame.width = d.srcFrame.width
-		d.dstFrame.height = d.srcFrame.height
-		d.dstFrame.color_range = C.AVCOL_RANGE_JPEG
-		res = C.av_frame_get_buffer(d.dstFrame, 1)
-		if res < 0 {
-			return nil, fmt.Errorf("av_frame_get_buffer() failed")
-		}
-
-		d.swsCtx = C.sws_getContext(
-			d.srcFrame.width,
-			d.srcFrame.height,
-			C.AV_PIX_FMT_YUV420P,
-			d.dstFrame.width,
-			d.dstFrame.height,
-			(int32)(d.dstFrame.format),
-			C.SWS_BILINEAR,
-			nil,
-			nil,
-			nil,
-		)
-		if d.swsCtx == nil {
-			return nil, fmt.Errorf("sws_getContext() failed")
-		}
-
-		dstFrameSize := C.av_image_get_buffer_size(
-			(int32)(d.dstFrame.format),
-			d.dstFrame.width,
-			d.dstFrame.height,
-			1,
-		)
-		d.dstFramePtr = (*[1 << 30]uint8)(unsafe.Pointer(d.dstFrame.data[0]))[:dstFrameSize:dstFrameSize]
-	}
-
-	// convert color space from YUV420 to RGBA
-	res = C.sws_scale(d.swsCtx, frameData(d.srcFrame), frameLineSize(d.srcFrame),
-		0, d.srcFrame.height, frameData(d.dstFrame), frameLineSize(d.dstFrame))
-	if res < 0 {
-		return nil, fmt.Errorf("sws_scale() failed")
-	}
-
-	// embed frame into an image.Image
-	return &image.RGBA{
-		Pix:    d.dstFramePtr,
-		Stride: 4 * (int)(d.dstFrame.width),
-		Rect: image.Rectangle{
-			Max: image.Point{(int)(d.dstFrame.width), (int)(d.dstFrame.height)},
-		},
-	}, nil
-}
-
-func decodeRTPPacket(forma format.Format, pkt *rtp.Packet, decs *decoders) (image.Image, error) {
-	rtp, ok := decs.rtp[forma.Codec()]
-	if !ok {
-		return nil, fmt.Errorf("RTP decoder not found: %s", forma.Codec())
-	}
-	frame, ok := decs.frame[forma.Codec()]
-	if !ok {
-		return nil, fmt.Errorf("Frame decoder not found: %s", forma.Codec())
-	}
-
-	au, err := rtp.Decode(pkt)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, nalu := range au {
-		img, err := frame.decode(nalu)
-		if err != nil {
-			return nil, fmt.Errorf("error decoding frame: %w", err)
-		}
-
-		if img == nil {
-			continue
-		}
-
-		return img, nil
-	}
-
-	return nil, errAllFrameEmpty
 }
