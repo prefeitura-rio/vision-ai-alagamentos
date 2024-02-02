@@ -1,16 +1,20 @@
 # -*- coding: utf-8 -*-
 import base64
+import io
 import json
 import time
 from typing import List, Union
 
 import functions_framework
+import google.generativeai as genai
 import requests
 import sentry_sdk
 from google.cloud import secretmanager
 from langchain.output_parsers import PydanticOutputParser
-from langchain_core.messages import HumanMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
+
+# from langchain_core.messages import HumanMessage
+# from langchain_google_genai import ChatGoogleGenerativeAI
+from PIL import Image
 from pydantic import BaseModel, Field
 
 
@@ -110,36 +114,44 @@ def get_prediction(
     top_p: int,
 ) -> dict:
     # Retrieves a prediction using the Google Generative AI model
-    llm = ChatGoogleGenerativeAI(
-        model=google_api_model,
-        google_api_key=google_api_key,
-        max_output_token=max_output_tokens,
-        temperature=temperature,
-        top_k=top_k,
-        top_p=top_p,
+    # llm = ChatGoogleGenerativeAI(
+    #     model=google_api_model,
+    #     google_api_key=google_api_key,
+    #     max_output_token=max_output_tokens,
+    #     temperature=temperature,
+    #     top_k=top_k,
+    #     top_p=top_p,
+    # )
+
+    # content = [{"type": "text", "text": prompt_text}, {"type": "image_url", "image_url": image_url}] # noqa
+
+    # message = HumanMessage(content=content)
+    # response = llm.invoke([message])
+    # response_ai = response.content
+    image_response = requests.get(image_url)
+
+    img = Image.open(io.BytesIO(image_response.content))
+    genai.configure(api_key=google_api_key)
+    model = genai.GenerativeModel(google_api_model)
+    responses = model.generate_content(
+        contents=[prompt_text, img],
+        generation_config={
+            "max_output_tokens": max_output_tokens,
+            "temperature": temperature,
+            "top_k": top_k,
+            "top_p": top_p,
+        },
+        stream=True,
     )
 
-    content = [{"type": "text", "text": prompt_text}, {"type": "image_url", "image_url": image_url}]
+    responses.resolve()
+    response_ai = responses.text
 
-    message = HumanMessage(content=content)
-    response = llm.invoke([message])
-    response_ai = response.content
     output_parser = PydanticOutputParser(pydantic_object=Output)
 
     try:
         response_parsed = output_parser.parse(response_ai)
     except Exception as e:  # noqa
-        # print(f"AI_RESPONSE:\n{}")
-        # print(f"AI_PROMPT:\n{prompt_text}")
-        # chunk_size = 800
-        # response_ai_chunks = {
-        #     f"chunk_{i // chunk_size + 1}": response_ai[i : i + chunk_size]
-        #     for i in range(0, len(response_ai), chunk_size)
-        # }
-        # prompt_ai_chunks = {
-        #     f"chunk_{i // chunk_size + 1}": prompt_text[i : i + chunk_size]
-        #     for i in range(0, len(prompt_text), chunk_size)
-        # }
         get_exception(response_ai, data)
 
     return response_parsed.dict()
