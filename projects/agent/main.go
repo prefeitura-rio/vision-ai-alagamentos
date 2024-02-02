@@ -10,9 +10,6 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
-	"slices"
-	"sync"
-	"sync/atomic"
 	"syscall"
 	"time"
 )
@@ -80,13 +77,7 @@ func makeSnapshot(cameraAPI CameraAPI, cameraURL string, accessToken *AccessToke
 	log.Printf("captura finalizada: %s", camera.id)
 }
 
-func runCameras(
-	ctx context.Context,
-	wg *sync.WaitGroup,
-	agentURL string,
-	cameraURL string,
-	accessToken *AccessToken,
-) error {
+func getCameras(agentURL string, accessToken *AccessToken) ([]CameraAPI, error) {
 	type apiData struct {
 		Items []CameraAPI `json:"items"`
 		Total int         `json:"total"`
@@ -99,7 +90,7 @@ func runCameras(
 
 	err := httpGet(agentURL, accessToken, &data)
 	if err != nil {
-		return fmt.Errorf("error getting cameras: %w", err)
+		return nil, fmt.Errorf("error getting cameras: %w", err)
 	}
 
 	cameras = append(cameras, data.Items...)
@@ -108,77 +99,13 @@ func runCameras(
 		url := fmt.Sprintf("%s?page=%d", agentURL, data.Page+1)
 		err = httpGet(url, accessToken, &data)
 		if err != nil {
-			return fmt.Errorf("error getting cameras: %w", err)
+			return nil, fmt.Errorf("error getting cameras: %w", err)
 		}
 
 		cameras = append(cameras, data.Items...)
 	}
 
-	camerasCh := make(chan CameraAPI, 30)
-	camerasByUpdateInterval := map[int][]CameraAPI{}
-	updateIntervals := []int{}
-
-	for _, camera := range cameras {
-		if slices.Contains(updateIntervals, camera.UpdateInterval) {
-			camerasByUpdateInterval[camera.UpdateInterval] = append(
-				camerasByUpdateInterval[camera.UpdateInterval],
-				camera,
-			)
-		} else {
-			camerasByUpdateInterval[camera.UpdateInterval] = []CameraAPI{camera}
-			updateIntervals = append(updateIntervals, camera.UpdateInterval)
-		}
-	}
-
-	go func() {
-		for _, updateInterval := range updateIntervals {
-			updateInterval := updateInterval
-			go func() {
-				interval := time.Duration(updateInterval) * time.Second
-				for {
-					for _, camera := range camerasByUpdateInterval[updateInterval] {
-						camerasCh <- camera
-					}
-					select {
-					case <-ctx.Done():
-						return
-					case <-time.Tick(interval):
-						continue
-					}
-				}
-			}()
-		}
-	}()
-
-	log.Printf("Running %d cameras", len(cameras))
-
-	count := atomic.Int32{}
-	maxCount := int32(50)
-
-	for {
-		select {
-		case <-ctx.Done():
-			wg.Wait()
-			close(camerasCh)
-			return nil
-		case camera := <-camerasCh:
-			for {
-				if count.Load() < maxCount {
-					break
-				}
-				time.Sleep(time.Second)
-			}
-
-			count.Add(1)
-			wg.Add(1)
-
-			go func() {
-				makeSnapshot(camera, cameraURL, accessToken)
-				count.Add(-1)
-				wg.Done()
-			}()
-		}
-	}
+	return cameras, nil
 }
 
 func sendHeartbeat(heartbeatURL string, accessToken *AccessToken, healthy bool) error {
@@ -203,47 +130,82 @@ func main() {
 		log.Println(http.ListenAndServe(":6060", nil))
 	}()
 
+	parallelSnapshots := int32(30)
+	cameras := newCamerasByUpdateInterval(int(parallelSnapshots))
+	ctxCameras, cancelCameras := context.WithCancel(context.Background())
+
+	defer func() {
+		if r := recover(); r != nil {
+			log.Println(r)
+		}
+
+		log.Println("Esperando as capturas serem finalizadas")
+		cancelCameras()
+		cameras.StopQueue()
+		cameras.StopConsume()
+		log.Println("Capturas finalizadas com sucesso")
+	}()
+
 	config, err := getConfig()
 	if err != nil {
-		log.Printf("error getting config: %s", err)
-		return
+		panic(fmt.Errorf("error getting config: %w", err))
 	}
 
 	accessToken := NewAccessToken(config.credentials, true)
 	for !accessToken.Valid() {
 		time.Sleep(time.Second)
 	}
-	log.Println(accessToken.GetHeader())
+
+	runSnapshot := func(camera CameraAPI) {
+		makeSnapshot(camera, config.cameraURL, accessToken)
+	}
+
+	err = cameras.StartQueue(ctxCameras)
+	if err != nil {
+		panic(fmt.Errorf("error starting queue: %w", err))
+	}
+
+	err = cameras.ConsumeQueue(ctxCameras, parallelSnapshots, runSnapshot)
+	if err != nil {
+		panic(fmt.Errorf("error consuming queue: %w", err))
+	}
+
+	ticker := time.NewTicker(config.heartbeat)
+	defer ticker.Stop()
 
 	osSignal := make(chan os.Signal, 1)
 	signal.Notify(osSignal, syscall.SIGINT, syscall.SIGHUP, syscall.SIGTERM)
-	log.Println("Esperando sinal de interrupção")
+	log.Println("waiting stop signal from OS")
 
-	wg := sync.WaitGroup{}
-	ticker := time.NewTicker(config.heartbeat)
-
-	ctxCameras, cancelCameras := context.WithCancel(context.Background())
-
-	err = runCameras(ctxCameras, &wg, config.agentURL, config.cameraURL, accessToken)
-	if err != nil {
-		log.Printf("Erro ao rodar as cameras: %s", err)
-	}
+	log.Printf("server intialized successfully")
 
 	for {
+		camerasAPI, err := getCameras(config.agentURL, accessToken)
+		if err != nil {
+			log.Printf("error getting cameras: %s", err)
+		} else if !cameras.Equals(camerasAPI) {
+			log.Printf("replacing cameras")
+
+			cameras.Replace(camerasAPI)
+
+			err = cameras.RestartQueue(ctxCameras)
+			if err != nil {
+				log.Printf("error restating queue: %s", err)
+			}
+
+			log.Printf("running %d cameras", cameras.Len())
+		}
+
 		err = sendHeartbeat(config.heartbeatURL, accessToken, err == nil)
 		if err != nil {
-			log.Printf("Error sending heartbeat: %s", err)
+			log.Printf("error sending heartbeat: %s", err)
 		}
 
 		select {
 		case <-osSignal:
-			log.Println("Esperando as capturas serem finalizadas")
-			cancelCameras()
-			wg.Wait()
-			log.Println("Capturas finalizadas com sucesso")
-
 			return
 		case <-ticker.C:
+			continue
 		}
 	}
 }
