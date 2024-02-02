@@ -94,6 +94,10 @@ def get_secret(secret_id: str) -> str:
     return secret
 
 
+def get_exception(error_msg_chunks):
+    raise Exception(str(error_msg_chunks))
+
+
 def get_prediction(
     data: dict,
     image_url: str,
@@ -124,14 +128,26 @@ def get_prediction(
 
     try:
         response_parsed = output_parser.parse(response_ai)
-    except Exception:
-        msg = f"""
-            CLOUD FUNCTION ERROR
-            response_ai:{response_ai}
-            panload_data:{data}
 
-        """
-        raise Exception(msg.replace("            ", ""))
+    except Exception:
+        # error_msg = f"""
+        #     CLOUD FUNCTION ERROR
+
+        #     response_ai:{response_ai}
+
+        #     payload_data:{data}
+
+        # """.replace(
+        #     "            ", ""
+        # )
+
+        # chunk_size = 800
+        # error_msg_chunks = {
+        #     f"chunk_{i // chunk_size + 1}": error_msg[i : i + chunk_size]
+        #     for i in range(0, len(error_msg), chunk_size)
+        # }
+
+        get_exception(error_msg_chunks=response_ai)
 
     return response_parsed.dict()
 
