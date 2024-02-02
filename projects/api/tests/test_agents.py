@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+from uuid import uuid4
+
 import pytest
 from httpx import AsyncClient
 
@@ -122,7 +124,7 @@ async def test_agents_post_heartbeat_to_other(
     client: AsyncClient, authorization_header: dict, context: dict
 ):
     response = await client.post(
-        f"/agents/{context['agent_id']}/heartbeat",
+        f"/agents/{uuid4()}/heartbeat",
         headers=authorization_header,
         json={"healthy": True},
     )
