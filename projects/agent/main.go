@@ -8,11 +8,9 @@ import (
 	"log"
 	"net/http"
 	_ "net/http/pprof"
-	"net/url"
 	"os"
 	"os/signal"
 	"slices"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -26,12 +24,6 @@ type OIDCClientCredentials struct {
 	Username string
 	Password string
 	ClientID string
-}
-
-type AccessToken struct {
-	AcsessToken string `json:"access_token"`
-	TokenType   string `json:"token_type"`
-	ExpiresIn   int    `json:"expires_in"`
 }
 
 type infisicalConfig struct {
@@ -49,35 +41,7 @@ type config struct {
 	heartbeat    time.Duration
 }
 
-func getAccessToken(credentials OIDCClientCredentials) (AccessToken, error) {
-	data := url.Values{
-		"grant_type": {"client_credentials"},
-		"client_id":  {credentials.ClientID},
-		"username":   {credentials.Username},
-		"password":   {credentials.Password},
-		"scope":      {"profile"},
-	}
-
-	body, err := httpPost(
-		credentials.TokenURL,
-		AccessToken{},
-		"application/x-www-form-urlencoded",
-		strings.NewReader(data.Encode()),
-	)
-	if err != nil {
-		return AccessToken{}, fmt.Errorf("error getting Access Token: %w", err)
-	}
-
-	accessToken := AccessToken{}
-	err = json.Unmarshal([]byte(body), &accessToken)
-	if err != nil {
-		return AccessToken{}, fmt.Errorf("error parsing body: %w", err)
-	}
-
-	return accessToken, err
-}
-
-func makeSnapshot(cameraAPI CameraAPI, cameraURL string, accessToken AccessToken) {
+func makeSnapshot(cameraAPI CameraAPI, cameraURL string, accessToken *AccessToken) {
 	initialTime := time.Now()
 
 	log.Printf("Realizando a captura da camera: %s", cameraAPI.ID)
@@ -121,7 +85,7 @@ func runCameras(
 	wg *sync.WaitGroup,
 	agentURL string,
 	cameraURL string,
-	credentials OIDCClientCredentials,
+	accessToken *AccessToken,
 ) error {
 	type apiData struct {
 		Items []CameraAPI `json:"items"`
@@ -133,12 +97,7 @@ func runCameras(
 	data := apiData{}
 	cameras := []CameraAPI{}
 
-	accessToken, err := getAccessToken(credentials)
-	if err != nil {
-		return fmt.Errorf("error getting access token: %s\n", err)
-	}
-
-	err = httpGet(agentURL, accessToken, &data)
+	err := httpGet(agentURL, accessToken, &data)
 	if err != nil {
 		return fmt.Errorf("error getting cameras: %w", err)
 	}
@@ -222,12 +181,7 @@ func runCameras(
 	}
 }
 
-func sendHeartbeat(heartbeatURL string, credentials OIDCClientCredentials, healthy bool) error {
-	accessToken, err := getAccessToken(credentials)
-	if err != nil {
-		return fmt.Errorf("error getting access token: %s\n", err)
-	}
-
+func sendHeartbeat(heartbeatURL string, accessToken *AccessToken, healthy bool) error {
 	rawdata := struct {
 		Healthy bool `json:"healthy"`
 	}{
@@ -255,6 +209,12 @@ func main() {
 		return
 	}
 
+	accessToken := NewAccessToken(config.credentials, true)
+	for !accessToken.Valid() {
+		time.Sleep(time.Second)
+	}
+	log.Println(accessToken.GetHeader())
+
 	osSignal := make(chan os.Signal, 1)
 	signal.Notify(osSignal, syscall.SIGINT, syscall.SIGHUP, syscall.SIGTERM)
 	log.Println("Esperando sinal de interrupção")
@@ -264,13 +224,13 @@ func main() {
 
 	ctxCameras, cancelCameras := context.WithCancel(context.Background())
 
-	err = runCameras(ctxCameras, &wg, config.agentURL, config.cameraURL, config.credentials)
+	err = runCameras(ctxCameras, &wg, config.agentURL, config.cameraURL, accessToken)
 	if err != nil {
 		log.Printf("Erro ao rodar as cameras: %s", err)
 	}
 
 	for {
-		err = sendHeartbeat(config.heartbeatURL, config.credentials, err == nil)
+		err = sendHeartbeat(config.heartbeatURL, accessToken, err == nil)
 		if err != nil {
 			log.Printf("Error sending heartbeat: %s", err)
 		}

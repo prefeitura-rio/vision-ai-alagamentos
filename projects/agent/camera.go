@@ -244,7 +244,7 @@ func (camera *Camera) getNextFrame() (image.Image, error) {
 
 		_, err := camera.client.Pause()
 		if err != nil {
-			return nil, fmt.Errorf("multiples errs: %w", ErrGetFrameTimeout, err)
+			return nil, fmt.Errorf("multiples errs: %w", errors.Join(ErrGetFrameTimeout, err))
 		}
 
 		return nil, ErrGetFrameTimeout

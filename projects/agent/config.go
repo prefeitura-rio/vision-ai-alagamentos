@@ -66,15 +66,15 @@ func getInfisicalSecrets(config infisicalConfig) (map[string]string, error) {
 
 	serviceTokenURL := config.url + "/api/v2/service-token/"
 	token := AccessToken{
-		AcsessToken: config.token,
-		TokenType:   "Bearer",
-		ExpiresIn:   300,
+		accessToken: config.token,
+		tokenType:   "Bearer",
+		interval:    time.Second,
 	}
 	serviceToken := ServiceToken{}
 	secretsRaw := SecretsRaw{}
 	secrets := map[string]string{}
 
-	err := httpGet(serviceTokenURL, token, &serviceToken)
+	err := httpGet(serviceTokenURL, &token, &serviceToken)
 	if err != nil {
 		return secrets, fmt.Errorf("error getting service token: %w", err)
 	}
@@ -95,7 +95,7 @@ func getInfisicalSecrets(config infisicalConfig) (map[string]string, error) {
 		config.environment,
 		serviceToken.WorkspaceID,
 	)
-	err = httpGet(secretURL, token, &secretsRaw)
+	err = httpGet(secretURL, &token, &secretsRaw)
 	if err != nil {
 		return secrets, fmt.Errorf("error getting secrets: %w", err)
 	}
