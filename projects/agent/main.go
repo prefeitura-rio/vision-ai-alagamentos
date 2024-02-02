@@ -4,10 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"image"
-	"image/png"
 	"log"
 	"net/http"
 	_ "net/http/pprof"
@@ -18,8 +15,6 @@ import (
 	"sync"
 	"syscall"
 	"time"
-
-	"github.com/google/uuid"
 )
 
 var errMediaNotFound error = fmt.Errorf("media not found")
@@ -80,27 +75,6 @@ func getAccessToken(credentials OIDCClientCredentials) (AccessToken, error) {
 	return accessToken, err
 }
 
-func saveImage(filename string, img image.Image) error {
-	file, err := os.Create(filename)
-	if err != nil {
-		return fmt.Errorf("error creating temp file: %w", err)
-	}
-
-	err = png.Encode(file, img)
-	if err != nil {
-		file.Close()
-
-		return fmt.Errorf("error encoding image to png: %w", err)
-	}
-
-	err = file.Close()
-	if err != nil && !errors.Is(err, os.ErrClosed) {
-		return fmt.Errorf("error closing temp file: %w", err)
-	}
-
-	return nil
-}
-
 func makeSnapshot(
 	ctx context.Context,
 	cameraAPI CameraAPI,
@@ -136,26 +110,7 @@ func makeSnapshot(
 		return
 	}
 
-	filename := fmt.Sprintf("/tmp/%s.png", uuid.NewString())
-
-	defer func() {
-		err = os.Remove(filename)
-		if err != nil && !errors.Is(err, os.ErrNotExist) {
-			log.Printf("error removing temp file: %s", err)
-		}
-	}()
-
-	err = saveImage(filename, img)
-	if err != nil {
-		log.Printf("error saving image: %s", err)
-		return
-	}
-
-	contentType, body, err := bodyFile(filename)
-	if err != nil {
-		log.Printf("error creating body: %s", err)
-		return
-	}
+	contentType, body := bodyImage(camera.id, img)
 
 	_, err = httpPost(camera.snapshotURL, accessToken, contentType, body)
 	if err != nil {
@@ -267,8 +222,8 @@ func main() {
 	}
 
 	osSignal := make(chan os.Signal, 1)
-	log.Println("Esperando sinal de interrupção")
 	signal.Notify(osSignal, syscall.SIGINT, syscall.SIGHUP, syscall.SIGTERM)
+	log.Println("Esperando sinal de interrupção")
 
 	wg := sync.WaitGroup{}
 	ticker := time.NewTicker(config.heartbeat)

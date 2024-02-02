@@ -1,13 +1,13 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/png"
 	"io"
 	"mime/multipart"
 	"net/http"
-	"os"
 )
 
 func httpGet(url string, accessToken AccessToken, body any) error {
@@ -75,27 +75,37 @@ func httpPost(
 	return string(body), err
 }
 
-func bodyFile(filename string) (string, *bytes.Buffer, error) {
-	var b bytes.Buffer
-	w := multipart.NewWriter(&b)
+func bodyImage(id string, img image.Image) (string, *io.PipeReader) {
+	ir, iw := io.Pipe()
 
-	file, err := os.Open(filename)
-	if err != nil {
-		return "", nil, fmt.Errorf("error opening file: %w", err)
-	}
-	defer file.Close()
+	go func() {
+		err := png.Encode(iw, img)
+		if err != nil {
+			iw.CloseWithError(err)
+		}
+		iw.CloseWithError(nil)
+	}()
 
-	fw, err := w.CreateFormFile("file", file.Name())
-	if err != nil {
-		return "", nil, fmt.Errorf("error creating form file")
-	}
+	pr, pw := io.Pipe()
+	writer := multipart.NewWriter(pw)
+	go func() {
+		part, err := writer.CreateFormFile("file", id+".png")
+		if err != nil {
+			pw.CloseWithError(err)
+			ir.CloseWithError(err)
+			return
+		}
+		_, err = io.Copy(part, ir)
+		if err != nil {
+			pw.CloseWithError(err)
+			ir.CloseWithError(err)
+			return
+		}
 
-	_, err = io.Copy(fw, file)
-	if err != nil {
-		return "", nil, fmt.Errorf("error copying file to buffer")
-	}
+		err = writer.Close()
+		pw.CloseWithError(err)
+		ir.CloseWithError(err)
+	}()
 
-	w.Close()
-
-	return w.FormDataContentType(), &b, nil
+	return writer.FormDataContentType(), pr
 }

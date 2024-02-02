@@ -7,6 +7,7 @@ import (
 	"image"
 	"log"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/bluenviron/gortsplib/v4"
@@ -179,16 +180,10 @@ func (camera *Camera) close() {
 
 func (camera *Camera) getNextFrame(ctx context.Context) (image.Image, bool, error) {
 	imgch := make(chan image.Image)
+	decoded := false
+	mu := sync.Mutex{}
 
 	camera.client.OnPacketRTPAny(func(m *description.Media, f format.Format, pkt *rtp.Packet) {
-		defer func() {
-			if r := recover(); r != nil {
-				message := fmt.Sprintf("%s", r)
-				if !strings.Contains(message, "send on closed channel") {
-					panic(r)
-				}
-			}
-		}()
 		_, ok := camera.client.PacketPTS(m, pkt)
 		if !ok {
 			return
@@ -204,6 +199,12 @@ func (camera *Camera) getNextFrame(ctx context.Context) (image.Image, bool, erro
 
 		validErrsMessags := []string{
 			"invalid fragmentation unit (non-starting)",
+		}
+
+		mu.Lock()
+		defer mu.Unlock()
+		if decoded {
+			return
 		}
 
 		img, err := decodeRTPPacket(f, pkt, camera.decoders)
@@ -223,6 +224,7 @@ func (camera *Camera) getNextFrame(ctx context.Context) (image.Image, bool, erro
 			log.Printf("error deconding package: %s", err)
 		} else {
 			imgch <- img
+			decoded = true
 		}
 	})
 

@@ -52,7 +52,6 @@ services:
       - stream-data:/data
     depends_on:
       - stream-server
-
 volumes:
   postgres-data:
   stream-data:
