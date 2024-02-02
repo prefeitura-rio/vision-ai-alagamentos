@@ -11,8 +11,10 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 )
@@ -75,12 +77,7 @@ func getAccessToken(credentials OIDCClientCredentials) (AccessToken, error) {
 	return accessToken, err
 }
 
-func makeSnapshot(
-	ctx context.Context,
-	cameraAPI CameraAPI,
-	cameraURL string,
-	accessToken AccessToken,
-) {
+func makeSnapshot(cameraAPI CameraAPI, cameraURL string, accessToken AccessToken) {
 	initialTime := time.Now()
 
 	log.Printf("Realizando a captura da camera: %s", cameraAPI.ID)
@@ -102,11 +99,9 @@ func makeSnapshot(
 	}
 	defer camera.close()
 
-	img, valid, err := camera.getNextFrame(ctx)
+	img, err := camera.getNextFrame()
 	if err != nil {
 		log.Printf("error getting frame: %s", err)
-	}
-	if !valid {
 		return
 	}
 
@@ -160,32 +155,71 @@ func runCameras(
 		cameras = append(cameras, data.Items...)
 	}
 
-	log.Printf("Running %d cameras", len(cameras))
+	camerasCh := make(chan CameraAPI, 30)
+	camerasByUpdateInterval := map[int][]CameraAPI{}
+	updateIntervals := []int{}
 
 	for _, camera := range cameras {
-		camera := camera
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			interval := time.Duration(camera.UpdateInterval) * time.Second
-			ctxSnaphot, cancelSnapshot := context.WithCancel(ctx)
-			go makeSnapshot(ctxSnaphot, camera, cameraURL, accessToken)
-
-			for {
-				select {
-				case <-ctx.Done():
-					cancelSnapshot()
-					return
-				case <-time.Tick(interval):
-					cancelSnapshot()
-					ctxSnaphot, cancelSnapshot = context.WithCancel(ctx)
-					go makeSnapshot(ctxSnaphot, camera, cameraURL, accessToken)
-				}
-			}
-		}()
+		if slices.Contains(updateIntervals, camera.UpdateInterval) {
+			camerasByUpdateInterval[camera.UpdateInterval] = append(
+				camerasByUpdateInterval[camera.UpdateInterval],
+				camera,
+			)
+		} else {
+			camerasByUpdateInterval[camera.UpdateInterval] = []CameraAPI{camera}
+			updateIntervals = append(updateIntervals, camera.UpdateInterval)
+		}
 	}
 
-	return nil
+	go func() {
+		for _, updateInterval := range updateIntervals {
+			updateInterval := updateInterval
+			go func() {
+				interval := time.Duration(updateInterval) * time.Second
+				for {
+					for _, camera := range camerasByUpdateInterval[updateInterval] {
+						camerasCh <- camera
+					}
+					select {
+					case <-ctx.Done():
+						return
+					case <-time.Tick(interval):
+						continue
+					}
+				}
+			}()
+		}
+	}()
+
+	log.Printf("Running %d cameras", len(cameras))
+
+	count := atomic.Int32{}
+	maxCount := int32(50)
+
+	for {
+		select {
+		case <-ctx.Done():
+			wg.Wait()
+			close(camerasCh)
+			return nil
+		case camera := <-camerasCh:
+			for {
+				if count.Load() < maxCount {
+					break
+				}
+				time.Sleep(time.Second)
+			}
+
+			count.Add(1)
+			wg.Add(1)
+
+			go func() {
+				makeSnapshot(camera, cameraURL, accessToken)
+				count.Add(-1)
+				wg.Done()
+			}()
+		}
+	}
 }
 
 func sendHeartbeat(heartbeatURL string, credentials OIDCClientCredentials, healthy bool) error {
@@ -228,14 +262,14 @@ func main() {
 	wg := sync.WaitGroup{}
 	ticker := time.NewTicker(config.heartbeat)
 
+	ctxCameras, cancelCameras := context.WithCancel(context.Background())
+
+	err = runCameras(ctxCameras, &wg, config.agentURL, config.cameraURL, config.credentials)
+	if err != nil {
+		log.Printf("Erro ao rodar as cameras: %s", err)
+	}
+
 	for {
-		ctxCameras, cancelCameras := context.WithCancel(context.Background())
-
-		err := runCameras(ctxCameras, &wg, config.agentURL, config.cameraURL, config.credentials)
-		if err != nil {
-			log.Printf("Erro ao rodar as cameras: %s", err)
-		}
-
 		err = sendHeartbeat(config.heartbeatURL, config.credentials, err == nil)
 		if err != nil {
 			log.Printf("Error sending heartbeat: %s", err)
@@ -250,9 +284,6 @@ func main() {
 
 			return
 		case <-ticker.C:
-			log.Println("Esperando as capturas serem finalizadas")
-			cancelCameras()
-			wg.Wait()
 		}
 	}
 }

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"image"
@@ -18,6 +17,8 @@ import (
 	"github.com/bluenviron/gortsplib/v4/pkg/format/rtph265"
 	"github.com/pion/rtp"
 )
+
+var ErrGetFrameTimeout error = fmt.Errorf("timeout on getting frame")
 
 type CameraAPI struct {
 	ID             string `json:"id"`
@@ -178,7 +179,7 @@ func (camera *Camera) close() {
 	camera.client.Close()
 }
 
-func (camera *Camera) getNextFrame(ctx context.Context) (image.Image, bool, error) {
+func (camera *Camera) getNextFrame() (image.Image, error) {
 	imgch := make(chan image.Image)
 	decoded := false
 	mu := sync.Mutex{}
@@ -230,25 +231,32 @@ func (camera *Camera) getNextFrame(ctx context.Context) (image.Image, bool, erro
 
 	_, err := camera.client.Play(nil)
 	if err != nil {
-		return nil, false, fmt.Errorf("error playing stream: %w", err)
+		return nil, fmt.Errorf("error playing stream: %w", err)
 	}
 
+	tick := time.NewTicker(camera.updateInterval / 2)
+	defer tick.Stop()
+
 	select {
-	case <-ctx.Done():
+	case <-tick.C:
 		camera.client.OnPacketRTPAny(func(m *description.Media, f format.Format, p *rtp.Packet) {})
 		close(imgch)
+
 		_, err := camera.client.Pause()
 		if err != nil {
-			return nil, false, fmt.Errorf("multiples errs: %w", errors.Join(ctx.Err(), err))
+			return nil, fmt.Errorf("multiples errs: %w", ErrGetFrameTimeout, err)
 		}
-		return nil, false, ctx.Err()
+
+		return nil, ErrGetFrameTimeout
 	case img := <-imgch:
 		camera.client.OnPacketRTPAny(func(m *description.Media, f format.Format, p *rtp.Packet) {})
 		close(imgch)
+
 		_, err := camera.client.Pause()
 		if err != nil {
-			return img, true, fmt.Errorf("error pausing client: %s", err)
+			return nil, fmt.Errorf("error pausing client: %s", err)
 		}
-		return img, true, nil
+
+		return img, nil
 	}
 }

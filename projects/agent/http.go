@@ -10,6 +10,8 @@ import (
 	"net/http"
 )
 
+var pngEnconder png.Encoder = png.Encoder{}
+
 func httpGet(url string, accessToken AccessToken, body any) error {
 	request, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -79,7 +81,7 @@ func bodyImage(id string, img image.Image) (string, *io.PipeReader) {
 	ir, iw := io.Pipe()
 
 	go func() {
-		err := png.Encode(iw, img)
+		err := pngEnconder.Encode(iw, img)
 		if err != nil {
 			iw.CloseWithError(err)
 		}
