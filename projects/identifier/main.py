@@ -23,7 +23,7 @@ class Object(BaseModel):
     label_explanation: str = Field(
         description="Highly detailed visual description of the image given the object context"
     )
-    label: Union[bool, str] = Field(
+    label: Union[bool, str, None] = Field(
         description="Label indicating the condition or characteristic of the object"
     )
 
@@ -33,31 +33,25 @@ class Output(BaseModel):
 
 
 class APIVisionAI:
-    def __init__(self, username, password, client_id, client_secret):
+    def __init__(self, username, password):
         self.BASE_URL = "https://vision-ai-api-staging-ahcsotxvgq-uc.a.run.app"
         self.username = username
         self.password = password
-        self.client_id = client_id
-        self.client_secret = client_secret
         self.headers, self.token_renewal_time = self._get_headers()
 
     def _get_headers(self):
         access_token_response = requests.post(
-            "https://authentik.dados.rio/application/o/token/",
+            f"{self.BASE_URL}/auth/token",
             data={
-                "grant_type": "password",
                 "username": self.username,
                 "password": self.password,
-                "client_id": self.client_id,
-                "client_secret": self.client_secret,
-                "scope": "profile",
             },
         ).json()
         token = access_token_response["access_token"]
         return {"Authorization": f"Bearer {token}"}, time.time()
 
     def _refresh_token_if_needed(self):
-        if time.time() - self.token_renewal_time >= 60:
+        if time.time() - self.token_renewal_time >= 120:
             self.header, self.token_renewal_time = self._get_headers()
 
     def _get(self, path):
@@ -113,7 +107,7 @@ def get_prediction(
     top_k: int,
     top_p: int,
 ) -> dict:
-    # Retrieves a prediction using the Google Generative AI model
+
     # llm = ChatGoogleGenerativeAI(
     #     model=google_api_model,
     #     google_api_key=google_api_key,
@@ -121,20 +115,25 @@ def get_prediction(
     #     temperature=temperature,
     #     top_k=top_k,
     #     top_p=top_p,
+    #     stream=True,
     # )
 
-    # content = [{"type": "text", "text": prompt_text}, {"type": "image_url", "image_url": image_url}] # noqa
+    # content = [
+    #     {"type": "text", "text": prompt_text},
+    #     {"type": "image_url", "image_url": image_url},
+    # ]  # noqa
 
     # message = HumanMessage(content=content)
     # response = llm.invoke([message])
     # response_ai = response.content
-    image_response = requests.get(image_url)
 
-    img = Image.open(io.BytesIO(image_response.content))
+    image_response = requests.get(image_url)
+    image = Image.open(io.BytesIO(image_response.content))
+
     genai.configure(api_key=google_api_key)
     model = genai.GenerativeModel(google_api_model)
     responses = model.generate_content(
-        contents=[prompt_text, img],
+        contents=[prompt_text, image],
         generation_config={
             "max_output_tokens": max_output_tokens,
             "temperature": temperature,
@@ -151,7 +150,7 @@ def get_prediction(
 
     try:
         response_parsed = output_parser.parse(response_ai)
-    except Exception as e:  # noqa
+    except Exception:
         get_exception(response_ai, data)
 
     return response_parsed.dict()
@@ -166,32 +165,30 @@ def predict(cloud_event: dict) -> None:
     data_bytes = base64.b64decode(cloud_event.data["message"]["data"])
     data = json.loads(data_bytes.decode("utf-8"))
 
-    # Extracts relevant information from the Cloud Event data
-    google_api_key = get_secret("gemini-api-key-cloud-functions")
-    vision_ai_api_secrets = get_secret("vision-ai-api-secrets-cloud-functions")
-    vision_ai_api_secrets = json.loads(vision_ai_api_secrets)
+    # Get secrets
+    vision_ai_secrets_str = get_secret("vision-ai-cloud-function-secrets")
+    vision_ai_secrets = json.loads(vision_ai_secrets_str)
 
-    sentry_sdk.init(vision_ai_api_secrets["sentry_dns"])
+    sentry_sdk.init(vision_ai_secrets["sentry_dns"])
 
     # Initializes the Vision AI API client
-    vision_ai_api = APIVisionAI(
-        username=vision_ai_api_secrets["username"],
-        password=vision_ai_api_secrets["password"],
-        client_id=vision_ai_api_secrets["client_id"],
-        client_secret=vision_ai_api_secrets["client_secret"],
-    )
 
     # Generates a prediction using the Google Generative AI model
     ai_response_parsed = get_prediction(
         data=data,
         image_url=data["image_url"],
         prompt_text=data["prompt_text"],
-        google_api_key=google_api_key,
+        google_api_key=vision_ai_secrets["google_gemini_api_key"],
         google_api_model=data["model"],
         max_output_tokens=data["max_output_tokens"],
         temperature=data["temperature"],
         top_k=data["top_k"],
         top_p=data["top_p"],
+    )
+
+    vision_ai_api = APIVisionAI(
+        username=vision_ai_secrets["vision_ai_api_username"],
+        password=vision_ai_secrets["vision_ai_api_password"],
     )
 
     camera_id = data.get("camera_id")
