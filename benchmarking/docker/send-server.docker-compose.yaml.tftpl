@@ -1,0 +1,11 @@
+services:
+  send-stream:
+    build: .
+    restart: always
+    environment:
+      DATA_PATH: /data
+      STREAM_SERVER_IP: ${server_ip}
+    volumes:
+      - stream-data:/data
+volumes:
+  stream-data:

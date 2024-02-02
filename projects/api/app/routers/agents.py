@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi_pagination import Page
 from fastapi_pagination.ext.tortoise import paginate as tortoise_paginate
 
-from app.dependencies import get_caller, is_admin
+from app.dependencies import get_caller, is_admin, is_agent
 from app.models import Agent, Camera
 from app.pydantic_models import (
     AgentPydantic,
@@ -42,6 +42,12 @@ async def get_agents(_=Depends(is_admin)) -> Page[AgentPydantic]:
             ),
         ),
     )
+
+
+@router.get("/me", response_model=AgentPydantic)
+async def get_agent_me(agent=Depends(is_agent)) -> AgentPydantic:
+    """Returns the agent informations."""
+    return agent
 
 
 @router.get("/cameras", response_model=Page[CameraConnectionInfo])

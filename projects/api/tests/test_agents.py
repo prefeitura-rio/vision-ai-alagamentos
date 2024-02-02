@@ -34,6 +34,27 @@ async def test_agents_get(client: AsyncClient, authorization_header: dict, conte
 
 @pytest.mark.anyio
 @pytest.mark.run(order=32)
+async def test_agents_me_get(client: AsyncClient, authorization_header: dict, context: dict):
+    response = await client.get("/agents/me", headers=authorization_header)
+    assert response.status_code == 200
+    assert "id" in response.json()
+    assert "name" in response.json()
+    assert "slug" in response.json()
+    assert "auth_sub" in response.json()
+    assert "last_heartbeat" in response.json()
+    assert isinstance(response.json()["id"], str)
+    assert isinstance(response.json()["name"], str)
+    assert isinstance(response.json()["slug"], str)
+    assert isinstance(response.json()["auth_sub"], str)
+    assert (
+        isinstance(response.json()["last_heartbeat"], str)
+        or response.json()["last_heartbeat"] is None
+    )
+    context["agent_id"] = response.json()["id"]
+
+
+@pytest.mark.anyio
+@pytest.mark.run(order=33)
 async def test_agents_get_cameras(client: AsyncClient, authorization_header: dict):
     response = await client.get("/agents/cameras", headers=authorization_header)
     assert response.status_code == 200
@@ -54,7 +75,7 @@ async def test_agents_get_cameras(client: AsyncClient, authorization_header: dic
 
 
 @pytest.mark.anyio
-@pytest.mark.run(order=33)
+@pytest.mark.run(order=34)
 async def test_agents_add_cameras(client: AsyncClient, authorization_header: dict, context: dict):
     response = await client.post(
         f"/agents/{context['agent_id']}/cameras?camera_id=0001",
@@ -71,7 +92,7 @@ async def test_agents_add_cameras(client: AsyncClient, authorization_header: dic
 
 
 @pytest.mark.anyio
-@pytest.mark.run(order=34)
+@pytest.mark.run(order=35)
 async def test_agents_get_by_id_cameras(
     client: AsyncClient, authorization_header: dict, context: dict
 ):
@@ -96,7 +117,7 @@ async def test_agents_get_by_id_cameras(
 
 
 @pytest.mark.anyio
-@pytest.mark.run(order=35)
+@pytest.mark.run(order=36)
 async def test_agents_post_heartbeat_to_other(
     client: AsyncClient, authorization_header: dict, context: dict
 ):

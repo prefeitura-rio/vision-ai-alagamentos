@@ -5,7 +5,7 @@ from fastapi import Depends, HTTPException, Security, status
 
 from app.models import Agent
 from app.oidc import get_current_user
-from app.pydantic_models import APICaller, UserInfo
+from app.pydantic_models import AgentPydantic, APICaller, UserInfo
 from app.utils import slugify
 
 
@@ -41,3 +41,15 @@ async def is_admin(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="You don't have permission to do this.",
         )
+
+
+async def is_agent(
+    caller: Annotated[APICaller, Depends(get_caller)],
+) -> AgentPydantic:
+    if caller.agent is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="You don't have permission to do this.",
+        )
+
+    return caller.agent
