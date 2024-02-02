@@ -1,0 +1,7 @@
+services:
+  agent:
+    image: ghcr.io/prefeitura-rio/vision-ai-agent:latest
+    restart: always
+    env_file: .env
+    ports:
+      - 6060:6060

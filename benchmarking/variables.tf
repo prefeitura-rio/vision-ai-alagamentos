@@ -33,7 +33,7 @@ variable "stream_server_machine_type" {
   type        = string
 }
 
-variable "send_stream_machine_type" {
+variable "send_server_machine_type" {
   description = "Stream server machine type"
   type        = string
 }
@@ -45,5 +45,20 @@ variable "api_machine_type" {
 
 variable "agent_machine_type" {
   description = "Stream server machine type"
+  type        = string
+}
+
+variable "infisical_address" {
+  description = "Infisical URL"
+  type        = string
+}
+
+variable "infisical_token" {
+  description = "Infisical token"
+  type        = string
+}
+
+variable "infisical_environment" {
+  description = "Infisical environment"
   type        = string
 }
