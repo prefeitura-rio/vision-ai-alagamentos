@@ -14,31 +14,7 @@ import (
 	"time"
 )
 
-var errMediaNotFound error = fmt.Errorf("media not found")
-
-type OIDCClientCredentials struct {
-	TokenURL string
-	Username string
-	Password string
-	ClientID string
-}
-
-type infisicalConfig struct {
-	url         string
-	token       string
-	secretKey   string
-	environment string
-}
-
-type config struct {
-	agentURL     string
-	cameraURL    string
-	heartbeatURL string
-	credentials  OIDCClientCredentials
-	heartbeat    time.Duration
-}
-
-func makeSnapshot(cameraAPI CameraAPI, cameraURL string, accessToken *AccessToken) {
+func makeSnapshot(cameraAPI CameraAPI) {
 	initialTime := time.Now()
 
 	log.Printf("Realizando a captura da camera: %s", cameraAPI.ID)
@@ -47,7 +23,7 @@ func makeSnapshot(cameraAPI CameraAPI, cameraURL string, accessToken *AccessToke
 		log.Printf("Tempo de captura da camera %s: %.2fs", cameraAPI.ID, delta)
 	}()
 
-	camera, err := NewCamera(cameraAPI, cameraURL)
+	camera, err := NewCamera(cameraAPI)
 	if err != nil {
 		log.Printf("error creating new camera from API: %s", err)
 		return
@@ -68,7 +44,7 @@ func makeSnapshot(cameraAPI CameraAPI, cameraURL string, accessToken *AccessToke
 
 	contentType, body := bodyImage(camera.id, img)
 
-	_, err = httpPost(camera.snapshotURL, accessToken, contentType, body)
+	_, err = httpPost(cameraAPI.snapshotURL, camera.accessToken, contentType, body)
 	if err != nil {
 		log.Printf("error sending snapshot: %s", err)
 		return
@@ -77,7 +53,7 @@ func makeSnapshot(cameraAPI CameraAPI, cameraURL string, accessToken *AccessToke
 	log.Printf("captura finalizada: %s", camera.id)
 }
 
-func getCameras(agentURL string, accessToken *AccessToken) ([]CameraAPI, error) {
+func getCameras(agentURL string, cameraURL string, accessToken *AccessToken) ([]CameraAPI, error) {
 	type apiData struct {
 		Items []CameraAPI `json:"items"`
 		Total int         `json:"total"`
@@ -88,7 +64,9 @@ func getCameras(agentURL string, accessToken *AccessToken) ([]CameraAPI, error) 
 	data := apiData{}
 	cameras := []CameraAPI{}
 
-	err := httpGet(agentURL, accessToken, &data)
+	url := agentURL + "/cameras"
+
+	err := httpGet(url, accessToken, &data)
 	if err != nil {
 		return nil, fmt.Errorf("error getting cameras: %w", err)
 	}
@@ -96,13 +74,18 @@ func getCameras(agentURL string, accessToken *AccessToken) ([]CameraAPI, error) 
 	cameras = append(cameras, data.Items...)
 
 	for data.Page != data.Pages {
-		url := fmt.Sprintf("%s?page=%d", agentURL, data.Page+1)
+		url := fmt.Sprintf("%s?page=%d", url, data.Page+1)
 		err = httpGet(url, accessToken, &data)
 		if err != nil {
 			return nil, fmt.Errorf("error getting cameras: %w", err)
 		}
 
 		cameras = append(cameras, data.Items...)
+	}
+
+	for index, camera := range cameras {
+		cameras[index].accessToken = accessToken
+		cameras[index].snapshotURL = fmt.Sprintf("%s/%s/snapshot", cameraURL, camera.ID)
 	}
 
 	return cameras, nil
@@ -151,13 +134,14 @@ func main() {
 		panic(fmt.Errorf("error getting config: %w", err))
 	}
 
+	urls := struct{ camera, agent string }{
+		camera: fmt.Sprintf("%s/cameras", config.apiBaseURL),
+		agent:  fmt.Sprintf("%s/agents/%s", config.apiBaseURL, config.agentID),
+	}
+
 	accessToken := NewAccessToken(config.credentials, true)
 	for !accessToken.Valid() {
 		time.Sleep(time.Second)
-	}
-
-	runSnapshot := func(camera CameraAPI) {
-		makeSnapshot(camera, config.cameraURL, accessToken)
 	}
 
 	err = cameras.StartQueue(ctxCameras)
@@ -165,7 +149,7 @@ func main() {
 		panic(fmt.Errorf("error starting queue: %w", err))
 	}
 
-	err = cameras.ConsumeQueue(ctxCameras, parallelSnapshots, runSnapshot)
+	err = cameras.ConsumeQueue(ctxCameras, parallelSnapshots, makeSnapshot)
 	if err != nil {
 		panic(fmt.Errorf("error consuming queue: %w", err))
 	}
@@ -180,7 +164,7 @@ func main() {
 	log.Printf("server intialized successfully")
 
 	for {
-		camerasAPI, err := getCameras(config.agentURL, accessToken)
+		camerasAPI, err := getCameras(urls.agent, urls.camera, accessToken)
 		if err != nil {
 			log.Printf("error getting cameras: %s", err)
 		} else if !cameras.Equals(camerasAPI) {
@@ -196,7 +180,7 @@ func main() {
 			log.Printf("running %d cameras", cameras.Len())
 		}
 
-		err = sendHeartbeat(config.heartbeatURL, accessToken, err == nil)
+		err = sendHeartbeat(urls.agent+"/heartbeat", accessToken, err == nil)
 		if err != nil {
 			log.Printf("error sending heartbeat: %s", err)
 		}

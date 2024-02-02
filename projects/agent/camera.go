@@ -21,24 +21,29 @@ import (
 	"github.com/pion/rtp"
 )
 
-var ErrGetFrameTimeout error = fmt.Errorf("timeout on getting frame")
+var (
+	ErrGetFrameTimeout error = fmt.Errorf("timeout on getting frame")
+	ErrMediaNotFound   error = fmt.Errorf("media not found")
+)
 
 type CameraAPI struct {
 	ID             string `json:"id"`
 	RTSP_URL       string `json:"rtsp_url"`
 	UpdateInterval int    `json:"update_interval"`
+	snapshotURL    string
+	accessToken    *AccessToken
 }
 
 type Camera struct {
 	id             string
 	getURL         *base.URL
-	snapshotURL    string
 	updateInterval time.Duration
 	client         *gortsplib.Client
 	decoders       *decoders
+	accessToken    *AccessToken
 }
 
-func NewCamera(api CameraAPI, cameraBaseURL string) (*Camera, error) {
+func NewCamera(api CameraAPI) (*Camera, error) {
 	u, err := base.ParseURL(api.RTSP_URL)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing RTSP URL: %w", err)
@@ -51,8 +56,8 @@ func NewCamera(api CameraAPI, cameraBaseURL string) (*Camera, error) {
 	return &Camera{
 		id:             api.ID,
 		getURL:         u,
-		snapshotURL:    fmt.Sprintf("%s/%s/snapshot", cameraBaseURL, api.ID),
 		updateInterval: time.Duration(api.UpdateInterval) * time.Second,
+		accessToken:    api.accessToken,
 		client: &gortsplib.Client{
 			ReadTimeout: time.Duration(api.UpdateInterval) * time.Second / 2,
 		},
@@ -141,7 +146,7 @@ func (camera *Camera) setDecoders() error {
 	}
 
 	if len(medias) == 0 {
-		return errMediaNotFound
+		return ErrMediaNotFound
 	}
 
 	err = camera.client.SetupAll(desc.BaseURL, medias)

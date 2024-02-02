@@ -12,6 +12,27 @@ import (
 	"time"
 )
 
+type OIDCClientCredentials struct {
+	TokenURL string
+	Username string
+	Password string
+	ClientID string
+}
+
+type infisicalConfig struct {
+	url         string
+	token       string
+	secretKey   string
+	environment string
+}
+
+type config struct {
+	apiBaseURL  string
+	agentID     string
+	credentials OIDCClientCredentials
+	heartbeat   time.Duration
+}
+
 func decrypt(key, nonce, tag, cipherText string) (string, error) {
 	nonceb64, err := base64.StdEncoding.DecodeString(nonce)
 	if err != nil {
@@ -132,9 +153,7 @@ func getConfig() (config, error) {
 		"INFISICAL_ADDRESS",
 		"INFISICAL_TOKEN",
 		"INFISICAL_ENVIRONMENT",
-		"AGENT_URL",
-		"CAMERA_URL",
-		"HEARTBEAT_URL",
+		"API_BASE_URL",
 	}
 	emptyEnvs := []string{}
 	for _, env := range envNames {
@@ -199,17 +218,34 @@ func getConfig() (config, error) {
 		return config{}, fmt.Errorf("HEARTBEAT_SECONDS must be greater than zero")
 	}
 
+	credentials := OIDCClientCredentials{
+		TokenURL: secrets["OIDC_TOKEN_URL"],
+		Username: secrets["OIDC_USERNAME"],
+		Password: secrets["OIDC_PASSWORD"],
+		ClientID: secrets["OIDC_CLIENT_ID"],
+	}
+
+	accessToken := NewAccessToken(credentials, false)
+	err = accessToken.Renew()
+	if err != nil {
+		return config{}, fmt.Errorf("error getting access token: %w", err)
+	}
+
+	apiBaseURL := os.Getenv("API_BASE_URL")
+	api := struct {
+		AgentID string `json:"id"`
+	}{}
+
+	err = httpGet(apiBaseURL+"/agents/me", accessToken, &api)
+	if err != nil {
+		return config{}, fmt.Errorf("error getting agent ID: %w", err)
+	}
+
 	config := config{
-		agentURL:     os.Getenv("AGENT_URL"),
-		cameraURL:    os.Getenv("CAMERA_URL"),
-		heartbeatURL: os.Getenv("HEARTBEAT_URL"),
-		credentials: OIDCClientCredentials{
-			TokenURL: secrets["OIDC_TOKEN_URL"],
-			Username: secrets["OIDC_USERNAME"],
-			Password: secrets["OIDC_PASSWORD"],
-			ClientID: secrets["OIDC_CLIENT_ID"],
-		},
-		heartbeat: time.Second * time.Duration(heartbeatSeconds),
+		apiBaseURL:  apiBaseURL,
+		agentID:     api.AgentID,
+		credentials: credentials,
+		heartbeat:   time.Second * time.Duration(heartbeatSeconds),
 	}
 	return config, nil
 }
