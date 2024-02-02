@@ -94,10 +94,6 @@ def get_secret(secret_id: str) -> str:
     return secret
 
 
-def get_exception(error_msg):
-    raise Exception(str(error_msg))
-
-
 def get_prediction(
     data: dict,
     image_url: str,
@@ -129,6 +125,8 @@ def get_prediction(
     try:
         response_parsed = output_parser.parse(response_ai)
     except Exception as e:  # noqa
+        print(response_ai)
+        raise Exception(response_ai)
         # error_msg = f"""
         #     CLOUD FUNCTION ERROR
 
@@ -146,7 +144,7 @@ def get_prediction(
         #     for i in range(0, len(error_msg), chunk_size)
         # }
 
-        get_exception(error_msg=response_ai)
+        # get_exception(error_msg=response_ai)
 
     return response_parsed.dict()
 
