@@ -94,16 +94,20 @@ def get_secret(secret_id: str) -> str:
     return secret
 
 
+def get_exception(response_ai, data):
+    raise Exception(response_ai, data)
+
+
 def get_prediction(
     data: dict,
     image_url: str,
     prompt_text: str,
     google_api_key: str,
-    google_api_model: str = "gemini-pro-vision",
-    max_output_tokens: int = 300,
-    temperature: float = 0.4,
-    top_k: int = 32,
-    top_p: int = 1,
+    google_api_model: str,
+    max_output_tokens: int,
+    temperature: float,
+    top_k: int,
+    top_p: int,
 ) -> dict:
     # Retrieves a prediction using the Google Generative AI model
     llm = ChatGoogleGenerativeAI(
@@ -125,26 +129,18 @@ def get_prediction(
     try:
         response_parsed = output_parser.parse(response_ai)
     except Exception as e:  # noqa
-        print(response_ai)
-        raise Exception(response_ai)
-        # error_msg = f"""
-        #     CLOUD FUNCTION ERROR
-
-        #     response_ai:{response_ai}
-
-        #     payload_data:{data}
-
-        # """.replace(
-        #     "            ", ""
-        # )
-
+        # print(f"AI_RESPONSE:\n{}")
+        # print(f"AI_PROMPT:\n{prompt_text}")
         # chunk_size = 800
-        # error_msg_chunks = {
-        #     f"chunk_{i // chunk_size + 1}": error_msg[i : i + chunk_size]
-        #     for i in range(0, len(error_msg), chunk_size)
+        # response_ai_chunks = {
+        #     f"chunk_{i // chunk_size + 1}": response_ai[i : i + chunk_size]
+        #     for i in range(0, len(response_ai), chunk_size)
         # }
-
-        # get_exception(error_msg=response_ai)
+        # prompt_ai_chunks = {
+        #     f"chunk_{i // chunk_size + 1}": prompt_text[i : i + chunk_size]
+        #     for i in range(0, len(prompt_text), chunk_size)
+        # }
+        get_exception(response_ai, data)
 
     return response_parsed.dict()
 
