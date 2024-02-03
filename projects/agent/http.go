@@ -1,16 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
-	"image"
-	"image/png"
 	"io"
 	"mime/multipart"
 	"net/http"
 )
-
-var pngEnconder png.Encoder = png.Encoder{}
 
 func httpGet(url string, accessToken *AccessToken, body any) error {
 	request, err := http.NewRequest("GET", url, nil)
@@ -77,36 +74,24 @@ func httpPost(
 	return string(body), err
 }
 
-func bodyImage(id string, img image.Image) (string, *io.PipeReader) {
-	ir, iw := io.Pipe()
-
-	go func() {
-		err := pngEnconder.Encode(iw, img)
-		if err != nil {
-			iw.CloseWithError(err)
-		}
-		iw.CloseWithError(nil)
-	}()
-
+func bodyImage(id string, img []byte) (string, *io.PipeReader) {
+	reader := bytes.NewReader(img)
 	pr, pw := io.Pipe()
 	writer := multipart.NewWriter(pw)
 	go func() {
 		part, err := writer.CreateFormFile("file", id+".png")
 		if err != nil {
 			pw.CloseWithError(err)
-			ir.CloseWithError(err)
 			return
 		}
-		_, err = io.Copy(part, ir)
+		_, err = io.Copy(part, reader)
 		if err != nil {
 			pw.CloseWithError(err)
-			ir.CloseWithError(err)
 			return
 		}
 
 		err = writer.Close()
 		pw.CloseWithError(err)
-		ir.CloseWithError(err)
 	}()
 
 	return writer.FormDataContentType(), pr
