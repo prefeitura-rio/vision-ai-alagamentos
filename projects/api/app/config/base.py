@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+import json
+from urllib.request import urlopen
+
 from . import getenv_or_action
 
 # Logging
@@ -26,3 +29,6 @@ if GCS_BUCKET_PATH_PREFIX:
     GCS_BUCKET_PATH_PREFIX = GCS_BUCKET_PATH_PREFIX.rstrip("/")
 GCP_PUBSUB_PROJECT_ID = getenv_or_action("GCP_PUBSUB_PROJECT_ID", action="warn")
 GCP_PUBSUB_TOPIC_NAME = getenv_or_action("GCP_PUBSUB_TOPIC_NAME", action="warn")
+
+jwksurl = urlopen(OIDC_ISSUER_URL + "/jwks/")
+JWS = json.loads(jwksurl.read())

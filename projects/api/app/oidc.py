@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
-import json
 from typing import Annotated
-from urllib.request import urlopen
 
 from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -39,9 +37,6 @@ async def authenticate_user(form_data: OAuth2PasswordRequestForm) -> Token:
 
 
 async def get_current_user(authorization_header: Annotated[str, Depends(oidc_scheme)]):
-    jwksurl = urlopen(config.OIDC_ISSUER_URL + "/jwks/")
-    jwks = json.loads(jwksurl.read())
-
     try:
         unverified_header = jwt.get_unverified_header(authorization_header)
     except Exception:
@@ -52,7 +47,7 @@ async def get_current_user(authorization_header: Annotated[str, Depends(oidc_sch
 
     rsa_key = {}
     algorithms = ""
-    for key in jwks["keys"]:
+    for key in config.JWS["keys"]:
         if key["kid"] == unverified_header["kid"]:
             rsa_key = {
                 "kty": key["kty"],
