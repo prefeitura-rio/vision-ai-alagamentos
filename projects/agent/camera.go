@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"image"
 	"log"
 	"slices"
 	"strings"
@@ -129,7 +128,7 @@ func (camera *Camera) closeDecoders() {
 	camera.frameDecoder.close()
 }
 
-func (camera *Camera) decodeRTPPacket(forma format.Format, pkt *rtp.Packet) (image.Image, error) {
+func (camera *Camera) decodeRTPPacket(forma format.Format, pkt *rtp.Packet) ([]byte, error) {
 	au, err := camera.rtpDecoder.Decode(pkt)
 	if err != nil {
 		return nil, err
@@ -151,8 +150,8 @@ func (camera *Camera) decodeRTPPacket(forma format.Format, pkt *rtp.Packet) (ima
 	return nil, errAllFrameEmpty
 }
 
-func (camera *Camera) getNextFrame() (image.Image, error) {
-	imgch := make(chan image.Image)
+func (camera *Camera) getNextFrame() ([]byte, error) {
+	imgch := make(chan []byte)
 	decoded := false
 	mu := sync.Mutex{}
 
