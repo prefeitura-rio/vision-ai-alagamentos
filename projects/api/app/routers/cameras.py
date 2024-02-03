@@ -4,7 +4,7 @@ from functools import partial
 from typing import Annotated, List
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi_pagination import Page
 from fastapi_pagination.ext.tortoise import paginate as tortoise_paginate
 from nest_asyncio import os
@@ -31,10 +31,14 @@ from app.utils import (
     upload_file_to_bucket,
 )
 
+BigPage = Page[CameraOut].with_custom_options(
+    size=Query(100, ge=1, le=3000),
+)
+
 router = APIRouter(prefix="/cameras", tags=["Cameras"])
 
 
-@router.get("", response_model=Page[CameraOut])
+@router.get("", response_model=BigPage)
 async def get_cameras(_=Depends(is_admin)) -> Page[CameraOut]:
     """Get a list of all cameras."""
 
