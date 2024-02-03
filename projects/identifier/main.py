@@ -100,10 +100,6 @@ def get_secret(secret_id: str) -> str:
     return secret
 
 
-def get_exception(ai_response, data):
-    raise Exception(ai_response, data)
-
-
 def save_data_in_bq(
     json_data: dict,
     error_step=None,
@@ -151,9 +147,16 @@ def save_data_in_bq(
     json_data["error_name"] = error_name
     json_data["error_message"] = error_message
 
-    json_data = json.loads(json.dumps(json_data))
-    job = client.load_table_from_json(json_data, table_full_name, job_config=job_config)
-    job.result()
+    json_data = json.loads(json.dumps([json_data]))
+    try:
+        job = client.load_table_from_json(json_data, table_full_name, job_config=job_config)
+        job.result()
+        print(job)
+    except Exception:
+        print(
+            "======================================= ERROR BQ UPLOAD ======================================="  # noqa
+        )
+        raise Exception(json_data)
 
 
 def get_prediction(
@@ -211,8 +214,8 @@ def get_prediction(
             error_step="ai_request",
             ai_response_parsed=None,
             ai_response=None,
-            error_message=traceback.format_exc(),
-            error_name=type(exception).__name__,
+            error_message=str(traceback.format_exc(chain=False)),
+            error_name=str(type(exception).__name__),
         )
         raise exception
 
@@ -226,8 +229,8 @@ def get_prediction(
             error_step="ai_response_parser",
             ai_response_parsed=None,
             ai_response=ai_response,
-            error_message=traceback.format_exc(),
-            error_name=type(exception).__name__,
+            error_message=str(traceback.format_exc(chain=False)),
+            error_name=str(type(exception).__name__),
         )
         raise exception
 
@@ -267,7 +270,6 @@ def predict(cloud_event: dict) -> None:
     # Generates a prediction using the Google Generative AI model
     ai_response_parsed = get_prediction(
         bq_data_json=bq_data,
-        data=data,
         image_url=data["image_url"],
         prompt_text=data["prompt_text"],
         google_api_key=vision_ai_secrets["google_gemini_api_key"],
@@ -278,41 +280,77 @@ def predict(cloud_event: dict) -> None:
         top_p=data["top_p"],
     )
 
-    vision_ai_api = APIVisionAI(
-        username=vision_ai_secrets["vision_ai_api_username"],
-        password=vision_ai_secrets["vision_ai_api_password"],
-    )
-
-    camera_objects_from_api = dict(zip(data["object_slugs"], data["object_ids"]))
-    ai_response_parsed_bq = []
-    for item in ai_response_parsed["objects"]:
-
-        object_id = camera_objects_from_api.get(item["object"], None)
-        label_explanation = item["label_explanation"]
-        label = item["label"]
-        label = str(label).lower()
-        if object_id is not None:
-            r = vision_ai_api.put_camera_object(
-                camera_id=camera_id,
-                object_id=object_id,
-                label_explanation=label_explanation,
-                label=label,
+    retry_count = 5
+    while retry_count > 0:
+        try:
+            vision_ai_api = APIVisionAI(
+                username=vision_ai_secrets["vision_ai_api_username"],
+                password=vision_ai_secrets["vision_ai_api_password"],
             )
 
-            item["api_error"] = None
-            item["api_status_code"] = r.status_code
+            camera_objects_from_api = dict(zip(data["object_slugs"], data["object_ids"]))
+            ai_response_parsed_bq = []
+            for item in ai_response_parsed["objects"]:
 
-            if (
-                r.status_code != 200
-            ):  # TODO pensar o que fazer com o label que nao existem, criar ou so ignora?
-                item["api_error"] = r.json()
-            ai_response_parsed_bq.append(item)
+                item["api_status_code"] = None
+                item["api_error_step"] = None
+                item["api_error_name"] = None
+                item["api_error_message"] = None
 
-    save_data_in_bq(
-        json_data=bq_data,
-        error_step=None,
-        ai_response_parsed=ai_response_parsed_bq,
-        ai_response=None,
-        error_message=None,
-        error_name=None,
-    )
+                object_id = camera_objects_from_api.get(item["object"], None)
+                label_explanation = item["label_explanation"]
+                label = item["label"]
+                label = str(label).lower()
+
+                if object_id is not None:
+                    try:
+                        put_response = vision_ai_api.put_camera_object(
+                            camera_id=camera_id,
+                            object_id=object_id,
+                            label_explanation=label_explanation,
+                            label=label,
+                        )
+                        if (
+                            put_response.status_code != 200
+                        ):  # TODO pensar o que fazer com o label que nao existem, criar ou so ignora? # noqa
+                            item["api_error_step"] = "api_object_not_exists"
+                            item["api_error_message"] = json.dumps(put_response.json())
+                        item["api_status_code"] = put_response.status_code
+                    except Exception as exception:
+                        item["api_error_step"] = "api_put_object"
+                        item["api_error_name"] = type(exception).__name__
+                        item["api_error_message"] = traceback.format_exc(chain=False)
+                else:
+                    item["api_error_step"] = "api_object_id_not_exists"
+                ai_response_parsed_bq.append(item)
+
+            save_data_in_bq(
+                json_data=bq_data,
+                error_step=None,
+                ai_response_parsed=json.dumps(ai_response_parsed_bq),
+                ai_response=None,
+                error_message=None,
+                error_name=None,
+            )
+            retry_count = 0
+        except Exception as exception:
+            if retry_count == 0:
+                ai_response_parsed_bq = []
+                for item in ai_response_parsed["objects"]:
+                    item["api_status_code"] = None
+                    item["api_error_step"] = None
+                    item["api_error_name"] = None
+                    item["api_error_message"] = None
+                    ai_response_parsed_bq.append(item)
+
+                save_data_in_bq(
+                    json_data=bq_data,
+                    error_step="api_authentication_error",
+                    ai_response_parsed=json.dumps(ai_response_parsed_bq),
+                    ai_response=None,
+                    error_message=str(traceback.format_exc(chain=False)),
+                    error_name=str(type(exception).__name__),
+                )
+
+                raise exception
+            retry_count += -1

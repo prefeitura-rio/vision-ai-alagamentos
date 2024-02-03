@@ -1,8 +1,11 @@
 functions-framework==3.*
-pillow==10.2.0
+google-cloud-bigquery==3.17.1
 google-cloud-secret-manager==2.17.0
-langchain-google-genai
-langchain
 google-generativeai==0.3.2
-sentry-sdk
--e libs/base
+langchain==0.1.5
+pillow==10.2.0
+pytz
+sentry-sdk==1.40.0
+
+# langchain-google-genai
+# -e libs/base
