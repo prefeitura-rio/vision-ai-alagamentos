@@ -53,7 +53,7 @@ class APIVisionAI:
 
     def _refresh_token_if_needed(self) -> None:
         if time.time() - self.token_renewal_time >= 60 * 50:
-            self.header, self.token_renewal_time = self._get_headers()
+            self.headers, self.token_renewal_time = self._get_headers()
 
     def _get(self, path: str) -> Dict:
         self._refresh_token_if_needed()
