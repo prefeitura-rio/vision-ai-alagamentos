@@ -55,19 +55,9 @@ class APIVisionAI:
         if time.time() - self.token_renewal_time >= 60 * 50:
             self.headers, self.token_renewal_time = self._get_headers()
 
-    def _get(self, path: str) -> Dict:
-        self._refresh_token_if_needed()
-        response = requests.get(f"{self.BASE_URL}{path}", headers=self.headers)
-        return response.json()
-
     def _put(self, path: str) -> requests.Response:
         self._refresh_token_if_needed()
         return requests.put(f"{self.BASE_URL}{path}", headers=self.headers)
-
-    def _post(self, path: str) -> Dict:
-        self._refresh_token_if_needed()
-        response = requests.post(f"{self.BASE_URL}{path}", headers=self.headers)
-        return response.json()
 
     def put_camera_object(
         self, camera_id: str, object_id: str, label_explanation: str, label: str
