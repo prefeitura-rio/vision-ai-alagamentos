@@ -52,7 +52,7 @@ class APIVisionAI:
         return {"Authorization": f"Bearer {token}"}, time.time()
 
     def _refresh_token_if_needed(self) -> None:
-        if time.time() - self.token_renewal_time >= 120:
+        if time.time() - self.token_renewal_time >= 60 * 50:
             self.header, self.token_renewal_time = self._get_headers()
 
     def _get(self, path: str) -> Dict:
