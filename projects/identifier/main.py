@@ -5,7 +5,7 @@ import json
 import time
 import traceback
 from datetime import datetime
-from typing import List, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import functions_framework
 import google.generativeai as genai
@@ -14,26 +14,22 @@ import requests
 import sentry_sdk
 from google.cloud import bigquery, secretmanager
 from langchain.output_parsers import PydanticOutputParser
+from PIL import Image
+from pydantic import BaseModel
 
 # from langchain_core.messages import HumanMessage
 # from langchain_google_genai import ChatGoogleGenerativeAI
-from PIL import Image
-from pydantic import BaseModel, Field
 
 
-def get_datetime():
+def get_datetime() -> str:
     timestamp = datetime.now(pytz.timezone("America/Sao_Paulo"))
     return timestamp.strftime("%Y-%m-%dT%H:%M:%S.%f")
 
 
 class Object(BaseModel):
-    object: str = Field(description="The object from the objects table")
-    label_explanation: str = Field(
-        description="Highly detailed visual description of the image given the object context"
-    )
-    label: Union[bool, str, None] = Field(
-        description="Label indicating the condition or characteristic of the object"
-    )
+    object: str
+    label_explanation: str
+    label: Union[bool, str, None]
 
 
 class Output(BaseModel):
@@ -41,73 +37,63 @@ class Output(BaseModel):
 
 
 class APIVisionAI:
-    def __init__(self, username, password):
+    def __init__(self, username: str, password: str) -> None:
         self.BASE_URL = "https://vision-ai-api-staging-ahcsotxvgq-uc.a.run.app"
         self.username = username
         self.password = password
         self.headers, self.token_renewal_time = self._get_headers()
 
-    def _get_headers(self):
+    def _get_headers(self) -> Tuple[Dict[str, str], float]:
         access_token_response = requests.post(
             f"{self.BASE_URL}/auth/token",
-            data={
-                "username": self.username,
-                "password": self.password,
-            },
+            data={"username": self.username, "password": self.password},
         ).json()
         token = access_token_response["access_token"]
         return {"Authorization": f"Bearer {token}"}, time.time()
 
-    def _refresh_token_if_needed(self):
+    def _refresh_token_if_needed(self) -> None:
         if time.time() - self.token_renewal_time >= 120:
             self.header, self.token_renewal_time = self._get_headers()
 
-    def _get(self, path):
+    def _get(self, path: str) -> Dict:
         self._refresh_token_if_needed()
         response = requests.get(f"{self.BASE_URL}{path}", headers=self.headers)
         return response.json()
 
-    def _put(self, path):
+    def _put(self, path: str) -> requests.Response:
         self._refresh_token_if_needed()
-        response = requests.put(
-            f"{self.BASE_URL}{path}",
-            headers=self.headers,
-        )
-        return response
+        return requests.put(f"{self.BASE_URL}{path}", headers=self.headers)
 
-    def _post(self, path):
+    def _post(self, path: str) -> Dict:
         self._refresh_token_if_needed()
-        response = requests.post(
-            f"{self.BASE_URL}{path}",
-            headers=self.headers,
-        )
+        response = requests.post(f"{self.BASE_URL}{path}", headers=self.headers)
         return response.json()
 
-    def put_camera_object(self, camera_id, object_id, label_explanation, label):
+    def put_camera_object(
+        self, camera_id: str, object_id: str, label_explanation: str, label: str
+    ) -> requests.Response:
         return self._put(
-            path=f"/cameras/{camera_id}/objects/{object_id}?label={label}&label_explanation={label_explanation}",  # noqa
+            f"/cameras/{camera_id}/objects/{object_id}?label={label}&label_explanation={label_explanation}"  # noqa
         )
 
 
 def get_secret(secret_id: str) -> str:
-    # Retrieves a secret from Google Cloud Secret Manager
     project_id = "rj-escritorio-dev"
     version_id = "latest"
     name = f"projects/{project_id}/secrets/{secret_id}/versions/{version_id}"
     client = secretmanager.SecretManagerServiceClient()
     response = client.access_secret_version(request={"name": name})
-    secret = response.payload.data.decode("UTF-8")
-    return secret
+    return response.payload.data.decode("UTF-8")
 
 
 def save_data_in_bq(
     json_data: dict,
-    error_step=None,
-    ai_response_parsed=None,
-    ai_response=None,
-    error_message=None,
-    error_name=None,
-):
+    error_step: Optional[str] = None,
+    ai_response_parsed: Optional[str] = None,
+    ai_response: Optional[str] = None,
+    error_message: Optional[str] = None,
+    error_name: Optional[str] = None,
+) -> None:
     project_id = "rj-escritorio-dev"
     dataset_id = "vision_ai"
     table_id = "cameras_predicoes"
@@ -151,11 +137,7 @@ def save_data_in_bq(
     try:
         job = client.load_table_from_json(json_data, table_full_name, job_config=job_config)
         job.result()
-        print(job)
     except Exception:
-        print(
-            "======================================= ERROR BQ UPLOAD ======================================="  # noqa
-        )
         raise Exception(json_data)
 
 
@@ -169,7 +151,7 @@ def get_prediction(
     temperature: float,
     top_k: int,
     top_p: int,
-) -> dict:
+) -> Dict:
 
     # llm = ChatGoogleGenerativeAI(
     #     model=google_api_model,
