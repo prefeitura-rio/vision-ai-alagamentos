@@ -93,6 +93,67 @@ async def get_cameras(params: BigParams = Depends(), _=Depends(is_admin)) -> Pag
     return create_page(camerasOut, total=await Camera.all().count(), params=params)
 
 
+@router.get("/v2", response_model=BigPage)
+async def get_cameras_v2(
+    params: BigParams = Depends(), _=Depends(is_admin), query_limit: int = 100
+) -> Page[CameraOut]:
+    camerasOut: List[CameraOut] = []
+    offset = params.size * (params.page - 1)
+
+    while len(camerasOut) < params.size:
+        size = min(params.size - len(camerasOut), query_limit)
+        cameras = await Camera.all().limit(size).offset(offset)
+
+        ids = [camera.id for camera in cameras]
+
+        cameraIdentifications = await CameraIdentification.all().filter(camera__id__in=ids)
+
+        allObjects = await Object.all()
+        objectsById = {}
+        for object in allObjects:
+            objectsById[object.id] = object
+
+        for camera in cameras:
+            identifications = filter(
+                lambda identification: identification.camera == camera.id, cameraIdentifications
+            )
+
+            objects = [
+                objectsById[identification.object].slug for identification in identifications
+            ]
+
+            identificationsDetails = [
+                IdentificationDetails(
+                    object=objectsById[identification.object].slug,
+                    timestamp=identification.timestamp,
+                    label=identification.label,
+                    label_explanation=identification.label_explanation,
+                )
+                for identification in identifications
+            ]
+
+            camerasOut.append(
+                CameraOut(
+                    id=camera.id,
+                    name=camera.name,
+                    rtsp_url=camera.rtsp_url,
+                    update_interval=camera.update_interval,
+                    latitude=camera.latitude,
+                    longitude=camera.longitude,
+                    snapshot_url=camera.snapshot_url,
+                    snapshot_timestamp=camera.snapshot_timestamp,
+                    objects=objects,
+                    identifications=identificationsDetails,
+                )
+            )
+
+        offset += query_limit
+        if len(cameras) < query_limit:
+            break
+
+    return create_page(camerasOut, total=await Camera.all().count(), params=params)
+
+
 @router.post("", response_model=CameraOut)
 async def create_camera(camera_: CameraIn, _=Depends(is_admin)) -> CameraOut:
     """Add a new camera."""
