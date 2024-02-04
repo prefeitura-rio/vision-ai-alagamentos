@@ -5,10 +5,10 @@ from typing import Annotated, List
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
-from fastapi_pagination import Page
+from fastapi_pagination import Page, Params
+from fastapi_pagination.api import create_page
 from fastapi_pagination.ext.tortoise import paginate as tortoise_paginate
 from nest_asyncio import os
-from tortoise.fields import ReverseRelation
 
 from app import config
 from app.dependencies import get_caller, is_admin
@@ -31,57 +31,66 @@ from app.utils import (
     upload_file_to_bucket,
 )
 
-BigPage = Page[CameraOut].with_custom_options(
-    size=Query(100, ge=1, le=3000),
-)
+
+class BigParams(Params):
+    size: int = Query(100, ge=1, le=3000)
+
+
+class BigPage(Page[CameraOut]):
+    __params_type__ = BigParams
+
 
 router = APIRouter(prefix="/cameras", tags=["Cameras"])
 
 
 @router.get("", response_model=BigPage)
-async def get_cameras(_=Depends(is_admin)) -> Page[CameraOut]:
-    """Get a list of all cameras."""
+async def get_cameras(params: BigParams = Depends(), _=Depends(is_admin)) -> Page[CameraOut]:
+    cameras = await Camera.all().limit(params.size).offset(params.size * (params.page - 1))
 
-    async def get_objects(identifications_relation: ReverseRelation) -> List[str]:
-        identifications: List[CameraIdentification] = await identifications_relation.all()
-        return [(await item.object).slug for item in identifications]
+    ids = [camera.id for camera in cameras]
 
-    async def get_identifications(
-        identifications_relation: ReverseRelation,
-    ) -> List[IdentificationDetails]:
-        identifications: List[CameraIdentification] = await identifications_relation.all()
-        return [
+    cameraIdentifications = await CameraIdentification.all().filter(camera__id__in=ids)
+
+    allObjects = await Object.all()
+    objectsById = {}
+    for object in allObjects:
+        objectsById[object.id] = object
+
+    camerasOut: List[CameraOut] = []
+
+    for camera in cameras:
+        identifications = filter(
+            lambda identification: identification.camera == camera.id, cameraIdentifications
+        )
+
+        objects = [objectsById[identification.object].slug for identification in identifications]
+
+        identificationsDetails = [
             IdentificationDetails(
-                object=(await item.object).slug,
-                timestamp=item.timestamp,
-                label=(await item.label).value if item.label else None,
-                label_explanation=item.label_explanation,
+                object=objectsById[identification.object].slug,
+                timestamp=identification.timestamp,
+                label=identification.label,
+                label_explanation=identification.label_explanation,
             )
-            for item in identifications
+            for identification in identifications
         ]
 
-    return await tortoise_paginate(
-        Camera,
-        transformer=partial(
-            apply_to_list,
-            fn=partial(
-                transform_tortoise_to_pydantic,
-                pydantic_model=CameraOut,
-                vars_map=[
-                    ("id", "id"),
-                    ("name", "name"),
-                    ("rtsp_url", "rtsp_url"),
-                    ("update_interval", "update_interval"),
-                    ("latitude", "latitude"),
-                    ("longitude", "longitude"),
-                    ("snapshot_url", "snapshot_url"),
-                    ("snapshot_timestamp", "snapshot_timestamp"),
-                    ("identifications", ("objects", get_objects)),
-                    ("identifications", ("identifications", get_identifications)),
-                ],
-            ),
-        ),
-    )
+        camerasOut.append(
+            CameraOut(
+                id=camera.id,
+                name=camera.name,
+                rtsp_url=camera.rtsp_url,
+                update_interval=camera.update_interval,
+                latitude=camera.latitude,
+                longitude=camera.longitude,
+                snapshot_url=camera.snapshot_url,
+                snapshot_timestamp=camera.snapshot_timestamp,
+                objects=objects,
+                identifications=identificationsDetails,
+            )
+        )
+
+    return create_page(camerasOut, total=await Camera.all().count(), params=params)
 
 
 @router.post("", response_model=CameraOut)
