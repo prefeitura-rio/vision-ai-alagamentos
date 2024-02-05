@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from datetime import datetime
 from functools import partial
-from typing import Annotated, List
+from typing import Annotated, Dict, List
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
@@ -46,124 +46,70 @@ router = APIRouter(prefix="/cameras", tags=["Cameras"])
 @router.get("", response_model=BigPage)
 async def get_cameras(params: BigParams = Depends(), _=Depends(is_admin)) -> Page[CameraOut]:
     """Get a list of all cameras."""
-    query_limit = 50
-    camerasOut: List[CameraOut] = []
+    cameras_out: Dict[str, CameraOut] = {}
     offset = params.size * (params.page - 1)
 
-    while len(camerasOut) < params.size:
-        size = min(params.size - len(camerasOut), query_limit)
-        cameras = await Camera.all().limit(size).offset(offset)
+    ids = await Camera.all().limit(params.size).offset(offset).values_list("id", flat=True)
 
-        ids = [camera.id for camera in cameras]
-
-        cameraIdentifications = (
-            await CameraIdentification.filter(camera__id__in=ids)
-            .prefetch_related("camera", "object", "label")
-            .all()
+    cameras = await (
+        Camera.filter(id__in=ids)
+        .select_related(
+            "identifications", "identifications__object__slug", "identifications__label__value"
         )
-
-        for camera in cameras:
-            identifications = list(
-                filter(
-                    lambda identification: identification.camera.id == camera.id,
-                    cameraIdentifications,
-                )
-            )
-
-            objects = [identification.object.slug for identification in identifications]
-
-            identificationsDetails = [
-                IdentificationDetails(
-                    object=identification.object.slug,
-                    timestamp=identification.timestamp,
-                    label=identification.label.value if identification.label else None,
-                    label_explanation=identification.label_explanation,
-                )
-                for identification in identifications
-            ]
-
-            camerasOut.append(
-                CameraOut(
-                    id=camera.id,
-                    name=camera.name,
-                    rtsp_url=camera.rtsp_url,
-                    update_interval=camera.update_interval,
-                    latitude=camera.latitude,
-                    longitude=camera.longitude,
-                    snapshot_url=camera.snapshot_url,
-                    snapshot_timestamp=camera.snapshot_timestamp,
-                    objects=objects,
-                    identifications=identificationsDetails,
-                )
-            )
-
-        offset += query_limit
-        if len(cameras) < query_limit:
-            break
-
-    return create_page(camerasOut, total=await Camera.all().count(), params=params)
-
-
-@router.get("/v2", response_model=BigPage)
-async def get_cameras_v2(
-    params: BigParams = Depends(), _=Depends(is_admin), query_limit: int = 100
-) -> Page[CameraOut]:
-    """Get a list of all cameras."""
-    camerasOut: List[CameraOut] = []
-    offset = params.size * (params.page - 1)
-
-    while len(camerasOut) < params.size:
-        size = min(params.size - len(camerasOut), query_limit)
-        cameras = await Camera.all().limit(size).offset(offset)
-
-        ids = [camera.id for camera in cameras]
-
-        cameraIdentifications = (
-            await CameraIdentification.filter(camera__id__in=ids).prefetch_related().all()
+        .all()
+        .values(
+            "id",
+            "name",
+            "rtsp_url",
+            "update_interval",
+            "latitude",
+            "longitude",
+            "snapshot_url",
+            "snapshot_timestamp",
+            "identifications__id",
+            "identifications__object__slug",
+            "identifications__timestamp",
+            "identifications__label__value",
+            "identifications__label_explanation",
         )
-        for cameraIdentification in cameraIdentifications:
-            await cameraIdentification.fetch_related("camera", "object", "label")
+    )
 
-        for camera in cameras:
-            identifications = list(
-                filter(
-                    lambda identification: identification.camera.id == camera.id,
-                    cameraIdentifications,
-                )
+    for camera in cameras:
+        id = camera["id"]
+        slug = None
+        identification_details = None
+        if camera["identifications__id"] is not None:
+            slug = camera["identifications__object__slug"]
+            identification_details = IdentificationDetails(
+                object=slug,
+                timestamp=camera["identifications__timestamp"],
+                label=camera["identifications__label__value"],
+                label_explanation=camera["identifications__label_explanation"],
             )
 
-            objects = [identification.object.slug for identification in identifications]
-
-            identificationsDetails = [
-                IdentificationDetails(
-                    object=identification.object.slug,
-                    timestamp=identification.timestamp,
-                    label=identification.label.value if identification.label else None,
-                    label_explanation=identification.label_explanation,
-                )
-                for identification in identifications
-            ]
-
-            camerasOut.append(
-                CameraOut(
-                    id=camera.id,
-                    name=camera.name,
-                    rtsp_url=camera.rtsp_url,
-                    update_interval=camera.update_interval,
-                    latitude=camera.latitude,
-                    longitude=camera.longitude,
-                    snapshot_url=camera.snapshot_url,
-                    snapshot_timestamp=camera.snapshot_timestamp,
-                    objects=objects,
-                    identifications=identificationsDetails,
-                )
+        if id in cameras_out:
+            if identification_details is None:
+                continue
+            cameras_out[id].identifications.append(identification_details)
+            if slug not in cameras_out[id].objects:
+                cameras_out[id].objects.append(slug or "")
+        else:
+            cameras_out[id] = CameraOut(
+                id=id,
+                name=camera["name"],
+                rtsp_url=camera["rtsp_url"],
+                update_interval=camera["update_interval"],
+                latitude=camera["latitude"],
+                longitude=camera["longitude"],
+                snapshot_url=camera["snapshot_url"],
+                snapshot_timestamp=camera["snapshot_timestamp"],
+                objects=[slug] if slug is not None else [],
+                identifications=[identification_details]
+                if identification_details is not None
+                else [],
             )
 
-        offset += query_limit
-        if len(cameras) < query_limit:
-            break
-
-    return create_page(camerasOut, total=await Camera.all().count(), params=params)
+    return create_page(list(cameras_out.values()), total=await Camera.all().count(), params=params)
 
 
 @router.post("", response_model=CameraOut)
