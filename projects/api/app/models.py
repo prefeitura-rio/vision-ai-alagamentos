@@ -21,6 +21,7 @@ class Camera(Model):
     longitude = fields.FloatField()
     snapshot_url = fields.CharField(max_length=255, null=True)
     snapshot_timestamp = fields.DatetimeField(null=True)
+    identifications = fields.ReverseRelation["CameraIdentification"]
 
 
 class CameraIdentification(Model):
