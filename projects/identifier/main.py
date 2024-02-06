@@ -71,7 +71,6 @@ class APIVisionAI:
 
 
 def get_secret(secret_id: str) -> str:
-
     name = f"projects/{PROJECT_ID}/secrets/{secret_id}/versions/{VERSION_ID}"
     client = secretmanager.SecretManagerServiceClient()
     response = client.access_secret_version(request={"name": name})
@@ -86,7 +85,6 @@ def save_data_in_bq(
     error_message: Optional[str] = None,
     error_name: Optional[str] = None,
 ) -> None:
-
     client = bigquery.Client()
     table_full_name = f"{PROJECT_ID}.{DATASET_ID}.{TABLE_ID}"
 
@@ -141,7 +139,6 @@ def get_prediction(
     top_k: int,
     top_p: int,
 ) -> Dict:
-
     # llm = ChatGoogleGenerativeAI(
     #     model=google_api_model,
     #     google_api_key=google_api_key,
@@ -162,7 +159,6 @@ def get_prediction(
     # ai_response = response.content
 
     try:
-
         image_response = requests.get(image_url)
         model = GenerativeModel(google_api_model)
         responses = model.generate_content(
@@ -178,7 +174,6 @@ def get_prediction(
         ai_response = responses.text
 
     except Exception as exception:
-
         save_data_in_bq(
             json_data=bq_data_json,
             error_step="ai_request",
@@ -260,7 +255,6 @@ def predict(cloud_event: dict) -> None:
             camera_objects_from_api = dict(zip(data["object_slugs"], data["object_ids"]))
             ai_response_parsed_bq = []
             for item in ai_response_parsed["objects"]:
-
                 item["api_status_code"] = None
                 item["api_error_step"] = None
                 item["api_error_name"] = None
