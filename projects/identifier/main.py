@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import base64
-import io
 import json
 import time
 import traceback
@@ -8,17 +7,21 @@ from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Union
 
 import functions_framework
-import google.generativeai as genai
 import pytz
 import requests
 import sentry_sdk
+import vertexai
 from google.cloud import bigquery, secretmanager
 from langchain.output_parsers import PydanticOutputParser
-from PIL import Image
 from pydantic import BaseModel
+from vertexai.preview.generative_models import GenerativeModel, Part
 
-# from langchain_core.messages import HumanMessage
-# from langchain_google_genai import ChatGoogleGenerativeAI
+PROJECT_ID = "rj-escritorio-dev"
+LOCATION = "us-central1"
+VERSION_ID = "latest"
+DATASET_ID = "vision_ai"
+TABLE_ID = "cameras_predicoes"
+vertexai.init(project=PROJECT_ID, location=LOCATION)
 
 
 def get_datetime() -> str:
@@ -68,9 +71,8 @@ class APIVisionAI:
 
 
 def get_secret(secret_id: str) -> str:
-    project_id = "rj-escritorio-dev"
-    version_id = "latest"
-    name = f"projects/{project_id}/secrets/{secret_id}/versions/{version_id}"
+
+    name = f"projects/{PROJECT_ID}/secrets/{secret_id}/versions/{VERSION_ID}"
     client = secretmanager.SecretManagerServiceClient()
     response = client.access_secret_version(request={"name": name})
     return response.payload.data.decode("UTF-8")
@@ -84,11 +86,9 @@ def save_data_in_bq(
     error_message: Optional[str] = None,
     error_name: Optional[str] = None,
 ) -> None:
-    project_id = "rj-escritorio-dev"
-    dataset_id = "vision_ai"
-    table_id = "cameras_predicoes"
+
     client = bigquery.Client()
-    table_full_name = f"{project_id}.{dataset_id}.{table_id}"
+    table_full_name = f"{PROJECT_ID}.{DATASET_ID}.{TABLE_ID}"
 
     schema = [
         bigquery.SchemaField("camera_id", "STRING", mode="NULLABLE"),
@@ -135,13 +135,13 @@ def get_prediction(
     bq_data_json: dict,
     image_url: str,
     prompt_text: str,
-    google_api_key: str,
     google_api_model: str,
     max_output_tokens: int,
     temperature: float,
     top_k: int,
     top_p: int,
 ) -> Dict:
+
     # llm = ChatGoogleGenerativeAI(
     #     model=google_api_model,
     #     google_api_key=google_api_key,
@@ -162,24 +162,23 @@ def get_prediction(
     # ai_response = response.content
 
     try:
+
         image_response = requests.get(image_url)
-        image = Image.open(io.BytesIO(image_response.content))
-        genai.configure(api_key=google_api_key)
-        model = genai.GenerativeModel(google_api_model)
+        model = GenerativeModel(google_api_model)
         responses = model.generate_content(
-            contents=[prompt_text, image],
+            contents=[prompt_text, Part.from_data(image_response.content, "image/png")],
             generation_config={
                 "max_output_tokens": max_output_tokens,
                 "temperature": temperature,
                 "top_k": top_k,
                 "top_p": top_p,
             },
-            stream=True,
         )
 
-        responses.resolve()
         ai_response = responses.text
+
     except Exception as exception:
+
         save_data_in_bq(
             json_data=bq_data_json,
             error_step="ai_request",
@@ -243,7 +242,6 @@ def predict(cloud_event: dict) -> None:
         bq_data_json=bq_data,
         image_url=data["image_url"],
         prompt_text=data["prompt_text"],
-        google_api_key=vision_ai_secrets["google_gemini_api_key"],
         google_api_model=data["model"],
         max_output_tokens=data["max_output_tokens"],
         temperature=data["temperature"],
@@ -262,6 +260,7 @@ def predict(cloud_event: dict) -> None:
             camera_objects_from_api = dict(zip(data["object_slugs"], data["object_ids"]))
             ai_response_parsed_bq = []
             for item in ai_response_parsed["objects"]:
+
                 item["api_status_code"] = None
                 item["api_error_step"] = None
                 item["api_error_name"] = None
