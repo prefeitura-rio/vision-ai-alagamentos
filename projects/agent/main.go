@@ -14,43 +14,38 @@ import (
 	"time"
 )
 
-func makeSnapshot(cameraAPI CameraAPI) {
-	initialTime := time.Now()
-
-	log.Printf("Realizando a captura da camera: %s", cameraAPI.ID)
-	defer func() {
-		delta := time.Since(initialTime).Seconds()
-		log.Printf("Tempo de captura da camera %s: %.2fs", cameraAPI.ID, delta)
-	}()
+func makeSnapshot(cameraAPI CameraAPI) (*metrics, error) {
+	metrics := newMetrics()
+	defer metrics.final()
 
 	camera, err := NewCamera(cameraAPI)
 	if err != nil {
-		log.Printf("error creating new camera from API: %s", err)
-		return
+		return metrics, fmt.Errorf("error creating new camera from API: %w", err)
 	}
+	metrics.add("setup")
 
 	err = camera.start()
 	if err != nil {
-		log.Printf("error starting camera stream: %s", err)
-		return
+		return metrics, fmt.Errorf("error starting camera stream: %w", err)
 	}
 	defer camera.close()
+	metrics.add("start")
 
 	img, err := camera.getNextFrame()
 	if err != nil {
-		log.Printf("error getting frame: %s", err)
-		return
+		return metrics, fmt.Errorf("error getting frame: %w", err)
 	}
+	metrics.add("get_next_frame")
 
 	contentType, body := bodyImage(camera.id, img)
-
 	_, err = httpPost(cameraAPI.snapshotURL, camera.accessToken, contentType, body)
 	if err != nil {
-		log.Printf("error sending snapshot: %s", err)
-		return
+		return metrics, fmt.Errorf("error sending snapshot: %w", err)
 	}
+	metrics.add("send_snapshot")
+	metrics.success = true
 
-	log.Printf("captura finalizada: %s", camera.id)
+	return metrics, nil
 }
 
 func getCameras(agentURL string, cameraURL string, accessToken *AccessToken) ([]CameraAPI, error) {
@@ -73,7 +68,7 @@ func getCameras(agentURL string, cameraURL string, accessToken *AccessToken) ([]
 
 	cameras = append(cameras, data.Items...)
 
-	for data.Page != data.Pages {
+	for data.Page < data.Pages {
 		url := fmt.Sprintf("%s?page=%d", url, data.Page+1)
 		err = httpGet(url, accessToken, &data)
 		if err != nil {
@@ -109,24 +104,15 @@ func sendHeartbeat(heartbeatURL string, accessToken *AccessToken, healthy bool) 
 }
 
 func main() {
+	log.Println("Initializing server")
 	go func() {
 		log.Println(http.ListenAndServe(":6060", nil))
 	}()
-
-	parallelSnapshots := int32(30)
-	cameras := newCamerasByUpdateInterval(int(parallelSnapshots))
-	ctxCameras, cancelCameras := context.WithCancel(context.Background())
 
 	defer func() {
 		if r := recover(); r != nil {
 			log.Println(r)
 		}
-
-		log.Println("Esperando as capturas serem finalizadas")
-		cancelCameras()
-		cameras.StopQueue()
-		cameras.StopConsume()
-		log.Println("Capturas finalizadas com sucesso")
 	}()
 
 	config, err := getConfig()
@@ -143,6 +129,18 @@ func main() {
 	for !accessToken.Valid() {
 		time.Sleep(time.Second)
 	}
+
+	parallelSnapshots := int32(30)
+	cameras := newCamerasByUpdateInterval(int(parallelSnapshots))
+	ctxCameras, cancelCameras := context.WithCancel(context.Background())
+
+	defer func() {
+		log.Println("Esperando as capturas serem finalizadas")
+		cancelCameras()
+		cameras.StopQueue()
+		cameras.StopConsume()
+		log.Println("Capturas finalizadas com sucesso")
+	}()
 
 	err = cameras.StartQueue(ctxCameras)
 	if err != nil {
