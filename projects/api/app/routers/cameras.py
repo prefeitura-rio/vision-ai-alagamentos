@@ -12,14 +12,14 @@ from nest_asyncio import os
 
 from app import config
 from app.dependencies import get_caller, is_admin
-from app.models import Agent, Camera, CameraIdentification, Label, Object
+from app.models import Agent, Camera, Identification, Label, Object
 from app.pydantic_models import (
     APICaller,
     CameraIn,
     CameraOut,
-    IdentificationDetails,
+    IdentificationOut,
+    PredictOut,
     Snapshot,
-    SnapshotPostResponse,
 )
 from app.utils import (
     apply_to_list,
@@ -80,7 +80,7 @@ async def get_cameras(params: BigParams = Depends(), _=Depends(is_admin)) -> Pag
         identification_details = None
         if camera["identifications__id"] is not None:
             slug = camera["identifications__object__slug"]
-            identification_details = IdentificationDetails(
+            identification_details = IdentificationOut(
                 object=slug,
                 timestamp=camera["identifications__timestamp"],
                 label=camera["identifications__label__value"],
@@ -125,17 +125,15 @@ async def create_camera(camera_: CameraIn, _=Depends(is_admin)) -> CameraOut:
         longitude=camera.longitude,
         snapshot_url=camera.snapshot_url,
         snapshot_timestamp=camera.snapshot_timestamp,
-        objects=[
-            item.object.slug for item in await CameraIdentification.filter(camera=camera).all()
-        ],
+        objects=[item.object.slug for item in await Identification.filter(camera=camera).all()],
         identifications=[
-            IdentificationDetails(
+            IdentificationOut(
                 object=item.object.slug,
                 timestamp=item.timestamp,
                 label=(await item.label).value if item.label else None,
                 label_explanation=item.label_explanation,
             )
-            for item in await CameraIdentification.filter(camera=camera).all()
+            for item in await Identification.filter(camera=camera).all()
         ],
     )
 
@@ -180,159 +178,22 @@ async def get_camera(
         snapshot_url=camera.snapshot_url,
         snapshot_timestamp=camera.snapshot_timestamp,
         objects=[
-            (await item.object).slug
-            for item in await CameraIdentification.filter(camera=camera).all()
+            (await item.object).slug for item in await Identification.filter(camera=camera).all()
         ],
         identifications=[
-            IdentificationDetails(
+            IdentificationOut(
                 object=(await item.object).slug,
                 timestamp=item.timestamp,
                 label=(await item.label).value if item.label else None,
                 label_explanation=item.label_explanation,
             )
-            for item in await CameraIdentification.filter(camera=camera).all()
+            for item in await Identification.filter(camera=camera).all()
         ],
     )
     return camera_details
 
 
-@router.get("/{camera_id}/objects", response_model=List[IdentificationDetails])
-async def get_camera_objects(
-    camera_id: str,
-    _: Annotated[APICaller, Depends(get_caller)],  # TODO: Review permissions here
-) -> List[IdentificationDetails]:
-    """Get all objects that the camera will identify."""
-    camera = await Camera.get(id=camera_id)
-    return [
-        IdentificationDetails(
-            object=(await item.object).slug,
-            timestamp=item.timestamp,
-            label=(await item.label).value if item.label else None,
-            label_explanation=item.label_explanation,
-        )
-        for item in await CameraIdentification.filter(camera=camera).all()
-    ]
-
-
-@router.post("/{camera_id}/objects", response_model=CameraOut)
-async def create_camera_object(
-    camera_id: str,
-    object_id: UUID,
-    _=Depends(is_admin),
-) -> CameraOut:
-    """Add an object to a camera."""
-    camera = await Camera.get_or_none(id=camera_id)
-    if not camera:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Camera not found.")
-    object_ = await Object.get_or_none(id=object_id)
-    if not object_:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Object not found.")
-    # Check if CameraIdentification already exists before adding
-    if await CameraIdentification.get_or_none(camera=camera, object=object_):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Camera object already exists.",
-        )
-    await CameraIdentification.create(camera=camera, object=object_)
-    return CameraOut(
-        id=camera.id,
-        name=camera.name,
-        rtsp_url=camera.rtsp_url,
-        update_interval=camera.update_interval,
-        latitude=camera.latitude,
-        longitude=camera.longitude,
-        snapshot_url=camera.snapshot_url,
-        snapshot_timestamp=camera.snapshot_timestamp,
-        objects=[
-            (await item.object).slug
-            for item in await CameraIdentification.filter(camera=camera).all()
-        ],
-        identifications=[
-            IdentificationDetails(
-                object=(await item.object).slug,
-                timestamp=item.timestamp,
-                label=(await item.label).value if item.label else None,
-                label_explanation=item.label_explanation,
-            )
-            for item in await CameraIdentification.filter(camera=camera).all()
-        ],
-    )
-
-
-@router.get("/{camera_id}/objects/{object_id}", response_model=IdentificationDetails)
-async def get_camera_object(
-    camera_id: str,
-    object_id: UUID,
-    _: Annotated[APICaller, Depends(get_caller)],  # TODO: Review permissions here
-) -> IdentificationDetails:
-    """Get a camera object."""
-    camera = await Camera.get(id=camera_id)
-    object_ = await Object.get(id=object_id)
-    identification = await CameraIdentification.get(camera=camera, object=object_)
-    return IdentificationDetails(
-        object=(await identification.object).slug,
-        timestamp=identification.timestamp,
-        label=(await identification.label).value if identification.label else None,
-        label_explanation=identification.label_explanation,
-    )
-
-
-@router.put("/{camera_id}/objects/{object_id}", response_model=IdentificationDetails)
-async def update_camera_object(
-    camera_id: str,
-    object_id: UUID,
-    label: str,
-    label_explanation: str,
-    _=Depends(is_admin),  # TODO: Review permissions here
-) -> IdentificationDetails:
-    """Update a camera object."""
-    camera = await Camera.get_or_none(id=camera_id)
-    if not camera:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Camera not found.")
-    object_ = await Object.get_or_none(id=object_id)
-    if not object_:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Object not found.")
-    identification = await CameraIdentification.get_or_none(camera=camera, object=object_)
-    if not identification:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Camera object not found.",
-        )
-    label_obj = await Label.get_or_none(object=object_, value=label)
-    if not label_obj:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Label not found.",
-        )
-    identification.label = label_obj
-    identification.label_explanation = label_explanation
-    identification.timestamp = datetime.now()
-    await identification.save()
-    return IdentificationDetails(
-        object=(await identification.object).slug,
-        timestamp=identification.timestamp,
-        label=(await identification.label).value if identification.label else None,
-        label_explanation=identification.label_explanation,
-    )
-
-
-@router.delete("/{camera_id}/objects/{object_id}")
-async def delete_camera_object(
-    camera_id: str,
-    object_id: UUID,
-    _=Depends(is_admin),
-) -> None:
-    """Delete a camera object."""
-    camera = await Camera.get_or_none(id=camera_id)
-    if not camera:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Camera not found.")
-    object_ = await Object.get_or_none(id=object_id)
-    if not object_:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Object not found.")
-    await CameraIdentification.filter(camera=camera, object=object_).delete()
-
-
-@router.get("/{camera_id}/snapshot", response_model=Snapshot)
+@router.get("/{camera_id}/snapshots", response_model=Snapshot)
 async def get_camera_snapshot(
     camera_id: str,
     _: Annotated[APICaller, Depends(get_caller)],  # TODO: Review permissions here
@@ -349,12 +210,151 @@ async def get_camera_snapshot(
     )
 
 
-@router.post("/{camera_id}/snapshot", response_model=SnapshotPostResponse)
-async def camera_snapshot(
+@router.get("/{camera_id}/snapshots/identifications", response_model=List[IdentificationOut])
+async def get_identifications(
+    camera_id: str,
+    _: Annotated[APICaller, Depends(get_caller)],  # TODO: Review permissions here
+) -> List[IdentificationOut]:
+    """Get all objects that the camera will identify."""
+    camera = await Camera.get(id=camera_id)
+    return [
+        IdentificationOut(
+            object=(await item.object).slug,
+            timestamp=item.timestamp,
+            label=(await item.label).value if item.label else None,
+            label_explanation=item.label_explanation,
+        )
+        for item in await Identification.filter(camera=camera).all()
+    ]
+
+
+@router.post("/{camera_id}/snapshots/identifications", response_model=CameraOut)
+async def create_identifcation(
+    camera_id: str,
+    identification_id: UUID,
+    _=Depends(is_admin),
+) -> CameraOut:
+    """Add an snapshot identification to a camera."""
+    camera = await Camera.get_or_none(id=camera_id)
+    if not camera:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Camera not found.")
+    object_ = await Object.get_or_none(id=identification_id)
+    if not object_:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Object not found.")
+    # Check if Identification already exists before adding
+    if await Identification.get_or_none(camera=camera, object=object_):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Camera object already exists.",
+        )
+    await Identification.create(camera=camera, object=object_)
+    return CameraOut(
+        id=camera.id,
+        name=camera.name,
+        rtsp_url=camera.rtsp_url,
+        update_interval=camera.update_interval,
+        latitude=camera.latitude,
+        longitude=camera.longitude,
+        snapshot_url=camera.snapshot_url,
+        snapshot_timestamp=camera.snapshot_timestamp,
+        objects=[
+            (await item.object).slug for item in await Identification.filter(camera=camera).all()
+        ],
+        identifications=[
+            IdentificationOut(
+                object=(await item.object).slug,
+                timestamp=item.timestamp,
+                label=(await item.label).value if item.label else None,
+                label_explanation=item.label_explanation,
+            )
+            for item in await Identification.filter(camera=camera).all()
+        ],
+    )
+
+
+@router.get(
+    "/{camera_id}/snapshots/identifications/{identification_id}", response_model=IdentificationOut
+)
+async def get_identification(
+    camera_id: str,
+    identification_id: UUID,
+    _: Annotated[APICaller, Depends(get_caller)],  # TODO: Review permissions here
+) -> IdentificationOut:
+    """Get a camera snapshot identification."""
+    camera = await Camera.get(id=camera_id)
+    object_ = await Object.get(id=identification_id)
+    identification = await Identification.get(camera=camera, object=object_)
+    return IdentificationOut(
+        object=(await identification.object).slug,
+        timestamp=identification.timestamp,
+        label=(await identification.label).value if identification.label else None,
+        label_explanation=identification.label_explanation,
+    )
+
+
+@router.put(
+    "/{camera_id}/snapshots/identifications/{identification_id}", response_model=IdentificationOut
+)
+async def update_identification(
+    camera_id: str,
+    identification_id: UUID,
+    label: str,
+    label_explanation: str,
+    _=Depends(is_admin),  # TODO: Review permissions here
+) -> IdentificationOut:
+    """Update a camera snapshot identifications."""
+    camera = await Camera.get_or_none(id=camera_id)
+    if not camera:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Camera not found.")
+    object_ = await Object.get_or_none(id=identification_id)
+    if not object_:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Object not found.")
+    identification = await Identification.get_or_none(camera=camera, object=object_)
+    if not identification:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Camera object not found.",
+        )
+    label_obj = await Label.get_or_none(object=object_, value=label)
+    if not label_obj:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Label not found.",
+        )
+    identification.label = label_obj
+    identification.label_explanation = label_explanation
+    identification.timestamp = datetime.now()
+    await identification.save()
+    return IdentificationOut(
+        object=(await identification.object).slug,
+        timestamp=identification.timestamp,
+        label=(await identification.label).value if identification.label else None,
+        label_explanation=identification.label_explanation,
+    )
+
+
+@router.delete("/{camera_id}/snapshots/identifications/{identification_id}")
+async def delete_identification(
+    camera_id: str,
+    identification_id: UUID,
+    _=Depends(is_admin),
+) -> None:
+    """Delete a camera snapshot identification."""
+    camera = await Camera.get_or_none(id=camera_id)
+    if not camera:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Camera not found.")
+    object_ = await Object.get_or_none(id=identification_id)
+    if not object_:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Object not found.")
+    await Identification.filter(camera=camera, object=object_).delete()
+
+
+@router.post("/{camera_id}/snapshots/identifications/predict", response_model=PredictOut)
+async def predict(
     camera_id: str,
     file: Annotated[UploadFile, File(media_type="image/png")],
     caller: Annotated[APICaller, Depends(get_caller)],
-) -> SnapshotPostResponse:
+) -> PredictOut:
     """Post a camera snapshot to the server."""
     # Caller must be an agent that has access to the camera.
     if not caller.agent:
@@ -394,29 +394,28 @@ async def camera_snapshot(
 
     print("END OF CAMERA SNAPSHOT POST")
     # Publish data to Pub/Sub
-    camera_object_ids = [
-        str((await item.object).id)
-        for item in await CameraIdentification.filter(camera=camera).all()
+    camera_snapshot_ids = [
+        str((await item.object).id) for item in await Identification.filter(camera=camera).all()
     ]
-    camera_object_slugs = [
-        (await item.object).slug for item in await CameraIdentification.filter(camera=camera).all()
+    camera_snpashot_slugs = [
+        (await item.object).slug for item in await Identification.filter(camera=camera).all()
     ]
-    print(f"camera_object_ids: {camera_object_ids}")
-    print(f"camera_object_slugs: {camera_object_slugs}")
+    print(f"camera_object_ids: {camera_snapshot_ids}")
+    print(f"camera_object_slugs: {camera_snpashot_slugs}")
 
-    if len(camera_object_slugs):
+    if len(camera_snpashot_slugs):
         print("Start of Publishing to Pub/Sub")
-        prompts = await get_prompts_best_fit(object_slugs=camera_object_slugs)
+        prompts = await get_prompts_best_fit(object_slugs=camera_snpashot_slugs)
         prompt = prompts[0]  # TODO: generalize this
         formatted_text = await get_prompt_formatted_text(
-            prompt=prompt, object_slugs=camera_object_slugs
+            prompt=prompt, object_slugs=camera_snpashot_slugs
         )
         message = {
             "camera_id": camera.id,
             "image_url": blob.public_url,
             "prompt_text": formatted_text,
-            "object_ids": camera_object_ids,
-            "object_slugs": camera_object_slugs,
+            "object_ids": camera_snapshot_ids,
+            "object_slugs": camera_snpashot_slugs,
             "model": prompt.model,
             "max_output_tokens": prompt.max_output_token,
             "temperature": prompt.temperature,
@@ -426,4 +425,4 @@ async def camera_snapshot(
         publish_message(data=message)
         print("End of Publishing to Pub/Sub")
 
-    return SnapshotPostResponse(error=False, message="OK")
+    return PredictOut(error=False, message="OK")

@@ -128,11 +128,13 @@ async def test_cameras_get_by_id(client: AsyncClient, authorization_header: dict
 
 @pytest.mark.anyio
 @pytest.mark.run(order=24)
-async def test_cameras_add_objects(client: AsyncClient, authorization_header: dict, context: dict):
+async def test_add_identification(client: AsyncClient, authorization_header: dict, context: dict):
+    path = f"/cameras/{context['test_camera_id']}/snapshots/identifications"
     response = await client.post(
-        f"/cameras/{context['test_camera_id']}/objects?object_id={context['test_object_id']}",
+        f"{path}?identification_id={context['test_object_id']}",
         headers=authorization_header,
     )
+    print(response.text)
     assert response.status_code == 200
     assert "id" in response.json()
     assert "name" in response.json()
@@ -165,9 +167,10 @@ async def test_cameras_add_objects(client: AsyncClient, authorization_header: di
 
 @pytest.mark.anyio
 @pytest.mark.run(order=25)
-async def test_cameras_get_objects(client: AsyncClient, authorization_header: dict, context: dict):
+async def test_get_identifications(client: AsyncClient, authorization_header: dict, context: dict):
     response = await client.get(
-        f"/cameras/{context['test_camera_id']}/objects", headers=authorization_header
+        f"/cameras/{context['test_camera_id']}/snapshots/identifications",
+        headers=authorization_header,
     )
     assert response.status_code == 200
     assert isinstance(response.json(), list)
@@ -182,11 +185,12 @@ async def test_cameras_get_objects(client: AsyncClient, authorization_header: di
 
 @pytest.mark.anyio
 @pytest.mark.run(order=26)
-async def test_cameras_get_object_by_id(
+async def test_get_identification_by_id(
     client: AsyncClient, authorization_header: dict, context: dict
 ):
+    path = f"/cameras/{context['test_camera_id']}/snapshots/identifications"
     response = await client.get(
-        f"/cameras/{context['test_camera_id']}/objects/{context['test_object_id']}",
+        f"{path}/{context['test_object_id']}",
         headers=authorization_header,
     )
     assert response.status_code == 200
@@ -201,11 +205,11 @@ async def test_cameras_get_object_by_id(
 
 @pytest.mark.anyio
 @pytest.mark.run(order=27)
-async def test_cameras_update_object(
+async def test_update_identification(
     client: AsyncClient, authorization_header: dict, context: dict
 ):
     response = await client.put(
-        f"/cameras/{context['test_camera_id']}/objects/{context['test_object_id']}?label={context['test_label_value']}&label_explanation=something",  # noqa
+        f"/cameras/{context['test_camera_id']}/snapshots/identifications/{context['test_object_id']}?label={context['test_label_value']}&label_explanation=something",  # noqa
         headers=authorization_header,
     )
     assert response.status_code == 200
@@ -223,11 +227,12 @@ async def test_cameras_update_object(
 
 @pytest.mark.anyio
 @pytest.mark.run(order=28)
-async def test_cameras_delete_object(
+async def test_delete_identification(
     client: AsyncClient, authorization_header: dict, context: dict
 ):
+    path = f"/cameras/{context['test_camera_id']}/snapshots/identifications"
     response = await client.delete(
-        f"/cameras/{context['test_camera_id']}/objects/{context['test_object_id']}",
+        f"{path}/{context['test_object_id']}",
         headers=authorization_header,
     )
     assert response.status_code == 200
@@ -235,11 +240,11 @@ async def test_cameras_delete_object(
 
 @pytest.mark.anyio
 @pytest.mark.run(order=29)
-async def test_cameras_post_snapshot(
+async def test_post_predict(
     client: AsyncClient, authorization_header: dict, context: dict, image_base64: str
 ):
     response = await client.post(
-        f"/cameras/{context['test_camera_id']}/snapshot",
+        f"/cameras/{context['test_camera_id']}/snapshots/identifications/predict",
         headers=authorization_header,
         files={
             "file": base64.b64decode(image_base64),
@@ -258,9 +263,9 @@ async def test_cameras_post_snapshot(
 
 @pytest.mark.anyio
 @pytest.mark.run(order=30)
-async def test_cameras_get_snapshot(client: AsyncClient, authorization_header: dict, context: dict):
+async def test_get_snapshot(client: AsyncClient, authorization_header: dict, context: dict):
     response = await client.get(
-        f"/cameras/{context['test_camera_id']}/snapshot", headers=authorization_header
+        f"/cameras/{context['test_camera_id']}/snapshots", headers=authorization_header
     )
     assert response.status_code == 200
     assert "image_url" in response.json()

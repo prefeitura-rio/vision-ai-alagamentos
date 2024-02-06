@@ -44,7 +44,7 @@ class CameraOut(BaseModel):
     snapshot_url: Optional[str]
     snapshot_timestamp: Optional[datetime]
     objects: List[str]
-    identifications: List["IdentificationDetails"]
+    identifications: List["IdentificationOut"]
 
 
 class Heartbeat(BaseModel):
@@ -55,7 +55,7 @@ class HeartbeatResponse(BaseModel):
     command: Optional[str]
 
 
-class IdentificationDetails(BaseModel):
+class IdentificationOut(BaseModel):
     object: str
     timestamp: Optional[datetime]
     label: Optional[str]
@@ -129,7 +129,7 @@ class Snapshot(BaseModel):
     timestamp: datetime
 
 
-class SnapshotPostResponse(BaseModel):
+class PredictOut(BaseModel):
     error: bool
     message: Optional[str]
 
@@ -162,9 +162,9 @@ AgentPydantic.update_forward_refs()
 APICaller.update_forward_refs()
 CameraConnectionInfo.update_forward_refs()
 CameraOut.update_forward_refs()
-IdentificationDetails.update_forward_refs()
+IdentificationOut.update_forward_refs()
 ObjectOut.update_forward_refs()
 PromptOut.update_forward_refs()
 Snapshot.update_forward_refs()
-SnapshotPostResponse.update_forward_refs()
+PredictOut.update_forward_refs()
 UserInfo.update_forward_refs()

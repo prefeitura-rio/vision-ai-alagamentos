@@ -9,7 +9,7 @@ from tortoise import Tortoise
 
 from app.db import TORTOISE_ORM
 from app.main import app
-from app.models import Agent, Camera, CameraIdentification, Label, Object, Prompt
+from app.models import Agent, Camera, Identification, Label, Object, Prompt
 
 
 @pytest.fixture(scope="session")
@@ -42,7 +42,7 @@ async def initialize_tests():
     logger.info("Tortoise-ORM schemas generated")
     await Agent.all().delete()
     await Camera.all().delete()
-    await CameraIdentification.all().delete()
+    await Identification.all().delete()
     await Label.all().delete()
     await Object.all().delete()
     await Prompt.all().delete()
@@ -201,7 +201,7 @@ async def initialize_tests():
         },
     ]
     for identification in identification_data:
-        await CameraIdentification.create(**identification)
+        await Identification.create(**identification)
     logger.info("Test data initialized")
 
     await Tortoise.close_connections()

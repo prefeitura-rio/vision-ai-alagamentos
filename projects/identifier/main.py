@@ -39,14 +39,14 @@ def get_datetime() -> str:
     return timestamp.strftime("%Y-%m-%dT%H:%M:%S.%f")
 
 
-class Object(BaseModel):
+class Snapshot(BaseModel):
     object: str
     label_explanation: str
     label: Union[bool, str, None]
 
 
 class Output(BaseModel):
-    objects: List[Object]
+    objects: List[Snapshot]
 
 
 class APIVisionAI:
@@ -72,11 +72,11 @@ class APIVisionAI:
         self._refresh_token_if_needed()
         return requests.put(f"{self.BASE_URL}{path}", headers=self.headers)
 
-    def put_camera_object(
-        self, camera_id: str, object_id: str, label_explanation: str, label: str
+    def put_identification(
+        self, camera_id: str, identification_id: str, label_explanation: str, label: str
     ) -> requests.Response:
         return self._put(
-            f"/cameras/{camera_id}/objects/{object_id}?label={label}&label_explanation={label_explanation}"  # noqa
+            f"/cameras/{camera_id}/snapshots/identifications/{identification_id}?label={label}&label_explanation={label_explanation}"  # noqa
         )
 
 
@@ -279,9 +279,9 @@ def predict(cloud_event: dict) -> None:
                 item["label"] = label
                 if object_id is not None:
                     try:
-                        put_response = vision_ai_api.put_camera_object(
+                        put_response = vision_ai_api.put_identification(
                             camera_id=camera_id,
-                            object_id=object_id,
+                            identification_id=object_id,
                             label_explanation=label_explanation,
                             label=label,
                         )

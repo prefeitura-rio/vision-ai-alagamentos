@@ -2,7 +2,7 @@
 from tortoise import Tortoise, run_async
 
 from app.db import TORTOISE_ORM
-from app.models import Camera, CameraIdentification, Object, Prompt
+from app.models import Camera, Identification, Object, Prompt
 
 
 async def run():
@@ -109,7 +109,7 @@ async def run():
         },
     ]
     for identification in identification_data:
-        await CameraIdentification.create(**identification)
+        await Identification.create(**identification)
 
     await Tortoise.close_connections()
 

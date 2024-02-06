@@ -21,15 +21,15 @@ class Camera(Model):
     longitude = fields.FloatField()
     snapshot_url = fields.CharField(max_length=255, null=True)
     snapshot_timestamp = fields.DatetimeField(null=True)
-    identifications = fields.ReverseRelation["CameraIdentification"]
+    identifications = fields.ReverseRelation["Identification"]
 
 
-class CameraIdentification(Model):
+class Identification(Model):
     id = fields.UUIDField(pk=True)
     camera = fields.ForeignKeyField("app.Camera", related_name="identifications")
-    timestamp = fields.DatetimeField(null=True)
     object = fields.ForeignKeyField("app.Object", related_name="identifications", null=True)
     label = fields.ForeignKeyField("app.Label", related_name="identifications", null=True)
+    timestamp = fields.DatetimeField(null=True)
     label_explanation = fields.TextField(null=True)
 
 
