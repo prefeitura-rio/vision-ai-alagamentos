@@ -142,7 +142,6 @@ def get_prediction(
     top_k: int,
     top_p: int,
 ) -> Dict:
-
     # llm = ChatGoogleGenerativeAI(
     #     model=google_api_model,
     #     google_api_key=google_api_key,
@@ -263,7 +262,6 @@ def predict(cloud_event: dict) -> None:
             camera_objects_from_api = dict(zip(data["object_slugs"], data["object_ids"]))
             ai_response_parsed_bq = []
             for item in ai_response_parsed["objects"]:
-
                 item["api_status_code"] = None
                 item["api_error_step"] = None
                 item["api_error_name"] = None

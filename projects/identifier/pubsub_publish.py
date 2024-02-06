@@ -10,7 +10,6 @@ from google.cloud.pubsub_v1.publisher.futures import Future
 
 
 def get_credential_client(secret_path: str) -> pubsub_v1.PublisherClient:
-
     service_account_info = json.load(open(secret_path))
     publisher_audience = "https://pubsub.googleapis.com/google.pubsub.v1.Publisher"
     audience = "https://pubsub.googleapis.com/google.pubsub.v1.Subscriber"
@@ -23,7 +22,6 @@ def get_credential_client(secret_path: str) -> pubsub_v1.PublisherClient:
 
 
 def publish_message(data: Dict[str, str], secret_path: Optional[str] = None) -> Future:
-
     if secret_path is not None:
         publisher = get_credential_client(secret_path=secret_path)
     else:
