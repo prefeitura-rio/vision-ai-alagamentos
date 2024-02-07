@@ -40,6 +40,9 @@ func (metrics *metrics) diff(index int) (string, time.Duration) {
 }
 
 func (metrics *metrics) total() (string, time.Duration) {
+	if len(metrics.order) == 0 {
+		return "", 0
+	}
 	previous := metrics.order[0]
 	current := metrics.order[len(metrics.order)-1]
 	key := fmt.Sprintf("%d__%s__%s", len(metrics.order), previous, current)

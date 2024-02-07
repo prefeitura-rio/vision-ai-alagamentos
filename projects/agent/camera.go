@@ -455,7 +455,7 @@ func (c *camerasByUpdateInterval) StartQueue(ctx context.Context) error {
 			interval := time.Duration(updateInterval) * time.Second
 
 			for {
-				log.Printf("send %ds cameras to the queue", updateInterval)
+				log.Printf("send %d seconds cameras to the queue", updateInterval)
 				c.mutex.RLock()
 				for _, camera := range c.cameras[updateInterval] {
 					c.queue <- camera
@@ -511,7 +511,7 @@ func (c *camerasByUpdateInterval) createKey(success bool, key string) {
 	}
 }
 
-func (c *camerasByUpdateInterval) proccessMetrics(allMetrics []*metrics) {
+func (c *camerasByUpdateInterval) proccessMetrics(allMetrics []metrics) {
 	c.mutexMetrics.Lock()
 	defer c.mutexMetrics.Unlock()
 	for _, rawMetrics := range allMetrics {
@@ -638,26 +638,28 @@ func (c *camerasByUpdateInterval) ConsumeQueue(
 	ctx, cancel := context.WithCancel(ctx)
 	c.ctxConsume = ctx
 	c.cancelConsume = cancel
-	metricsCh := make(chan *metrics, maxConcurrency*2)
+	// metricsCh := make(chan metrics, maxConcurrency*100)
 
-	go func() {
-		allMetrics := make([]*metrics, 0, maxConcurrency*2)
-		ticker := time.NewTicker(time.Second * 10)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				c.proccessMetrics(allMetrics)
-				allMetrics = allMetrics[:0]
-			case metrics, more := <-metricsCh:
-				if !more {
-					c.proccessMetrics(allMetrics)
-					return
-				}
-				allMetrics = append(allMetrics, metrics)
-			}
-		}
-	}()
+	// go func() {
+	// 	allMetrics := make([]metrics, 0, maxConcurrency*100)
+	// 	ticker := time.NewTicker(time.Second * 10)
+	// 	defer ticker.Stop()
+	// 	for {
+	// 		select {
+	// 		case <-ticker.C:
+	// 			buffer := make([]metrics, len(allMetrics))
+	// 			copy(buffer, allMetrics)
+	// 			go c.proccessMetrics(buffer)
+	// 			clear(allMetrics)
+	// 		case metrics, more := <-metricsCh:
+	// 			if !more {
+	// 				c.proccessMetrics(allMetrics)
+	// 				return
+	// 			}
+	// 			allMetrics = append(allMetrics, metrics)
+	// 		}
+	// 	}
+	// }()
 
 	go func() {
 		count := atomic.Int32{}
@@ -666,7 +668,7 @@ func (c *camerasByUpdateInterval) ConsumeQueue(
 			select {
 			case <-c.ctxConsume.Done():
 				c.wgConsume.Wait()
-				close(metricsCh)
+				// close(metricsCh)
 				return
 			case camera := <-c.queue:
 				for {
@@ -680,12 +682,16 @@ func (c *camerasByUpdateInterval) ConsumeQueue(
 				c.wgConsume.Add(1)
 
 				go func() {
-					metrics, err := run(camera)
+					_, err := run(camera)
 					if err != nil {
 						log.Printf("error running: %s", err)
 					}
-					metricsCh <- metrics
 					count.Add(-1)
+					// metricsCh <- metrics{
+					// 	data:    m.data,
+					// 	order:   m.order,
+					// 	success: m.success,
+					// }
 					c.wgConsume.Done()
 				}()
 			}
