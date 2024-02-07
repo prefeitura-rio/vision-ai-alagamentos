@@ -14,10 +14,10 @@ from app.pydantic_models import (
     APICaller,
     LabelOut,
     ObjectOut,
+    ObjectsSlugIn,
     PromptIn,
     PromptOut,
-    PromptsRequest,
-    PromptsResponse,
+    PromptsOut,
 )
 from app.utils import (
     apply_to_list,
@@ -163,6 +163,8 @@ async def get_prompt_objects(
             id=object_.id,
             name=object_.name,
             slug=object_.slug,
+            title=object_.title,
+            explanation=object_.explanation,
             labels=[
                 LabelOut(
                     id=label.id,
@@ -195,6 +197,8 @@ async def add_prompt_object(
         id=object_.id,
         name=object_.name,
         slug=object_.slug,
+        title=object_.title,
+        explanation=object_.explanation,
         labels=[
             LabelOut(
                 id=label.id,
@@ -223,11 +227,11 @@ async def remove_prompt_object(
     await prompt.objects.remove(object_)
 
 
-@router.post("/best_fit", response_model=PromptsResponse)
+@router.post("/best_fit", response_model=PromptsOut)
 async def get_best_fit_prompts(
-    request: PromptsRequest,
+    request: ObjectsSlugIn,
     _: Annotated[APICaller, Depends(get_caller)],  # TODO: Review permissions here
-) -> PromptsResponse:
+) -> PromptsOut:
     """Get the best fit prompts for a list of objects."""
     object_slugs = request.objects
     prompts = await get_prompts_best_fit(object_slugs=object_slugs)
@@ -254,6 +258,6 @@ async def get_best_fit_prompts(
                 top_p=prompt.top_p,
             )
         )
-    return PromptsResponse(
+    return PromptsOut(
         prompts=ret_prompts,
     )

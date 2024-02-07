@@ -84,12 +84,16 @@ class LabelUpdate(BaseModel):
 class ObjectIn(BaseModel):
     name: str
     slug: str
+    title: str
+    explanation: str
 
 
 class ObjectOut(BaseModel):
     id: UUID
     name: str
     slug: str
+    title: str
+    explanation: str
     labels: List[LabelOut]
 
 
@@ -115,11 +119,11 @@ class PromptOut(BaseModel):
     objects: List[str]
 
 
-class PromptsRequest(BaseModel):
+class ObjectsSlugIn(BaseModel):
     objects: List[str]
 
 
-class PromptsResponse(BaseModel):
+class PromptsOut(BaseModel):
     prompts: List[PromptOut]
 
 

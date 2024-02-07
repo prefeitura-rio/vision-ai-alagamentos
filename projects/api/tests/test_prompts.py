@@ -182,8 +182,12 @@ async def test_prompts_add_objects(
     assert "id" in response.json()
     assert "name" in response.json()
     assert "slug" in response.json()
+    assert "title" in response.json()
+    assert "explanation" in response.json()
     assert response.json()["id"] == context["test_object_id"]
     assert response.json()["slug"] == context["test_object_slug"]
+    assert response.json()["title"] == context["test_object_title"]
+    assert response.json()["explanation"] == context["test_object_explanation"]
 
 
 @pytest.mark.anyio
@@ -200,8 +204,12 @@ async def test_prompts_get_objects(
     assert "id" in response.json()[0]
     assert "name" in response.json()[0]
     assert "slug" in response.json()[0]
+    assert "title" in response.json()[0]
+    assert "explanation" in response.json()[0]
     assert response.json()[0]["id"] == context["test_object_id"]
     assert response.json()[0]["slug"] == context["test_object_slug"]
+    assert response.json()[0]["title"] == context["test_object_title"]
+    assert response.json()[0]["explanation"] == context["test_object_explanation"]
 
 
 @pytest.mark.anyio

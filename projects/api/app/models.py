@@ -9,7 +9,7 @@ class Agent(Model):
     slug = fields.CharField(max_length=255, unique=True)
     auth_sub = fields.CharField(max_length=255, unique=True, index=True)
     last_heartbeat = fields.DatetimeField(null=True)
-    cameras = fields.ManyToManyField("app.Camera", related_name="agents")
+    cameras = fields.ManyToManyField("app.Camera")
 
 
 class Camera(Model):
@@ -19,16 +19,23 @@ class Camera(Model):
     update_interval = fields.IntField()
     latitude = fields.FloatField()
     longitude = fields.FloatField()
-    snapshot_url = fields.CharField(max_length=255, null=True)
-    snapshot_timestamp = fields.DatetimeField(null=True)
+    objects = fields.ManyToManyField("app.Object")
+    snapshots: fields.ReverseRelation["Snapshot"]
+    agents: fields.ManyToManyRelation[Agent]
+
+
+class Snapshot(Model):
+    id = fields.UUIDField(pk=True)
+    url = fields.CharField(max_length=255)
+    timestamp = fields.DatetimeField()
+    camera = fields.ForeignKeyField("app.Camera")
     identifications = fields.ReverseRelation["Identification"]
 
 
 class Identification(Model):
     id = fields.UUIDField(pk=True)
-    camera = fields.ForeignKeyField("app.Camera", related_name="identifications")
-    object = fields.ForeignKeyField("app.Object", related_name="identifications", null=True)
-    label = fields.ForeignKeyField("app.Label", related_name="identifications", null=True)
+    snapshot = fields.ForeignKeyField("app.Snapshot")
+    label = fields.ForeignKeyField("app.Label")
     timestamp = fields.DatetimeField(null=True)
     label_explanation = fields.TextField(null=True)
 
@@ -44,12 +51,6 @@ class Label(Model):
         unique_together = (("object", "value"),)
 
 
-class Object(Model):
-    id = fields.UUIDField(pk=True)
-    name = fields.CharField(max_length=255, unique=True)
-    slug = fields.CharField(max_length=255, unique=True)
-
-
 class Prompt(Model):  # TODO: Add platform (GCP, OpenAI, etc.)
     id = fields.UUIDField(pk=True)
     name = fields.CharField(max_length=255, unique=True)
@@ -60,3 +61,13 @@ class Prompt(Model):  # TODO: Add platform (GCP, OpenAI, etc.)
     temperature = fields.FloatField()
     top_k = fields.IntField()
     top_p = fields.FloatField()
+
+
+class Object(Model):
+    id = fields.UUIDField(pk=True)
+    name = fields.CharField(max_length=255, unique=True)
+    slug = fields.CharField(max_length=255, unique=True)
+    title = fields.CharField(max_length=255, unique=True)
+    explanation = fields.TextField()
+    cameras: fields.ManyToManyRelation[Camera]
+    prompts: fields.ManyToManyRelation[Prompt]

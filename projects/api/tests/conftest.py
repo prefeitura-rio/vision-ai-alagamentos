@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import asyncio
+from datetime import datetime
 from os import getenv
 
 import pytest
@@ -9,7 +10,7 @@ from tortoise import Tortoise
 
 from app.db import TORTOISE_ORM
 from app.main import app
-from app.models import Agent, Camera, Identification, Label, Object, Prompt
+from app.models import Agent, Camera, Identification, Label, Object, Prompt, Snapshot
 
 
 @pytest.fixture(scope="session")
@@ -87,9 +88,24 @@ async def initialize_tests():
         cameras.append(await Camera.create(**camera))
 
     object_data = [
-        {"name": "Person", "slug": "person"},
-        {"name": "Car", "slug": "car"},
-        {"name": "Bicycle", "slug": "bicycle"},
+        {
+            "name": "Person",
+            "slug": "person",
+            "title": "Tem pessoas",
+            "explanation": "A imagem contém pessoas",
+        },
+        {
+            "name": "Car",
+            "slug": "car",
+            "title": "Tem carros",
+            "explanation": "A imagem contém somente o rosto de uma pessoa",
+        },
+        {
+            "name": "Bicycle",
+            "slug": "bicycle",
+            "title": "Tem bicicletas",
+            "explanation": "A imagem contém bicicletas",
+        },
     ]
     objects = []
     for object in object_data:
@@ -174,30 +190,96 @@ async def initialize_tests():
         for object in objects[: i + 1]:
             await prompt.objects.add(object)
 
+    snapshot_data = [
+        {
+            "url": "http://example.com/1",
+            "timestamp": datetime.now(),
+            "camera": cameras[0],
+        },
+        {
+            "url": "http://example.com/2",
+            "timestamp": datetime.now(),
+            "camera": cameras[0],
+        },
+        {
+            "url": "http://example.com/3",
+            "timestamp": datetime.now(),
+            "camera": cameras[0],
+        },
+        {
+            "url": "http://example.com/4",
+            "timestamp": datetime.now(),
+            "camera": cameras[0],
+        },
+        {
+            "url": "http://example.com/5",
+            "timestamp": datetime.now(),
+            "camera": cameras[1],
+        },
+        {
+            "url": "http://example.com/6",
+            "timestamp": datetime.now(),
+            "camera": cameras[1],
+        },
+        {
+            "url": "http://example.com/7",
+            "timestamp": datetime.now(),
+            "camera": cameras[1],
+        },
+        {
+            "url": "http://example.com/8",
+            "timestamp": datetime.now(),
+            "camera": cameras[1],
+        },
+        {
+            "url": "http://example.com/9",
+            "timestamp": datetime.now(),
+            "camera": cameras[2],
+        },
+        {
+            "url": "http://example.com/10",
+            "timestamp": datetime.now(),
+            "camera": cameras[2],
+        },
+        {
+            "url": "http://example.com/11",
+            "timestamp": datetime.now(),
+            "camera": cameras[2],
+        },
+        {
+            "url": "http://example.com/12",
+            "timestamp": datetime.now(),
+            "camera": cameras[2],
+        },
+    ]
+    snapshots = []
+    for snapshot in snapshot_data:
+        snapshots.append(await Snapshot.create(**snapshot))
+
     identification_data = [
         {
-            "camera": cameras[0],
-            "object": objects[0],
+            "snapshot": snapshots[0],
+            "label": labels[0],
         },
         {
-            "camera": cameras[0],
-            "object": objects[1],
+            "snapshot": snapshots[0],
+            "label": labels[1],
         },
         {
-            "camera": cameras[1],
-            "object": objects[1],
+            "snapshot": snapshots[1],
+            "label": labels[1],
         },
         {
-            "camera": cameras[1],
-            "object": objects[2],
+            "snapshot": snapshots[1],
+            "label": labels[2],
         },
         {
-            "camera": cameras[2],
-            "object": objects[2],
+            "snapshot": snapshots[2],
+            "label": labels[2],
         },
         {
-            "camera": cameras[2],
-            "object": objects[0],
+            "snapshot": snapshots[2],
+            "label": labels[0],
         },
     ]
     for identification in identification_data:
