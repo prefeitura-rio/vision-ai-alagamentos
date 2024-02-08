@@ -264,7 +264,7 @@ def predict(cloud_event: dict) -> None:
                 label_explanation = item["label_explanation"]
                 label = item["label"]
                 label = str(label).lower()
-
+                item["label"] = label
                 if object_id is not None:
                     try:
                         put_response = vision_ai_api.put_camera_object(
