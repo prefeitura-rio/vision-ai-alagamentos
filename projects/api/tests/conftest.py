@@ -260,26 +260,38 @@ async def initialize_tests():
         {
             "snapshot": snapshots[0],
             "label": labels[0],
+            "label_explanation": "There is a person in the frame",
+            "timestamp": datetime.now(),
         },
         {
             "snapshot": snapshots[0],
             "label": labels[1],
+            "label_explanation": "There is no person in the frame",
+            "timestamp": datetime.now(),
         },
         {
             "snapshot": snapshots[1],
             "label": labels[1],
+            "label_explanation": "There is a car in the frame",
+            "timestamp": datetime.now(),
         },
         {
             "snapshot": snapshots[1],
             "label": labels[2],
+            "label_explanation": "There is no car in the frame",
+            "timestamp": datetime.now(),
         },
         {
             "snapshot": snapshots[2],
             "label": labels[2],
+            "label_explanation": "There is a bicycle in the frame",
+            "timestamp": datetime.now(),
         },
         {
             "snapshot": snapshots[2],
             "label": labels[0],
+            "label_explanation": "There is no bicycle in the frame",
+            "timestamp": datetime.now(),
         },
     ]
     for identification in identification_data:

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import partial
 from typing import Annotated, Dict, List
 from uuid import UUID, uuid4
@@ -12,14 +12,15 @@ from nest_asyncio import os
 
 from app import config
 from app.dependencies import get_caller, is_admin
-from app.models import Agent, Camera, Identification, Label, Object
+from app.models import Agent, Camera, Identification, Label, Object, Snapshot
 from app.pydantic_models import (
     APICaller,
+    CameraIdentificationOut,
     CameraIn,
     CameraOut,
     IdentificationOut,
     PredictOut,
-    Snapshot,
+    SnapshotOut,
 )
 from app.utils import (
     apply_to_list,
@@ -36,7 +37,7 @@ class BigParams(Params):
     size: int = Query(100, ge=1, le=3000)
 
 
-class BigPage(Page[CameraOut]):
+class BigPage(Page[CameraIdentificationOut]):
     __params_type__ = BigParams
 
 
@@ -44,19 +45,19 @@ router = APIRouter(prefix="/cameras", tags=["Cameras"])
 
 
 @router.get("", response_model=BigPage)
-async def get_cameras(params: BigParams = Depends(), _=Depends(is_admin)) -> Page[CameraOut]:
+async def get_cameras(
+    params: BigParams = Depends(), _=Depends(is_admin), hour_interval: int = 3
+) -> Page[CameraIdentificationOut]:
     """Get a list of all cameras."""
-    cameras_out: Dict[str, CameraOut] = {}
+    cameras_out: Dict[str, CameraIdentificationOut] = {}
     offset = params.size * (params.page - 1)
 
     ids = await Camera.all().limit(params.size).offset(offset).values_list("id", flat=True)
 
-    cameras = await (
-        Camera.filter(id__in=ids)
-        .select_related(
-            "identifications", "identifications__object__slug", "identifications__label__value"
-        )
-        .all()
+    cameras = (
+        await Camera.all()
+        .filter(id__in=ids)
+        .select_related("objects")
         .values(
             "id",
             "name",
@@ -64,50 +65,72 @@ async def get_cameras(params: BigParams = Depends(), _=Depends(is_admin)) -> Pag
             "update_interval",
             "latitude",
             "longitude",
-            "snapshot_url",
-            "snapshot_timestamp",
-            "identifications__id",
-            "identifications__object__slug",
-            "identifications__timestamp",
-            "identifications__label__value",
-            "identifications__label_explanation",
+            "objects__slug",
         )
     )
 
     for camera in cameras:
         id = camera["id"]
-        slug = None
-        identification_details = None
-        if camera["identifications__id"] is not None:
-            slug = camera["identifications__object__slug"]
-            identification_details = IdentificationOut(
-                object=slug,
-                timestamp=camera["identifications__timestamp"],
-                label=camera["identifications__label__value"],
-                label_explanation=camera["identifications__label_explanation"],
-            )
+        slug = camera["objects__slug"]
 
         if id in cameras_out:
-            if identification_details is None:
-                continue
-            cameras_out[id].identifications.append(identification_details)
-            if slug not in cameras_out[id].objects:
-                cameras_out[id].objects.append(slug or "")
+            if slug is not None and slug not in cameras_out[id].objects:
+                cameras_out[id].objects.append(slug)
         else:
-            cameras_out[id] = CameraOut(
+            cameras_out[id] = CameraIdentificationOut(
                 id=id,
                 name=camera["name"],
                 rtsp_url=camera["rtsp_url"],
                 update_interval=camera["update_interval"],
                 latitude=camera["latitude"],
                 longitude=camera["longitude"],
-                snapshot_url=camera["snapshot_url"],
-                snapshot_timestamp=camera["snapshot_timestamp"],
                 objects=[slug] if slug is not None else [],
-                identifications=(
-                    [identification_details] if identification_details is not None else []
+                identifications=[],
+            )
+
+    last3hour = datetime.now() - timedelta(hours=hour_interval)
+
+    raw_identifications = (
+        await Identification.all()
+        .filter(snapshot__camera__id__in=ids, timestamp__gte=last3hour)
+        .select_related(
+            "snapshot",
+            "snapshot__camera__id",
+            "label",
+            "label__object",
+        )
+        .values(
+            "timestamp",
+            "label_explanation",
+            "snapshot__id",
+            "snapshot__url",
+            "snapshot__timestamp",
+            "snapshot__camera__id",
+            "label__value",
+            "label__object__slug",
+            "label__object__title",
+            "label__object__explanation",
+        )
+    )
+
+    for raw_identification in raw_identifications:
+        id = raw_identification["snapshot__camera__id"]
+        cameras_out[id].identifications.append(
+            IdentificationOut(
+                object=raw_identification["label__object__slug"],
+                title=raw_identification["label__object__title"],
+                explanation=raw_identification["label__object__explanation"],
+                timestamp=raw_identification["timestamp"],
+                label=raw_identification["label__value"],
+                label_explanation=raw_identification["label_explanation"],
+                snapshot=SnapshotOut(
+                    id=str(raw_identification["snapshot__id"]),
+                    camera_id=id,
+                    image_url=raw_identification["snapshot__url"],
+                    timestamp=raw_identification["snapshot__timestamp"],
                 ),
             )
+        )
 
     return create_page(list(cameras_out.values()), total=await Camera.all().count(), params=params)
 
@@ -123,34 +146,57 @@ async def create_camera(camera_: CameraIn, _=Depends(is_admin)) -> CameraOut:
         update_interval=camera.update_interval,
         latitude=camera.latitude,
         longitude=camera.longitude,
-        snapshot_url=camera.snapshot_url,
-        snapshot_timestamp=camera.snapshot_timestamp,
-        objects=[item.object.slug for item in await Identification.filter(camera=camera).all()],
-        identifications=[
-            IdentificationOut(
-                object=item.object.slug,
-                timestamp=item.timestamp,
-                label=(await item.label).value if item.label else None,
-                label_explanation=item.label_explanation,
-            )
-            for item in await Identification.filter(camera=camera).all()
-        ],
     )
 
 
-@router.get("/latest_snapshots", response_model=Page[Snapshot])
+@router.get("/{camera_id}", response_model=CameraOut)
+async def get_camera(
+    camera_id: str,
+    _: Annotated[APICaller, Depends(get_caller)],  # TODO: Review permissions here
+) -> CameraOut:
+    """Get information about a camera."""
+    raw_camera = await Camera.get_or_none(id=camera_id)
+    if not raw_camera:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Camera not found.")
+
+    camera = CameraOut(
+        id=raw_camera.id,
+        name=raw_camera.name,
+        rtsp_url=raw_camera.rtsp_url,
+        update_interval=raw_camera.update_interval,
+        latitude=raw_camera.latitude,
+        longitude=raw_camera.longitude,
+    )
+
+    return camera
+
+
+@router.delete("/{camera_id}")
+async def delete_camera(
+    camera_id: str,
+    _=Depends(is_admin),
+) -> None:
+    """Delete a camera."""
+    camera = await Camera.get_or_none(id=camera_id)
+    if not camera:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Camera not found.")
+
+    await Camera.filter(id=camera_id).delete()
+
+
+@router.get("/latest_snapshots", response_model=Page[SnapshotOut])
 async def get_latest_snapshots(
     after: datetime,
     _: Annotated[APICaller, Depends(get_caller)],  # TODO: Review permissions here
-) -> Page[Snapshot]:
+) -> Page[SnapshotOut]:
     """Get snapshots after a treshold datetime."""
     return await tortoise_paginate(
-        Camera.filter(snapshot_timestamp__gte=after),
+        Snapshot.filter(timestamp__gte=after),
         transformer=partial(
             apply_to_list,
             fn=partial(
                 transform_tortoise_to_pydantic,
-                pydantic_model=Snapshot,
+                pydantic_model=SnapshotOut,
                 vars_map=[
                     ("id", "camera_id"),
                     ("snapshot_url", "image_url"),
@@ -161,52 +207,27 @@ async def get_latest_snapshots(
     )
 
 
-@router.get("/{camera_id}", response_model=CameraOut)
-async def get_camera(
+@router.get("/{camera_id}/snapshots", response_model=Page[SnapshotOut])
+async def get_camera_snapshots(
     camera_id: str,
     _: Annotated[APICaller, Depends(get_caller)],  # TODO: Review permissions here
-) -> CameraOut:
-    """Get information about a camera."""
-    camera = await Camera.get(id=camera_id)
-    camera_details = CameraOut(
-        id=camera.id,
-        name=camera.name,
-        rtsp_url=camera.rtsp_url,
-        update_interval=camera.update_interval,
-        latitude=camera.latitude,
-        longitude=camera.longitude,
-        snapshot_url=camera.snapshot_url,
-        snapshot_timestamp=camera.snapshot_timestamp,
-        objects=[
-            (await item.object).slug for item in await Identification.filter(camera=camera).all()
-        ],
-        identifications=[
-            IdentificationOut(
-                object=(await item.object).slug,
-                timestamp=item.timestamp,
-                label=(await item.label).value if item.label else None,
-                label_explanation=item.label_explanation,
-            )
-            for item in await Identification.filter(camera=camera).all()
-        ],
-    )
-    return camera_details
-
-
-@router.get("/{camera_id}/snapshots", response_model=Snapshot)
-async def get_camera_snapshot(
-    camera_id: str,
-    _: Annotated[APICaller, Depends(get_caller)],  # TODO: Review permissions here
-) -> Snapshot:
+) -> Page[SnapshotOut]:
     """Get a camera snapshot from the server."""
     camera = await Camera.get(id=camera_id)
-    if not camera.snapshot_url:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Camera snapshot not found.",
-        )
-    return Snapshot(
-        camera_id=camera.id, image_url=camera.snapshot_url, timestamp=camera.snapshot_timestamp
+    return await tortoise_paginate(
+        Snapshot.filter(camera=camera),
+        transformer=partial(
+            apply_to_list,
+            fn=partial(
+                transform_tortoise_to_pydantic,
+                pydantic_model=SnapshotOut,
+                vars_map=[
+                    ("id", "camera_id"),
+                    ("snapshot_url", "image_url"),
+                    ("snapshot_timestamp", "timestamp"),
+                ],
+            ),
+        ),
     )
 
 
@@ -216,24 +237,16 @@ async def get_identifications(
     _: Annotated[APICaller, Depends(get_caller)],  # TODO: Review permissions here
 ) -> List[IdentificationOut]:
     """Get all objects that the camera will identify."""
-    camera = await Camera.get(id=camera_id)
-    return [
-        IdentificationOut(
-            object=(await item.object).slug,
-            timestamp=item.timestamp,
-            label=(await item.label).value if item.label else None,
-            label_explanation=item.label_explanation,
-        )
-        for item in await Identification.filter(camera=camera).all()
-    ]
+    # camera = await Camera.get(id=camera_id)
+    return []
 
 
-@router.post("/{camera_id}/snapshots/identifications", response_model=CameraOut)
+@router.post("/{camera_id}/snapshots/identifications", response_model=CameraIdentificationOut)
 async def create_identifcation(
     camera_id: str,
     identification_id: UUID,
     _=Depends(is_admin),
-) -> CameraOut:
+) -> CameraIdentificationOut:
     """Add an snapshot identification to a camera."""
     camera = await Camera.get_or_none(id=camera_id)
     if not camera:
@@ -248,32 +261,20 @@ async def create_identifcation(
             detail="Camera object already exists.",
         )
     await Identification.create(camera=camera, object=object_)
-    return CameraOut(
+    return CameraIdentificationOut(
         id=camera.id,
         name=camera.name,
         rtsp_url=camera.rtsp_url,
         update_interval=camera.update_interval,
         latitude=camera.latitude,
         longitude=camera.longitude,
-        snapshot_url=camera.snapshot_url,
-        snapshot_timestamp=camera.snapshot_timestamp,
-        objects=[
-            (await item.object).slug for item in await Identification.filter(camera=camera).all()
-        ],
-        identifications=[
-            IdentificationOut(
-                object=(await item.object).slug,
-                timestamp=item.timestamp,
-                label=(await item.label).value if item.label else None,
-                label_explanation=item.label_explanation,
-            )
-            for item in await Identification.filter(camera=camera).all()
-        ],
+        objects=[(await item.object).slug for item in await camera.objects.all()],
+        identifications=[],
     )
 
 
 @router.get(
-    "/{camera_id}/snapshots/identifications/{identification_id}", response_model=IdentificationOut
+    "/{camera_id}/snapshots/{snapshot_id}/identifications", response_model=IdentificationOut
 )
 async def get_identification(
     camera_id: str,
@@ -293,7 +294,8 @@ async def get_identification(
 
 
 @router.put(
-    "/{camera_id}/snapshots/identifications/{identification_id}", response_model=IdentificationOut
+    "/{camera_id}/snapshots/{snapshot_id}/identifications/{identification_id}",
+    response_model=IdentificationOut,
 )
 async def update_identification(
     camera_id: str,
@@ -333,7 +335,7 @@ async def update_identification(
     )
 
 
-@router.delete("/{camera_id}/snapshots/identifications/{identification_id}")
+@router.delete("/{camera_id}/snapshots/{snapshot_id}/identifications/{identification_id}")
 async def delete_identification(
     camera_id: str,
     identification_id: UUID,
@@ -349,7 +351,9 @@ async def delete_identification(
     await Identification.filter(camera=camera, object=object_).delete()
 
 
-@router.post("/{camera_id}/snapshots/identifications/predict", response_model=PredictOut)
+@router.post(
+    "/{camera_id}/snapshots/{snapshot_id}/identifications/predict", response_model=PredictOut
+)
 async def predict(
     camera_id: str,
     file: Annotated[UploadFile, File(media_type="image/png")],

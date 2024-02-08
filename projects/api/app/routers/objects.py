@@ -9,9 +9,10 @@ from fastapi_pagination.ext.tortoise import paginate as tortoise_paginate
 from tortoise.fields import ReverseRelation
 
 from app.dependencies import get_caller, is_admin
-from app.models import Label, Object
+from app.models import Camera, Label, Object
 from app.pydantic_models import (
     APICaller,
+    CameraOut,
     LabelIn,
     LabelOut,
     LabelUpdate,
@@ -74,15 +75,7 @@ async def create_object(
         slug=object.slug,
         title=object.title,
         explanation=object.explanation,
-        labels=[
-            LabelOut(
-                id=label.id,
-                value=label.value,
-                criteria=label.criteria,
-                identification_guide=label.identification_guide,
-            )
-            for label in await object.labels.all()
-        ],
+        labels=[],
     )
 
 
@@ -248,4 +241,34 @@ async def delete_object_label(
         value=label_obj.value,
         criteria=label_obj.criteria,
         identification_guide=label_obj.identification_guide,
+    )
+
+
+@router.post("/{object_id}/cameras/{camera_id}", response_model=CameraOut)
+async def add_camera_to_object(
+    object_id: UUID,
+    camera_id: str,
+    _=Depends(is_admin),
+) -> CameraOut:
+    """Add a camera to an object."""
+    object = await Object.get_or_none(id=object_id)
+    if object is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Object not found",
+        )
+    camera = await Camera.get_or_none(id=camera_id)
+    if not camera:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Camera not found",
+        )
+    await object.cameras.add(camera)
+    return CameraOut(
+        id=camera.id,
+        name=camera.name,
+        rtsp_url=camera.rtsp_url,
+        update_interval=camera.update_interval,
+        latitude=camera.latitude,
+        longitude=camera.longitude,
     )

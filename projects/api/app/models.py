@@ -36,8 +36,8 @@ class Identification(Model):
     id = fields.UUIDField(pk=True)
     snapshot = fields.ForeignKeyField("app.Snapshot")
     label = fields.ForeignKeyField("app.Label")
-    timestamp = fields.DatetimeField(null=True)
-    label_explanation = fields.TextField(null=True)
+    timestamp = fields.DatetimeField()
+    label_explanation = fields.TextField()
 
 
 class Label(Model):

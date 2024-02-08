@@ -38,13 +38,27 @@ async def test_cameras_get(client: AsyncClient, authorization_header: dict):
         assert isinstance(item["identifications"], list)
         for identification in item["identifications"]:
             assert "object" in identification
+            assert "title" in identification
+            assert "explanation" in identification
             assert "timestamp" in identification
             assert "label" in identification
+            assert "label_explanation" in identification
+            assert "snapshot" in identification
+            assert "id" in identification["snapshot"]
+            assert "camera_id" in identification["snapshot"]
+            assert "image_url" in identification["snapshot"]
+            assert "timestamp" in identification["snapshot"]
             assert isinstance(identification["object"], str)
-            assert (
-                isinstance(identification["timestamp"], str) or identification["timestamp"] is None
-            )
-            assert isinstance(identification["label"], bool) or identification["label"] is None
+            assert isinstance(identification["title"], str)
+            assert isinstance(identification["explanation"], str)
+            assert isinstance(identification["timestamp"], str)
+            assert isinstance(identification["label"], str)
+            assert isinstance(identification["label_explanation"], str)
+            assert isinstance(identification["snapshot"], dict)
+            assert isinstance(identification["snapshot"]["id"], str)
+            assert isinstance(identification["snapshot"]["camera_id"], str)
+            assert isinstance(identification["snapshot"]["image_url"], str)
+            assert isinstance(identification["snapshot"]["timestamp"], str)
 
 
 @pytest.mark.anyio
@@ -69,25 +83,12 @@ async def test_cameras_create(client: AsyncClient, authorization_header: dict, c
     assert "update_interval" in response.json()
     assert "latitude" in response.json()
     assert "longitude" in response.json()
-    assert "objects" in response.json()
-    assert "identifications" in response.json()
     assert isinstance(response.json()["id"], str)
     assert isinstance(response.json()["name"], str)
     assert isinstance(response.json()["rtsp_url"], str)
     assert isinstance(response.json()["update_interval"], int)
     assert isinstance(response.json()["latitude"], float)
     assert isinstance(response.json()["longitude"], float)
-    assert isinstance(response.json()["objects"], list)
-    for object_ in response.json()["objects"]:
-        assert isinstance(object_, str)
-    assert isinstance(response.json()["identifications"], list)
-    for identification in response.json()["identifications"]:
-        assert "object" in identification
-        assert "timestamp" in identification
-        assert "label" in identification
-        assert isinstance(identification["object"], str)
-        assert isinstance(identification["timestamp"], str) or identification["timestamp"] is None
-        assert isinstance(identification["label"], bool) or identification["label"] is None
     context["test_camera_id"] = response.json()["id"]
 
 
@@ -104,25 +105,11 @@ async def test_cameras_get_by_id(client: AsyncClient, authorization_header: dict
     assert "update_interval" in response.json()
     assert "latitude" in response.json()
     assert "longitude" in response.json()
-    assert "objects" in response.json()
-    assert "identifications" in response.json()
     assert isinstance(response.json()["id"], str)
     assert isinstance(response.json()["name"], str)
     assert isinstance(response.json()["rtsp_url"], str)
     assert isinstance(response.json()["update_interval"], int)
     assert isinstance(response.json()["latitude"], float)
-    assert isinstance(response.json()["longitude"], float)
-    assert isinstance(response.json()["objects"], list)
-    for object_ in response.json()["objects"]:
-        assert isinstance(object_, str)
-    assert isinstance(response.json()["identifications"], list)
-    for identification in response.json()["identifications"]:
-        assert "object" in identification
-        assert "timestamp" in identification
-        assert "label" in identification
-        assert isinstance(identification["object"], str)
-        assert isinstance(identification["timestamp"], str) or identification["timestamp"] is None
-        assert isinstance(identification["label"], bool) or identification["label"] is None
     assert response.json()["id"] == context["test_camera_id"]
 
 

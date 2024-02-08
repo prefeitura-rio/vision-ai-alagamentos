@@ -19,12 +19,6 @@ class APICaller(BaseModel):
     agent: Optional[AgentPydantic]
 
 
-class CameraConnectionInfo(BaseModel):
-    id: str
-    rtsp_url: str
-    update_interval: int
-
-
 class CameraIn(BaseModel):
     id: str
     name: Optional[str]
@@ -34,6 +28,17 @@ class CameraIn(BaseModel):
     longitude: float
 
 
+class CameraIdentificationOut(BaseModel):
+    id: str
+    name: Optional[str]
+    rtsp_url: str
+    update_interval: int
+    latitude: float
+    longitude: float
+    objects: List[str]
+    identifications: List["IdentificationOut"]
+
+
 class CameraOut(BaseModel):
     id: str
     name: Optional[str]
@@ -41,25 +46,31 @@ class CameraOut(BaseModel):
     update_interval: int
     latitude: float
     longitude: float
-    snapshot_url: Optional[str]
-    snapshot_timestamp: Optional[datetime]
-    objects: List[str]
-    identifications: List["IdentificationOut"]
 
 
-class Heartbeat(BaseModel):
+class HeartbeatIn(BaseModel):
     healthy: bool
 
 
-class HeartbeatResponse(BaseModel):
+class HeartbeatOut(BaseModel):
     command: Optional[str]
+
+
+class SnapshotOut(BaseModel):
+    id: str
+    camera_id: str
+    image_url: str
+    timestamp: datetime
 
 
 class IdentificationOut(BaseModel):
     object: str
-    timestamp: Optional[datetime]
-    label: Optional[str]
-    label_explanation: Optional[str]
+    title: str
+    explanation: str
+    timestamp: datetime
+    label: str
+    label_explanation: str
+    snapshot: SnapshotOut
 
 
 class LabelIn(BaseModel):
@@ -127,12 +138,6 @@ class PromptsOut(BaseModel):
     prompts: List[PromptOut]
 
 
-class Snapshot(BaseModel):
-    camera_id: str
-    image_url: str
-    timestamp: datetime
-
-
 class PredictOut(BaseModel):
     error: bool
     message: Optional[str]
@@ -164,11 +169,10 @@ class UserInfo(BaseModel):
 
 AgentPydantic.update_forward_refs()
 APICaller.update_forward_refs()
-CameraConnectionInfo.update_forward_refs()
-CameraOut.update_forward_refs()
+CameraIdentificationOut.update_forward_refs()
 IdentificationOut.update_forward_refs()
 ObjectOut.update_forward_refs()
 PromptOut.update_forward_refs()
-Snapshot.update_forward_refs()
+SnapshotOut.update_forward_refs()
 PredictOut.update_forward_refs()
 UserInfo.update_forward_refs()
