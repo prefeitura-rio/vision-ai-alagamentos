@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from functools import partial
-from typing import Annotated, List
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -35,8 +35,8 @@ async def get_prompts(
 ) -> Page[PromptOut]:
     """Get a list of all prompts."""
 
-    async def get_objects(objects_relation: ReverseRelation) -> List[str]:
-        objects: List[Object] = await objects_relation.all()
+    async def get_objects(objects_relation: ReverseRelation) -> list[str]:
+        objects: list[Object] = await objects_relation.all()
         return [object_.slug for object_ in objects]
 
     return await tortoise_paginate(
@@ -69,7 +69,7 @@ async def create_prompt(
 ) -> PromptOut:
     """Add a new prompt."""
     prompt = await Prompt.create(**prompt_.dict())
-    objects: List[str] = []
+    objects: list[str] = []
     for object_ in await prompt.objects.all():
         objects.append(object_.slug)
     return PromptOut(
@@ -94,7 +94,7 @@ async def get_prompt(
     prompt = await Prompt.get_or_none(id=prompt_id)
     if prompt is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prompt not found")
-    objects: List[str] = []
+    objects: list[str] = []
     for object_ in await prompt.objects.all():
         objects.append(object_.slug)
     return PromptOut(
@@ -121,7 +121,7 @@ async def update_prompt(
     if prompt is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prompt not found")
     await prompt.update_from_dict(prompt_.dict()).save()
-    objects: List[str] = []
+    objects: list[str] = []
     for object_ in await prompt.objects.all():
         objects.append(object_.slug)
     return PromptOut(
@@ -149,11 +149,11 @@ async def delete_prompt(
     await prompt.delete()
 
 
-@router.get("/{prompt_id}/objects", response_model=List[ObjectOut])
+@router.get("/{prompt_id}/objects", response_model=list[ObjectOut])
 async def get_prompt_objects(
     prompt_id: UUID,
     _: Annotated[APICaller, Depends(get_caller)],  # TODO: Review permissions here
-) -> List[ObjectOut]:
+) -> list[ObjectOut]:
     """Get a prompt's objects."""
     prompt = await Prompt.get_or_none(id=prompt_id)
     if prompt is None:

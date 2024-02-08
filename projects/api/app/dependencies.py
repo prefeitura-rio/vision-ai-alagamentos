@@ -23,13 +23,20 @@ async def get_caller(
     # If "vision-ai-agent" is in groups, look for an agent with the same sub
     agent = None
     if "vision-ai-agent" in user_info.groups:
-        agent = await Agent.get_or_none(auth_sub=user_info.sub)
-        if agent is None:
-            agent = await Agent.create(
+        agent_raw = await Agent.get_or_none(auth_sub=user_info.sub)
+        if agent_raw is None:
+            agent_raw = await Agent.create(
                 name=user_info.nickname,
                 slug=slugify(user_info.nickname),
                 auth_sub=user_info.sub,
             )
+        agent = AgentPydantic(
+            id=agent_raw.id,
+            name=agent_raw.name,
+            slug=agent_raw.slug,
+            auth_sub=agent_raw.auth_sub,
+            last_heartbeat=agent_raw.last_heartbeat,
+        )
     return APICaller(is_admin=is_admin, agent=agent)
 
 

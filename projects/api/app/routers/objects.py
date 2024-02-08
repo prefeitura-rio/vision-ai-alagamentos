@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from functools import partial
-from typing import Annotated, List
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -30,8 +30,8 @@ async def get_objects(
 ) -> Page[ObjectOut]:
     """Get a list of all objects."""
 
-    async def get_labels(labels_relation: ReverseRelation) -> List[LabelOut]:
-        labels: List[Label] = await labels_relation.all()
+    async def get_labels(labels_relation: ReverseRelation) -> list[LabelOut]:
+        labels: list[Label] = await labels_relation.all()
         return [
             LabelOut(
                 id=label.id,
@@ -154,9 +154,9 @@ async def add_label_to_object(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Object not found",
         )
-    label = await Label.create(object=object, **label.dict())
+    label_raw = await Label.create(object=object, **label.dict())
     return LabelOut(
-        id=label.id,
+        id=label_raw.id,
         value=label.value,
         criteria=label.criteria,
         identification_guide=label.identification_guide,

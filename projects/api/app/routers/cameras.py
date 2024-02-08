@@ -1,13 +1,11 @@
 # -*- coding: utf-8 -*-
 from datetime import datetime, timedelta
-from functools import partial
-from typing import Annotated, Dict, List
+from typing import Annotated
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi_pagination import Page, Params
 from fastapi_pagination.api import create_page
-from fastapi_pagination.ext.tortoise import paginate as tortoise_paginate
 from nest_asyncio import os
 
 from app import config
@@ -23,12 +21,10 @@ from app.pydantic_models import (
     SnapshotOut,
 )
 from app.utils import (
-    apply_to_list,
     generate_blob_path,
     get_prompt_formatted_text,
     get_prompts_best_fit,
     publish_message,
-    transform_tortoise_to_pydantic,
     upload_file_to_bucket,
 )
 
@@ -46,10 +42,10 @@ router = APIRouter(prefix="/cameras", tags=["Cameras"])
 
 @router.get("", response_model=BigPage)
 async def get_cameras(
-    params: BigParams = Depends(), _=Depends(is_admin), hour_interval: int = 3
+    params: BigParams = Depends(), _=Depends(is_admin), minute_interval: int = 30
 ) -> Page[CameraIdentificationOut]:
     """Get a list of all cameras."""
-    cameras_out: Dict[str, CameraIdentificationOut] = {}
+    cameras_out: dict[str, CameraIdentificationOut] = {}
     offset = params.size * (params.page - 1)
 
     ids = await Camera.all().limit(params.size).offset(offset).values_list("id", flat=True)
@@ -88,11 +84,11 @@ async def get_cameras(
                 identifications=[],
             )
 
-    last3hour = datetime.now() - timedelta(hours=hour_interval)
+    lastminutes = datetime.now() - timedelta(minutes=minute_interval)
 
-    raw_identifications = (
+    identifications = (
         await Identification.all()
-        .filter(snapshot__camera__id__in=ids, timestamp__gte=last3hour)
+        .filter(snapshot__camera__id__in=ids, timestamp__gte=lastminutes)
         .select_related(
             "snapshot",
             "snapshot__camera__id",
@@ -113,21 +109,21 @@ async def get_cameras(
         )
     )
 
-    for raw_identification in raw_identifications:
-        id = raw_identification["snapshot__camera__id"]
+    for identification in identifications:
+        id = identification["snapshot__camera__id"]
         cameras_out[id].identifications.append(
             IdentificationOut(
-                object=raw_identification["label__object__slug"],
-                title=raw_identification["label__object__title"],
-                explanation=raw_identification["label__object__explanation"],
-                timestamp=raw_identification["timestamp"],
-                label=raw_identification["label__value"],
-                label_explanation=raw_identification["label_explanation"],
+                object=identification["label__object__slug"],
+                title=identification["label__object__title"],
+                explanation=identification["label__object__explanation"],
+                timestamp=identification["timestamp"],
+                label=identification["label__value"],
+                label_explanation=identification["label_explanation"],
                 snapshot=SnapshotOut(
-                    id=str(raw_identification["snapshot__id"]),
+                    id=identification["snapshot__id"],
                     camera_id=id,
-                    image_url=raw_identification["snapshot__url"],
-                    timestamp=raw_identification["snapshot__timestamp"],
+                    image_url=identification["snapshot__url"],
+                    timestamp=identification["snapshot__timestamp"],
                 ),
             )
         )
@@ -155,20 +151,18 @@ async def get_camera(
     _: Annotated[APICaller, Depends(get_caller)],  # TODO: Review permissions here
 ) -> CameraOut:
     """Get information about a camera."""
-    raw_camera = await Camera.get_or_none(id=camera_id)
-    if not raw_camera:
+    camera = await Camera.get_or_none(id=camera_id)
+    if not camera:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Camera not found.")
 
-    camera = CameraOut(
-        id=raw_camera.id,
-        name=raw_camera.name,
-        rtsp_url=raw_camera.rtsp_url,
-        update_interval=raw_camera.update_interval,
-        latitude=raw_camera.latitude,
-        longitude=raw_camera.longitude,
+    return CameraOut(
+        id=camera.id,
+        name=camera.name,
+        rtsp_url=camera.rtsp_url,
+        update_interval=camera.update_interval,
+        latitude=camera.latitude,
+        longitude=camera.longitude,
     )
-
-    return camera
 
 
 @router.delete("/{camera_id}")
@@ -184,58 +178,39 @@ async def delete_camera(
     await Camera.filter(id=camera_id).delete()
 
 
-@router.get("/latest_snapshots", response_model=Page[SnapshotOut])
-async def get_latest_snapshots(
-    after: datetime,
-    _: Annotated[APICaller, Depends(get_caller)],  # TODO: Review permissions here
-) -> Page[SnapshotOut]:
-    """Get snapshots after a treshold datetime."""
-    return await tortoise_paginate(
-        Snapshot.filter(timestamp__gte=after),
-        transformer=partial(
-            apply_to_list,
-            fn=partial(
-                transform_tortoise_to_pydantic,
-                pydantic_model=SnapshotOut,
-                vars_map=[
-                    ("id", "camera_id"),
-                    ("snapshot_url", "image_url"),
-                    ("snapshot_timestamp", "timestamp"),
-                ],
-            ),
-        ),
-    )
-
-
 @router.get("/{camera_id}/snapshots", response_model=Page[SnapshotOut])
 async def get_camera_snapshots(
     camera_id: str,
     _: Annotated[APICaller, Depends(get_caller)],  # TODO: Review permissions here
+    params: Params = Depends(),
+    minute_interval: int = 30,
 ) -> Page[SnapshotOut]:
     """Get a camera snapshot from the server."""
-    camera = await Camera.get(id=camera_id)
-    return await tortoise_paginate(
-        Snapshot.filter(camera=camera),
-        transformer=partial(
-            apply_to_list,
-            fn=partial(
-                transform_tortoise_to_pydantic,
-                pydantic_model=SnapshotOut,
-                vars_map=[
-                    ("id", "camera_id"),
-                    ("snapshot_url", "image_url"),
-                    ("snapshot_timestamp", "timestamp"),
-                ],
-            ),
-        ),
-    )
+    camera = await Camera.get_or_none(id=camera_id)
+    if not camera:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Camera not found.")
+
+    lastminutes = datetime.now() - timedelta(minutes=minute_interval)
+    filter_query = Snapshot.filter(camera=camera, timestamp__gte=lastminutes)
+    snapshots = await filter_query.all().limit(params.size).offset(params.size * (params.page - 1))
+    snapshots_out = [
+        SnapshotOut(
+            id=snapshot.id,
+            camera_id=camera_id,
+            image_url=snapshot.url,
+            timestamp=snapshot.timestamp,
+        )
+        for snapshot in snapshots
+    ]
+
+    return create_page(snapshots_out, total=await filter_query.all().count(), params=params)
 
 
-@router.get("/{camera_id}/snapshots/identifications", response_model=List[IdentificationOut])
+@router.get("/{camera_id}/snapshots/identifications", response_model=list[IdentificationOut])
 async def get_identifications(
     camera_id: str,
     _: Annotated[APICaller, Depends(get_caller)],  # TODO: Review permissions here
-) -> List[IdentificationOut]:
+) -> list[IdentificationOut]:
     """Get all objects that the camera will identify."""
     # camera = await Camera.get(id=camera_id)
     return []
@@ -351,9 +326,7 @@ async def delete_identification(
     await Identification.filter(camera=camera, object=object_).delete()
 
 
-@router.post(
-    "/{camera_id}/snapshots/{snapshot_id}/identifications/predict", response_model=PredictOut
-)
+@router.post("/{camera_id}/snapshots/{snapshot_id}/predict", response_model=PredictOut)
 async def predict(
     camera_id: str,
     file: Annotated[UploadFile, File(media_type="image/png")],

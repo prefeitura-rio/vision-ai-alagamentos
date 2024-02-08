@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 from datetime import datetime
-from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -11,17 +10,17 @@ class AgentPydantic(BaseModel):
     name: str
     slug: str
     auth_sub: str
-    last_heartbeat: Optional[datetime]
+    last_heartbeat: datetime | None
 
 
 class APICaller(BaseModel):
-    is_admin: Optional[bool] = False
-    agent: Optional[AgentPydantic]
+    is_admin: bool | None = False
+    agent: AgentPydantic | None
 
 
 class CameraIn(BaseModel):
     id: str
-    name: Optional[str]
+    name: str | None
     rtsp_url: str
     update_interval: int
     latitude: float
@@ -30,18 +29,18 @@ class CameraIn(BaseModel):
 
 class CameraIdentificationOut(BaseModel):
     id: str
-    name: Optional[str]
+    name: str | None
     rtsp_url: str
     update_interval: int
     latitude: float
     longitude: float
-    objects: List[str]
-    identifications: List["IdentificationOut"]
+    objects: list[str]
+    identifications: list["IdentificationOut"]
 
 
 class CameraOut(BaseModel):
     id: str
-    name: Optional[str]
+    name: str | None
     rtsp_url: str
     update_interval: int
     latitude: float
@@ -53,14 +52,14 @@ class HeartbeatIn(BaseModel):
 
 
 class HeartbeatOut(BaseModel):
-    command: Optional[str]
+    command: str | None
 
 
 class SnapshotOut(BaseModel):
-    id: str
+    id: UUID
     camera_id: str
     image_url: str
-    timestamp: datetime
+    timestamp: datetime | None
 
 
 class IdentificationOut(BaseModel):
@@ -87,9 +86,9 @@ class LabelOut(BaseModel):
 
 
 class LabelUpdate(BaseModel):
-    value: Optional[str]
-    criteria: Optional[str]
-    identification_guide: Optional[str]
+    value: str | None
+    criteria: str | None
+    identification_guide: str | None
 
 
 class ObjectIn(BaseModel):
@@ -105,7 +104,7 @@ class ObjectOut(BaseModel):
     slug: str
     title: str
     explanation: str
-    labels: List[LabelOut]
+    labels: list[LabelOut]
 
 
 class PromptIn(BaseModel):
@@ -127,20 +126,20 @@ class PromptOut(BaseModel):
     temperature: float
     top_k: int
     top_p: float
-    objects: List[str]
+    objects: list[str]
 
 
 class ObjectsSlugIn(BaseModel):
-    objects: List[str]
+    objects: list[str]
 
 
 class PromptsOut(BaseModel):
-    prompts: List[PromptOut]
+    prompts: list[PromptOut]
 
 
 class PredictOut(BaseModel):
     error: bool
-    message: Optional[str]
+    message: str | None
 
 
 class Token(BaseModel):
@@ -158,13 +157,13 @@ class UserInfo(BaseModel):
     acr: str
     azp: str
     uid: str
-    email: Optional[str]
-    email_verified: Optional[bool]
-    name: Optional[str]
-    given_name: Optional[str]
-    preferred_username: Optional[str]
-    nickname: Optional[str]
-    groups: Optional[List[str]]
+    email: str | None
+    email_verified: bool | None
+    name: str | None
+    given_name: str | None
+    preferred_username: str | None
+    nickname: str
+    groups: list[str]
 
 
 AgentPydantic.update_forward_refs()
