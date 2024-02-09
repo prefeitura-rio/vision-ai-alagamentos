@@ -68,15 +68,15 @@ class APIVisionAI:
         if time.time() - self.token_renewal_time >= 60 * 50:
             self.headers, self.token_renewal_time = self._get_headers()
 
-    def _put(self, path: str) -> requests.Response:
+    def _post(self, path: str) -> requests.Response:
         self._refresh_token_if_needed()
-        return requests.put(f"{self.BASE_URL}{path}", headers=self.headers)
+        return requests.post(f"{self.BASE_URL}{path}", headers=self.headers)
 
-    def put_identification(
-        self, camera_id: str, identification_id: str, label_explanation: str, label: str
+    def post_identification(
+        self, camera_id: str, snapshot_id: str, object_id: str, label_explanation: str, label: str
     ) -> requests.Response:
-        return self._put(
-            f"/cameras/{camera_id}/snapshots/identifications/{identification_id}?label={label}&label_explanation={label_explanation}"  # noqa
+        return self._post(
+            f"/cameras/{camera_id}/snapshots/{snapshot_id}/identifications?object_id={object_id}label_value={label}&label_explanation={label_explanation}"  # noqa
         )
 
 
@@ -279,9 +279,10 @@ def predict(cloud_event: dict) -> None:
                 item["label"] = label
                 if object_id is not None:
                     try:
-                        put_response = vision_ai_api.put_identification(
+                        put_response = vision_ai_api.post_identification(
                             camera_id=camera_id,
-                            identification_id=object_id,
+                            snapshot_id=data["snapshot_id"],
+                            object_id=object_id,
                             label_explanation=label_explanation,
                             label=label,
                         )

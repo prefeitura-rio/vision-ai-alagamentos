@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 )
 
@@ -85,7 +84,6 @@ func httpPut(
 	for key, value := range headers {
 		request.Header.Add(key, value)
 	}
-	log.Println(request.Header)
 
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {

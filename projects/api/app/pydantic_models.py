@@ -68,6 +68,7 @@ class SnapshotOut(BaseModel):
 
 
 class IdentificationOut(BaseModel):
+    id: UUID
     object: str
     title: str
     explanation: str

@@ -67,12 +67,12 @@ func makeSnapshot(cameraAPI CameraAPI) (*metrics, error) {
 	}
 	metrics.add("create_snapshot")
 
-	snpashot := struct {
+	snapshot := struct {
 		ID       string `json:"id"`
 		CameraID string `json:"camera_id"`
 		ImageURL string `json:"image_url"`
 	}{}
-	err = json.Unmarshal(bodyResponse, &snpashot)
+	err = json.Unmarshal(bodyResponse, &snapshot)
 	if err != nil {
 		return metrics, fmt.Errorf("error parsing body: %w", err)
 	}
@@ -84,7 +84,7 @@ func makeSnapshot(cameraAPI CameraAPI) (*metrics, error) {
 	}
 
 	_, err = httpPut(
-		snpashot.ImageURL,
+		snapshot.ImageURL,
 		headers,
 		bytes.NewReader(img),
 	)
@@ -92,6 +92,13 @@ func makeSnapshot(cameraAPI CameraAPI) (*metrics, error) {
 		return metrics, fmt.Errorf("error sending snapshot: %w", err)
 	}
 	metrics.add("send_snapshot")
+
+	preditcURL := cameraAPI.snapshotURL + "/" + snapshot.ID + "/predict"
+	_, err = httpPost(preditcURL, camera.accessToken, "application/json", nil)
+	if err != nil {
+		return metrics, fmt.Errorf("error creating predictions: %w", err)
+	}
+	metrics.add("create_predictions")
 
 	metrics.success = true
 
