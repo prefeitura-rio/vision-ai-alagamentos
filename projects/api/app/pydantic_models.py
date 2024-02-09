@@ -55,6 +55,11 @@ class HeartbeatOut(BaseModel):
     command: str | None
 
 
+class SnapshotIn(BaseModel):
+    hash_md5: str
+    content_length: int
+
+
 class SnapshotOut(BaseModel):
     id: UUID
     camera_id: str

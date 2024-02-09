@@ -53,14 +53,14 @@ CREATE TABLE IF NOT EXISTS "prompt" (
 );
 CREATE TABLE IF NOT EXISTS "snapshot" (
     "id" UUID NOT NULL  PRIMARY KEY,
-    "url" VARCHAR(255) NOT NULL,
-    "timestamp" TIMESTAMPTZ NOT NULL,
+    "public_url" VARCHAR(255) NOT NULL,
+    "timestamp" TIMESTAMPTZ,
     "camera_id" VARCHAR(30) NOT NULL REFERENCES "camera" ("id") ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS "identification" (
     "id" UUID NOT NULL  PRIMARY KEY,
-    "timestamp" TIMESTAMPTZ,
-    "label_explanation" TEXT,
+    "timestamp" TIMESTAMPTZ NOT NULL,
+    "label_explanation" TEXT NOT NULL,
     "label_id" UUID NOT NULL REFERENCES "label" ("id") ON DELETE CASCADE,
     "snapshot_id" UUID NOT NULL REFERENCES "snapshot" ("id") ON DELETE CASCADE
 );

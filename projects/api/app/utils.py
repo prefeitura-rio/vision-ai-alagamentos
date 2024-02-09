@@ -5,6 +5,7 @@ import inspect
 import io
 import json
 from asyncio import Task
+from datetime import datetime
 from typing import Any, Callable
 from uuid import uuid4
 
@@ -113,7 +114,7 @@ def fn_is_async(fn: Callable) -> bool:
     return inspect.iscoroutinefunction(fn) or inspect.isasyncgenfunction(fn)
 
 
-def generate_blob_path(camera_id: str) -> str:
+def generate_blob_path(camera_id: str, snapshot_id: str = str(uuid4)) -> str:
     """
     Generates a blob path for a camera snapshot.
 
@@ -123,7 +124,8 @@ def generate_blob_path(camera_id: str) -> str:
     Returns:
         str: The blob path.
     """
-    return f"{config.GCS_BUCKET_PATH_PREFIX}/{camera_id}.png"
+    path_data = datetime.now().strftime("ano=%Y/mes=%m/dia=%d")
+    return f"{config.GCS_BUCKET_PATH_PREFIX}/{path_data}/camera_id={camera_id}/{snapshot_id}.png"
 
 
 def get_camera_snapshot_blob_url(*, camera_id: str) -> str:

@@ -1,11 +1,10 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
-	"mime/multipart"
+	"log"
 	"net/http"
 )
 
@@ -46,10 +45,10 @@ func httpPost(
 	accessToken *AccessToken,
 	contentType string,
 	requestBody io.Reader,
-) (string, error) {
+) ([]byte, error) {
 	request, err := http.NewRequest("POST", url, requestBody)
 	if err != nil {
-		return "", fmt.Errorf("error creating request: %w", err)
+		return []byte{}, fmt.Errorf("error creating request: %w", err)
 	}
 	if accessToken != nil {
 		request.Header.Add("Authorization", accessToken.GetHeader())
@@ -58,41 +57,50 @@ func httpPost(
 
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
-		return "", fmt.Errorf("error making request: %w", err)
+		return []byte{}, fmt.Errorf("error making request: %w", err)
 	}
 	defer response.Body.Close()
 
 	body, err := io.ReadAll(response.Body)
 	if err != nil {
-		return "", fmt.Errorf("error getting response body: %w", err)
+		return []byte{}, fmt.Errorf("error getting response body: %w", err)
 	}
 
 	if response.StatusCode >= 300 || response.StatusCode < 200 {
-		return string(body), fmt.Errorf("invalid Status Code: %d, %s", response.StatusCode, body)
+		return body, fmt.Errorf("invalid Status Code: %d, %s", response.StatusCode, body)
 	}
 
-	return string(body), err
+	return body, err
 }
 
-func bodyImage(id string, img []byte) (string, *io.PipeReader) {
-	reader := bytes.NewReader(img)
-	pr, pw := io.Pipe()
-	writer := multipart.NewWriter(pw)
-	go func() {
-		part, err := writer.CreateFormFile("file", id+".png")
-		if err != nil {
-			pw.CloseWithError(err)
-			return
-		}
-		_, err = io.Copy(part, reader)
-		if err != nil {
-			pw.CloseWithError(err)
-			return
-		}
+func httpPut(
+	url string,
+	headers map[string]string,
+	requestBody io.Reader,
+) ([]byte, error) {
+	request, err := http.NewRequest("PUT", url, requestBody)
+	if err != nil {
+		return []byte{}, fmt.Errorf("error creating request: %w", err)
+	}
+	for key, value := range headers {
+		request.Header.Add(key, value)
+	}
+	log.Println(request.Header)
 
-		err = writer.Close()
-		pw.CloseWithError(err)
-	}()
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		return []byte{}, fmt.Errorf("error making request: %w", err)
+	}
+	defer response.Body.Close()
 
-	return writer.FormDataContentType(), pr
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		return []byte{}, fmt.Errorf("error getting response body: %w", err)
+	}
+
+	if response.StatusCode >= 300 || response.StatusCode < 200 {
+		return body, fmt.Errorf("invalid Status Code: %d, %s", response.StatusCode, body)
+	}
+
+	return body, err
 }

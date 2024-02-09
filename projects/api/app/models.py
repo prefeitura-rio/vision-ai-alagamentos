@@ -26,7 +26,7 @@ class Camera(Model):
 
 class Snapshot(Model):
     id = fields.UUIDField(pk=True)
-    url = fields.CharField(max_length=255)
+    public_url = fields.CharField(max_length=255)
     timestamp = fields.DatetimeField(null=True)
     camera = fields.ForeignKeyField("app.Camera")
     identifications = fields.ReverseRelation["Identification"]

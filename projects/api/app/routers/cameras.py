@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, 
 from fastapi_pagination import Page, Params
 from fastapi_pagination.api import create_page
 from nest_asyncio import os
+from tortoise.expressions import Q
 
 from app import config
 from app.dependencies import get_caller, is_admin
@@ -18,10 +19,12 @@ from app.pydantic_models import (
     CameraOut,
     IdentificationOut,
     PredictOut,
+    SnapshotIn,
     SnapshotOut,
 )
 from app.utils import (
     generate_blob_path,
+    get_gcs_client,
     get_prompt_formatted_text,
     get_prompts_best_fit,
     publish_message,
@@ -99,7 +102,7 @@ async def get_cameras(
             "timestamp",
             "label_explanation",
             "snapshot__id",
-            "snapshot__url",
+            "snapshot__public_url",
             "snapshot__timestamp",
             "snapshot__camera__id",
             "label__value",
@@ -122,7 +125,7 @@ async def get_cameras(
                 snapshot=SnapshotOut(
                     id=identification["snapshot__id"],
                     camera_id=id,
-                    image_url=identification["snapshot__url"],
+                    image_url=identification["snapshot__public_url"],
                     timestamp=identification["snapshot__timestamp"],
                 ),
             )
@@ -191,19 +194,78 @@ async def get_camera_snapshots(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Camera not found.")
 
     lastminutes = datetime.now() - timedelta(minutes=minute_interval)
-    filter_query = Snapshot.filter(camera=camera, timestamp__gte=lastminutes)
+    filter_query = Snapshot.filter(
+        Q(camera=camera) & (Q(timestamp__gte=lastminutes) | Q(timestamp__isnull=True))
+    )
     snapshots = await filter_query.all().limit(params.size).offset(params.size * (params.page - 1))
     snapshots_out = [
         SnapshotOut(
             id=snapshot.id,
             camera_id=camera_id,
-            image_url=snapshot.url,
+            image_url=snapshot.public_url,
             timestamp=snapshot.timestamp,
         )
         for snapshot in snapshots
     ]
 
     return create_page(snapshots_out, total=await filter_query.all().count(), params=params)
+
+
+@router.post("/{camera_id}/snapshots", response_model=SnapshotOut)
+async def create_camera_snapshot(
+    camera_id: str,
+    snapshot_in: SnapshotIn,
+    caller: Annotated[APICaller, Depends(get_caller)],
+) -> SnapshotOut:
+    """Post a camera snapshot to the server."""
+    # Caller must be an agent that has access to the camera.
+    camera = await Camera.get_or_none(id=camera_id)
+    if not camera:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Camera not found.")
+    if not caller.agent:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not allowed to post snapshots for this camera.",
+        )
+    agent = await Agent.get_or_none(id=caller.agent.id)
+    if not agent:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not allowed to post snapshots for this camera.",
+        )
+    cameras = await agent.cameras.filter(id=camera_id)
+    if not cameras:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not allowed to post snapshots for this camera.",
+        )
+
+    id = uuid4()
+
+    storage_client = get_gcs_client()
+    bucket = storage_client.bucket(config.GCS_BUCKET_NAME)
+    blob = bucket.blob(blob_name=generate_blob_path(camera_id, str(id)))
+    url = blob.generate_signed_url(
+        version="v4",
+        expiration=timedelta(minutes=15),
+        method="PUT",
+        content_md5=snapshot_in.hash_md5,
+        content_type="image/png",
+    )
+
+    snapshot = await Snapshot.create(
+        id=id,
+        camera=camera,
+        public_url=blob.public_url,
+        timestamp=None,
+    )
+
+    return SnapshotOut(
+        id=snapshot.id,
+        camera_id=camera_id,
+        image_url=url,
+        timestamp=snapshot.timestamp,
+    )
 
 
 @router.get("/{camera_id}/snapshots/identifications", response_model=list[IdentificationOut])

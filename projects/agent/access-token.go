@@ -71,7 +71,7 @@ func (at *AccessToken) Renew() error {
 		TokenType   string `json:"token_type"`
 		ExpiresIn   int    `json:"expires_in"`
 	}{}
-	err = json.Unmarshal([]byte(body), &accessToken)
+	err = json.Unmarshal(body, &accessToken)
 	if err != nil {
 		return fmt.Errorf("error parsing body: %w", err)
 	}

@@ -192,62 +192,62 @@ async def initialize_tests():
 
     snapshot_data = [
         {
-            "url": "http://example.com/1",
+            "public_url": "http://example.com/1",
             "timestamp": datetime.now(),
             "camera": cameras[0],
         },
         {
-            "url": "http://example.com/2",
+            "public_url": "http://example.com/2",
             "timestamp": datetime.now(),
             "camera": cameras[0],
         },
         {
-            "url": "http://example.com/3",
+            "public_url": "http://example.com/3",
             "timestamp": datetime.now(),
             "camera": cameras[0],
         },
         {
-            "url": "http://example.com/4",
+            "public_url": "http://example.com/4",
             "timestamp": datetime.now(),
             "camera": cameras[0],
         },
         {
-            "url": "http://example.com/5",
+            "public_url": "http://example.com/5",
             "timestamp": datetime.now(),
             "camera": cameras[1],
         },
         {
-            "url": "http://example.com/6",
+            "public_url": "http://example.com/6",
             "timestamp": datetime.now(),
             "camera": cameras[1],
         },
         {
-            "url": "http://example.com/7",
+            "public_url": "http://example.com/7",
             "timestamp": datetime.now(),
             "camera": cameras[1],
         },
         {
-            "url": "http://example.com/8",
+            "public_url": "http://example.com/8",
             "timestamp": datetime.now(),
             "camera": cameras[1],
         },
         {
-            "url": "http://example.com/9",
+            "public_url": "http://example.com/9",
             "timestamp": datetime.now(),
             "camera": cameras[2],
         },
         {
-            "url": "http://example.com/10",
+            "public_url": "http://example.com/10",
             "timestamp": datetime.now(),
             "camera": cameras[2],
         },
         {
-            "url": "http://example.com/11",
+            "public_url": "http://example.com/11",
             "timestamp": datetime.now(),
             "camera": cameras[2],
         },
         {
-            "url": "http://example.com/12",
+            "public_url": "http://example.com/12",
             "timestamp": datetime.now(),
             "camera": cameras[2],
         },

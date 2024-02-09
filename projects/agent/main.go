@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/md5"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -37,12 +39,60 @@ func makeSnapshot(cameraAPI CameraAPI) (*metrics, error) {
 	}
 	metrics.add("get_next_frame")
 
-	contentType, body := bodyImage(camera.id, img)
-	_, err = httpPost(cameraAPI.snapshotURL, camera.accessToken, contentType, body)
+	sum := md5.Sum(img)
+	hash := base64.StdEncoding.EncodeToString(sum[:])
+	contentLength := int(float64(len(img)) * 1.25)
+	bodyData := struct {
+		HashMD5       string `json:"hash_md5"`
+		ContentLength int    `json:"content_length"`
+	}{
+		HashMD5:       hash,
+		ContentLength: contentLength,
+	}
+
+	bodyRequest, err := json.Marshal(bodyData)
+	if err != nil {
+		return metrics, fmt.Errorf("error creating snapshot body: %w", err)
+	}
+	metrics.add("create_snapshot_body")
+
+	bodyResponse, err := httpPost(
+		cameraAPI.snapshotURL,
+		camera.accessToken,
+		"application/json",
+		bytes.NewReader(bodyRequest),
+	)
+	if err != nil {
+		return metrics, fmt.Errorf("error creating snapshot: %w", err)
+	}
+	metrics.add("create_snapshot")
+
+	snpashot := struct {
+		ID       string `json:"id"`
+		CameraID string `json:"camera_id"`
+		ImageURL string `json:"image_url"`
+	}{}
+	err = json.Unmarshal(bodyResponse, &snpashot)
+	if err != nil {
+		return metrics, fmt.Errorf("error parsing body: %w", err)
+	}
+	metrics.add("unmarshal_snapshot")
+
+	headers := map[string]string{
+		"Content-Type": "image/png",
+		"Content-MD5":  hash,
+	}
+
+	_, err = httpPut(
+		snpashot.ImageURL,
+		headers,
+		bytes.NewReader(img),
+	)
 	if err != nil {
 		return metrics, fmt.Errorf("error sending snapshot: %w", err)
 	}
 	metrics.add("send_snapshot")
+
 	metrics.success = true
 
 	return metrics, nil
@@ -80,18 +130,14 @@ func getCameras(agentURL string, cameraURL string, accessToken *AccessToken) ([]
 
 	for index, camera := range cameras {
 		cameras[index].accessToken = accessToken
-		cameras[index].snapshotURL = fmt.Sprintf("%s/%s/snapshot", cameraURL, camera.ID)
+		cameras[index].snapshotURL = fmt.Sprintf("%s/%s/snapshots", cameraURL, camera.ID)
 	}
 
 	return cameras, nil
 }
 
 func sendHeartbeat(heartbeatURL string, accessToken *AccessToken, healthy bool) error {
-	rawdata := struct {
-		Healthy bool `json:"healthy"`
-	}{
-		Healthy: healthy,
-	}
+	rawdata := map[string]bool{"healthy": healthy}
 
 	data, err := json.Marshal(rawdata)
 	if err != nil {
