@@ -263,6 +263,7 @@ def predict(cloud_event: dict) -> None:
                 object_id = camera_objects_from_api.get(item["object"], None)
                 label_explanation = item["label_explanation"]
                 label = item["label"]
+                label = label if label is not None else "null"
                 label = str(label).lower()
                 item["label"] = label
                 if object_id is not None:

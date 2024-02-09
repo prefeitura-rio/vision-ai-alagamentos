@@ -13,7 +13,8 @@ WITH parsed_ai_responses AS (
     JSON_EXTRACT_ARRAY(ai_response_parsed) AS ai_response_array
   FROM
     `rj-escritorio-dev.vision_ai.cameras_predicoes`
-  LIMIT 2
+  WHERE data_particao = CURRENT_DATE("America/Sao_Paulo")
+    AND start_datetime >= CAST(DATETIME_SUB(DATETIME(CURRENT_TIMESTAMP(), "America/Sao_Paulo"), INTERVAL 1 MINUTE) AS DATETIME)
 ), unnested_responses AS (
   SELECT
     * EXCEPT (ai_response_array),
