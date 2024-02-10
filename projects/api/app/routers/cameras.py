@@ -104,9 +104,9 @@ async def get_cameras(params: BigParams = Depends(), _=Depends(is_admin)) -> Pag
                 snapshot_url=camera["snapshot_url"],
                 snapshot_timestamp=camera["snapshot_timestamp"],
                 objects=[slug] if slug is not None else [],
-                identifications=[identification_details]
-                if identification_details is not None
-                else [],
+                identifications=(
+                    [identification_details] if identification_details is not None else []
+                ),
             )
 
     return create_page(list(cameras_out.values()), total=await Camera.all().count(), params=params)
@@ -392,6 +392,7 @@ async def camera_snapshot(
 
     os.remove(tmp_fname)
 
+    print("END OF CAMERA SNAPSHOT POST")
     # Publish data to Pub/Sub
     camera_object_ids = [
         str((await item.object).id)
@@ -400,7 +401,11 @@ async def camera_snapshot(
     camera_object_slugs = [
         (await item.object).slug for item in await CameraIdentification.filter(camera=camera).all()
     ]
+    print(f"camera_object_ids: {camera_object_ids}")
+    print(f"camera_object_slugs: {camera_object_slugs}")
+
     if len(camera_object_slugs):
+        print("Start of Publishing to Pub/Sub")
         prompts = await get_prompts_best_fit(object_slugs=camera_object_slugs)
         prompt = prompts[0]  # TODO: generalize this
         formatted_text = await get_prompt_formatted_text(
@@ -419,5 +424,6 @@ async def camera_snapshot(
             "top_p": prompt.top_p,
         }
         publish_message(data=message)
+        print("End of Publishing to Pub/Sub")
 
     return SnapshotPostResponse(error=False, message="OK")
