@@ -129,13 +129,13 @@ jobs:
 
       - name: Google Auth
         id: auth
-        uses: 'google-github-actions/auth@v0'
+        uses: 'google-github-actions/auth@v2'
         with:
           credentials_json: '${{ env.GCP_SA_KEY }}'
 
       - name: Deploy to Google Cloud Run (Production)
         if: github.ref == 'refs/heads/main'
-        uses: google-github-actions/deploy-cloudrun@v1
+        uses: google-github-actions/deploy-cloudrun@v2
         with:
           service: ${{ env.GCR_SERVICE }}-production
           region: ${{ env.GCR_REGION }}
@@ -148,7 +148,7 @@ jobs:
 
       - name: Deploy to Google Cloud Run (Staging)
         if: github.ref == 'refs/heads/development'
-        uses: google-github-actions/deploy-cloudrun@v1
+        uses: google-github-actions/deploy-cloudrun@v2
         with:
           service: ${{ env.GCR_SERVICE }}-staging
           region: ${{ env.GCR_REGION }}
