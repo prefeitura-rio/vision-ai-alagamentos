@@ -188,6 +188,7 @@ def save_data_in_sheets(
         google_sheet_credential_env_name: str
 
     """
+
     if not save_data:
         return None
 

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # pip install google-cloud-pubsub
 # pip install google-auth
+import base64
 import json
 from typing import Dict, Optional
 
@@ -37,5 +38,22 @@ def publish_message(data: Dict[str, str], secret_path: Optional[str] = None) -> 
     return future.result()
 
 
-data = {"camera_id": "000005"}
+data = {
+    "camera_id": "000398",
+    "image_url": "str",
+    "prompt_text": "str",
+    "object_ids": "str",
+    "object_slugs": "str",
+    "model": "gemini-pro-vision",
+    "max_output_tokens": 2000,
+    "temperature": 0.1,
+    "top_k": 32,
+    "top_p": 1,
+}
+
+
+data_b64 = base64.b64encode(json.dumps(data).encode())
+data_bytes = base64.b64decode(data_b64)
+data = json.loads(data_bytes.decode("utf-8"))
+
 publish_message(data=data)

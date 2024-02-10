@@ -1,3 +1,9 @@
+[tool.flake8]
+max-line-length = 100
+exclude = [".git", "__pycache__", "dist"]
+extend-ignore = ["E501"]
+max-complexity = 10
+
 [tool.black]
 line-length = 100
 target-version = ["py311"]
