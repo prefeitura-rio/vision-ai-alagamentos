@@ -24,7 +24,7 @@ class APIVisionAI:
             return {"Authorization": f"Bearer {token}"}, time.time()
         else:
             print(
-                f"Status code: {access_token_response.status_code}\nResponse:{access_token_response.content}"  # noqa
+                f"Status code: {access_token_response.status_code}\nResponse:{access_token_response.content}"
             )
             raise Exception()
 
@@ -290,7 +290,7 @@ class APIVisionAI:
 
             elif response.status_code == 422:
                 print(
-                    f"Label '{label_slug}': Validation error when associating object'{object_slug}'.\nStatus Code: {response.status_code}\nError: {response.json()}"
+                    f"Label '{label_slug}': Validation error when associating object'{object_slug}'.\nStatus Code: {response.status_code}\nError: {response.json()}"  # noqa
                 )
                 raise Exception()
 
@@ -324,7 +324,7 @@ class APIVisionAI:
             print(f"Camera {camera_id}: Object' {object_slug}' is already associated.")
         elif response.status_code == 422:
             print(
-                f"Camera {camera_id}: Validation error when associating object' {object_slug}'.\nStatus Code: {response.status_code}\nError: {response.json()}"
+                f"Camera {camera_id}: Validation error when associating object' {object_slug}'.\nStatus Code: {response.status_code}\nError: {response.json()}"  # noqa
             )
             raise Exception()
         else:
