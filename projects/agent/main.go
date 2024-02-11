@@ -24,12 +24,14 @@ func makeSnapshot(cameraAPI CameraAPI) (*metrics, error) {
 	if err != nil {
 		return metrics, fmt.Errorf("error creating new camera from API: %w", err)
 	}
+
 	metrics.add("setup")
 
 	err = camera.start()
 	if err != nil {
 		return metrics, fmt.Errorf("error starting camera stream: %w", err)
 	}
+
 	defer camera.close()
 	metrics.add("start")
 
@@ -37,11 +39,12 @@ func makeSnapshot(cameraAPI CameraAPI) (*metrics, error) {
 	if err != nil {
 		return metrics, fmt.Errorf("error getting frame: %w", err)
 	}
+
 	metrics.add("get_next_frame")
 
 	sum := md5.Sum(img)
 	hash := base64.StdEncoding.EncodeToString(sum[:])
-	contentLength := int(float64(len(img)) * 1.25)
+	contentLength := len(img)
 	bodyData := struct {
 		HashMD5       string `json:"hash_md5"`
 		ContentLength int    `json:"content_length"`
@@ -54,6 +57,7 @@ func makeSnapshot(cameraAPI CameraAPI) (*metrics, error) {
 	if err != nil {
 		return metrics, fmt.Errorf("error creating snapshot body: %w", err)
 	}
+
 	metrics.add("create_snapshot_body")
 
 	bodyResponse, err := httpPost(
@@ -65,6 +69,7 @@ func makeSnapshot(cameraAPI CameraAPI) (*metrics, error) {
 	if err != nil {
 		return metrics, fmt.Errorf("error creating snapshot: %w", err)
 	}
+
 	metrics.add("create_snapshot")
 
 	snapshot := struct {
@@ -72,10 +77,12 @@ func makeSnapshot(cameraAPI CameraAPI) (*metrics, error) {
 		CameraID string `json:"camera_id"`
 		ImageURL string `json:"image_url"`
 	}{}
+
 	err = json.Unmarshal(bodyResponse, &snapshot)
 	if err != nil {
 		return metrics, fmt.Errorf("error parsing body: %w", err)
 	}
+
 	metrics.add("unmarshal_snapshot")
 
 	headers := map[string]string{
@@ -91,13 +98,16 @@ func makeSnapshot(cameraAPI CameraAPI) (*metrics, error) {
 	if err != nil {
 		return metrics, fmt.Errorf("error sending snapshot: %w", err)
 	}
+
 	metrics.add("send_snapshot")
 
 	preditcURL := cameraAPI.snapshotURL + "/" + snapshot.ID + "/predict"
+
 	_, err = httpPost(preditcURL, camera.accessToken, "application/json", nil)
 	if err != nil {
 		return metrics, fmt.Errorf("error creating predictions: %w", err)
 	}
+
 	metrics.add("create_predictions")
 
 	metrics.success = true
@@ -113,9 +123,9 @@ func getCameras(agentURL string, cameraURL string, accessToken *AccessToken) ([]
 		Size  int         `json:"size"`
 		Pages int         `json:"pages"`
 	}
+
 	data := apiData{}
 	cameras := []CameraAPI{}
-
 	url := agentURL + "/cameras"
 
 	err := httpGet(url, accessToken, &data)
@@ -127,6 +137,7 @@ func getCameras(agentURL string, cameraURL string, accessToken *AccessToken) ([]
 
 	for data.Page < data.Pages {
 		url := fmt.Sprintf("%s?page=%d", url, data.Page+1)
+
 		err = httpGet(url, accessToken, &data)
 		if err != nil {
 			return nil, fmt.Errorf("error getting cameras: %w", err)
@@ -158,6 +169,7 @@ func sendHeartbeat(heartbeatURL string, accessToken *AccessToken, healthy bool) 
 
 func main() {
 	log.Println("Initializing server")
+
 	go func() {
 		log.Println(http.ListenAndServe(":6060", nil))
 	}()
@@ -183,8 +195,7 @@ func main() {
 		time.Sleep(time.Second)
 	}
 
-	parallelSnapshots := int32(30)
-	cameras := newCamerasByUpdateInterval(int(parallelSnapshots))
+	cameras := newCamerasByUpdateInterval(config.parallelSnapshots)
 	ctxCameras, cancelCameras := context.WithCancel(context.Background())
 
 	defer func() {
@@ -200,7 +211,7 @@ func main() {
 		panic(fmt.Errorf("error starting queue: %w", err))
 	}
 
-	err = cameras.ConsumeQueue(ctxCameras, parallelSnapshots, makeSnapshot)
+	err = cameras.ConsumeQueue(ctxCameras, config.parallelSnapshots, makeSnapshot)
 	if err != nil {
 		panic(fmt.Errorf("error consuming queue: %w", err))
 	}
