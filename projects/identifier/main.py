@@ -14,6 +14,7 @@ import vertexai
 from google.cloud import bigquery, secretmanager
 from langchain.output_parsers import PydanticOutputParser
 from pydantic import BaseModel
+from vertexai.preview import generative_models
 from vertexai.preview.generative_models import GenerativeModel, Part
 
 PROJECT_ID = "rj-escritorio-dev"
@@ -22,6 +23,15 @@ VERSION_ID = "latest"
 DATASET_ID = "vision_ai"
 TABLE_ID = "cameras_predicoes"
 vertexai.init(project=PROJECT_ID, location=LOCATION)
+
+SAFETY_CONFIG = (
+    {
+        generative_models.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: generative_models.HarmBlockThreshold.BLOCK_NONE,
+        generative_models.HarmCategory.HARM_CATEGORY_HARASSMENT: generative_models.HarmBlockThreshold.BLOCK_NONE,
+        generative_models.HarmCategory.HARM_CATEGORY_HATE_SPEECH: generative_models.HarmBlockThreshold.BLOCK_NONE,
+        generative_models.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: generative_models.HarmBlockThreshold.BLOCK_NONE,
+    },
+)
 
 
 def get_datetime() -> str:
@@ -169,6 +179,7 @@ def get_prediction(
                 "top_k": top_k,
                 "top_p": top_p,
             },
+            safety_settings=SAFETY_CONFIG,
         )
 
         ai_response = responses.text
