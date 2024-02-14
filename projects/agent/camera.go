@@ -400,6 +400,9 @@ func (c *cameraPool) StartQueue(ctx context.Context) error {
 			defer c.wgStart.Done()
 
 			interval := time.Duration(updateInterval) * time.Second
+			ticker := time.NewTicker(interval)
+
+			defer ticker.Stop()
 
 			for {
 				log.Printf("send %d seconds cameras to the queue", updateInterval)
@@ -416,7 +419,7 @@ func (c *cameraPool) StartQueue(ctx context.Context) error {
 				select {
 				case <-c.ctxStart.Done():
 					return
-				case <-time.Tick(interval):
+				case <-ticker.C:
 					continue
 				}
 			}
