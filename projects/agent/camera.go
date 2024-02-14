@@ -277,7 +277,7 @@ func (camera *Camera) close() {
 }
 
 //nolint:containedctx
-type camerasByUpdateInterval struct {
+type cameraPool struct {
 	ids                []string
 	cameras            map[int][]CameraAPI
 	intervals          []int
@@ -294,11 +294,11 @@ type camerasByUpdateInterval struct {
 	metricsAggregation *metricsAggregation
 }
 
-func newCamerasByUpdateInterval(queueBuffer int) *camerasByUpdateInterval {
+func newCameraPool(queueBuffer int) *cameraPool {
 	ctxStart, cancelStart := context.WithCancel(context.Background())
 	ctxConsume, cancelConsume := context.WithCancel(context.Background())
 
-	return &camerasByUpdateInterval{
+	return &cameraPool{
 		ids:                []string{},
 		cameras:            map[int][]CameraAPI{},
 		intervals:          []int{},
@@ -316,7 +316,7 @@ func newCamerasByUpdateInterval(queueBuffer int) *camerasByUpdateInterval {
 	}
 }
 
-func (c *camerasByUpdateInterval) Replace(cameras []CameraAPI) {
+func (c *cameraPool) Replace(cameras []CameraAPI) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -341,7 +341,7 @@ func (c *camerasByUpdateInterval) Replace(cameras []CameraAPI) {
 	}
 }
 
-func (c *camerasByUpdateInterval) Equals(camerasAPI []CameraAPI) bool {
+func (c *cameraPool) Equals(camerasAPI []CameraAPI) bool {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 
@@ -375,14 +375,14 @@ func (c *camerasByUpdateInterval) Equals(camerasAPI []CameraAPI) bool {
 	return len(ids) == len(c.ids)
 }
 
-func (c *camerasByUpdateInterval) Len() int {
+func (c *cameraPool) Len() int {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 
 	return len(c.ids)
 }
 
-func (c *camerasByUpdateInterval) StartQueue(ctx context.Context) error {
+func (c *cameraPool) StartQueue(ctx context.Context) error {
 	if !c.startedQueue.CompareAndSwap(false, true) {
 		return errQueueStart
 	}
@@ -425,19 +425,19 @@ func (c *camerasByUpdateInterval) StartQueue(ctx context.Context) error {
 	return nil
 }
 
-func (c *camerasByUpdateInterval) StopQueue() {
+func (c *cameraPool) StopQueue() {
 	c.cancelStart()
 	c.wgStart.Wait()
 	c.startedQueue.Store(false)
 }
 
-func (c *camerasByUpdateInterval) RestartQueue(ctx context.Context) error {
+func (c *cameraPool) RestartQueue(ctx context.Context) error {
 	c.StopQueue()
 
 	return c.StartQueue(ctx)
 }
 
-func (c *camerasByUpdateInterval) ConsumeQueue(
+func (c *cameraPool) ConsumeQueue(
 	ctx context.Context,
 	maxConcurrency int,
 	run func(CameraAPI) (*metrics, error),
@@ -524,7 +524,7 @@ func (c *camerasByUpdateInterval) ConsumeQueue(
 	return nil
 }
 
-func (c *camerasByUpdateInterval) StopConsume() {
+func (c *cameraPool) StopConsume() {
 	c.cancelConsume()
 	c.wgConsume.Wait()
 	c.consumingQueue.Store(false)

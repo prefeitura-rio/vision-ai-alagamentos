@@ -196,7 +196,7 @@ func main() {
 		time.Sleep(time.Second)
 	}
 
-	cameras := newCamerasByUpdateInterval(config.parallelSnapshots)
+	cameras := newCameraPool(config.parallelSnapshots)
 	ctxCameras, cancelCameras := context.WithCancel(context.Background())
 
 	defer func() {
