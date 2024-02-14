@@ -4,13 +4,12 @@ from datetime import datetime
 from os import getenv
 
 import pytest
-from httpx import AsyncClient
-from loguru import logger
-from tortoise import Tortoise
-
 from app.db import TORTOISE_ORM
 from app.main import app
 from app.models import Agent, Camera, Identification, Label, Object, Prompt, Snapshot
+from httpx import AsyncClient
+from loguru import logger
+from tortoise import Tortoise
 
 
 @pytest.fixture(scope="session")

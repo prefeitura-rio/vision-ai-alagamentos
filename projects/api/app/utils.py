@@ -10,6 +10,8 @@ from typing import Any, Callable
 from uuid import uuid4
 
 import nest_asyncio
+from app import config
+from app.models import Label, Object, Prompt
 from fastapi import HTTPException, status
 from google.cloud import pubsub, storage
 from google.cloud.storage.blob import Blob
@@ -18,9 +20,6 @@ from PIL import Image
 from pydantic import BaseModel
 from tortoise.models import Model
 from vision_ai.base.shared_models import Output, OutputFactory
-
-from app import config
-from app.models import Label, Object, Prompt
 
 
 def _to_task(future, as_task, loop):
