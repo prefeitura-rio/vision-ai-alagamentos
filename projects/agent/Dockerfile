@@ -1,4 +1,4 @@
-FROM golang:1.21-bookworm AS builder
+FROM golang:1.22-bookworm AS builder
 WORKDIR /usr/src/app
 
 RUN apt update

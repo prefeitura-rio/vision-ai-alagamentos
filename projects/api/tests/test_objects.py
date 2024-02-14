@@ -18,10 +18,14 @@ async def test_objects_get(client: AsyncClient, authorization_header: dict) -> N
         assert "id" in item
         assert "name" in item
         assert "slug" in item
+        assert "title" in item
+        assert "explanation" in item
         assert "labels" in item
         assert isinstance(item["id"], str)
         assert isinstance(item["name"], str)
         assert isinstance(item["slug"], str)
+        assert isinstance(item["title"], str)
+        assert isinstance(item["explanation"], str)
         assert isinstance(item["labels"], list)
         for label in item["labels"]:
             assert "id" in label
@@ -46,19 +50,32 @@ async def test_objects_create(
     response = await client.post(
         "/objects",
         headers=authorization_header,
-        json={"name": "Test Object", "slug": "test-object"},
+        json={
+            "name": "Test Object",
+            "slug": "test-object",
+            "title": "Tittle Test",
+            "explanation": "Explaning tittle test",
+        },
     )
     assert response.status_code == 200
     assert "id" in response.json()
     assert "name" in response.json()
     assert "slug" in response.json()
+    assert "title" in response.json()
+    assert "explanation" in response.json()
     assert isinstance(response.json()["id"], str)
     assert isinstance(response.json()["name"], str)
     assert isinstance(response.json()["slug"], str)
+    assert isinstance(response.json()["title"], str)
+    assert isinstance(response.json()["explanation"], str)
     assert response.json()["name"] == "Test Object"
     assert response.json()["slug"] == "test-object"
+    assert response.json()["title"] == "Tittle Test"
+    assert response.json()["explanation"] == "Explaning tittle test"
     context["test_object_id"] = response.json()["id"]
     context["test_object_slug"] = response.json()["slug"]
+    context["test_object_title"] = response.json()["title"]
+    context["test_object_explanation"] = response.json()["explanation"]
 
 
 @pytest.mark.anyio
@@ -229,6 +246,10 @@ async def test_objects_delete(
     assert "id" in response.json()
     assert "name" in response.json()
     assert "slug" in response.json()
+    assert "title" in response.json()
+    assert "explanation" in response.json()
     assert isinstance(response.json()["id"], str)
     assert isinstance(response.json()["name"], str)
     assert isinstance(response.json()["slug"], str)
+    assert isinstance(response.json()["title"], str)
+    assert isinstance(response.json()["explanation"], str)

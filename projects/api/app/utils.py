@@ -5,10 +5,13 @@ import inspect
 import io
 import json
 from asyncio import Task
-from typing import Any, Callable, Dict, List, Tuple, Union
+from datetime import datetime
+from typing import Any, Callable
 from uuid import uuid4
 
 import nest_asyncio
+from app import config
+from app.models import Label, Object, Prompt
 from fastapi import HTTPException, status
 from google.cloud import pubsub, storage
 from google.cloud.storage.blob import Blob
@@ -18,9 +21,6 @@ from pydantic import BaseModel
 from tortoise.models import Model
 from vision_ai.base.shared_models import Output, OutputFactory
 
-from app import config
-from app.models import Label, Object, Prompt
-
 
 def _to_task(future, as_task, loop):
     if not as_task or isinstance(future, Task):
@@ -28,7 +28,7 @@ def _to_task(future, as_task, loop):
     return loop.create_task(future)
 
 
-def apply_to_list(lst: List[Any], fn: Callable) -> List[Any]:
+def apply_to_list(lst: list[Any], fn: Callable) -> list[Any]:
     """
     Applies a function to a whole list and returns the result.
     """
@@ -113,7 +113,7 @@ def fn_is_async(fn: Callable) -> bool:
     return inspect.iscoroutinefunction(fn) or inspect.isasyncgenfunction(fn)
 
 
-def generate_blob_path(camera_id: str) -> str:
+def generate_blob_path(camera_id: str, snapshot_id: str = str(uuid4)) -> str:
     """
     Generates a blob path for a camera snapshot.
 
@@ -123,7 +123,8 @@ def generate_blob_path(camera_id: str) -> str:
     Returns:
         str: The blob path.
     """
-    return f"{config.GCS_BUCKET_PATH_PREFIX}/{camera_id}.png"
+    path_data = datetime.now().strftime("ano=%Y/mes=%m/dia=%d")
+    return f"{config.GCS_BUCKET_PATH_PREFIX}/{path_data}/camera_id={camera_id}/{snapshot_id}.png"
 
 
 def get_camera_snapshot_blob_url(*, camera_id: str) -> str:
@@ -145,7 +146,7 @@ def get_camera_snapshot_blob_url(*, camera_id: str) -> str:
 
 
 def get_gcp_credentials(
-    scopes: List[str] = None,
+    scopes: list[str] = None,
 ) -> service_account.Credentials:
     """
     Gets credentials from env vars
@@ -174,7 +175,7 @@ def get_gcs_client() -> storage.Client:
     return storage.Client(credentials=credentials)
 
 
-async def get_objects_table(objects: List[Object]) -> str:
+async def get_objects_table(objects: list[Object]) -> str:
     """
     Fetches all `Label` objects for the provided `objects` and return
     a markdown table with the following format:
@@ -184,7 +185,7 @@ async def get_objects_table(objects: List[Object]) -> str:
     | ...    | ...      | ...                  | ...   |
 
     Args:
-        objects (List[Object]): The objects to fetch.
+        objects (list[Object]): The objects to fetch.
 
     Returns:
         str: The markdown table.
@@ -207,19 +208,19 @@ async def get_objects_table(objects: List[Object]) -> str:
     return header + rows
 
 
-def get_output_schema_and_sample() -> Tuple[str, str]:
+def get_output_schema_and_sample() -> tuple[str, str]:
     """
     Gets the output schema and sample for the vision AI model.
 
     Returns:
-        Tuple[str, str]: The output schema and sample.
+        tuple[str, str]: The output schema and sample.
     """
     output_schema = Output.schema_json(indent=4)
     output_sample = json.dumps(OutputFactory.generate_sample().dict(), indent=4)
     return output_schema, output_sample
 
 
-async def get_prompt_formatted_text(prompt: Prompt, object_slugs: List[str]) -> str:
+async def get_prompt_formatted_text(prompt: Prompt, object_slugs: list[str]) -> str:
     """
     Gets the full text of a prompt.
 
@@ -247,18 +248,18 @@ async def get_prompt_formatted_text(prompt: Prompt, object_slugs: List[str]) -> 
     return template
 
 
-async def get_prompts_best_fit(object_slugs: List[str]) -> List[Prompt]:
+async def get_prompts_best_fit(object_slugs: list[str]) -> list[Prompt]:
     """
     Gets the best fit prompts for a list of objects.
 
     Args:
-        object_slugs (List[str]): The slugs for the objects.
+        object_slugs (list[str]): The slugs for the objects.
 
     Returns:
-        List[Prompt]: The best fit prompts.
+        list[Prompt]: The best fit prompts.
     """
-    prompts: List[Prompt] = []
-    objects: List[Object] = []
+    prompts: list[Prompt] = []
+    objects: list[Object] = []
     for object_slug in object_slugs:
         object_ = await Object.get_or_none(slug=object_slug)
         if object_ is None:
@@ -274,8 +275,8 @@ async def get_prompts_best_fit(object_slugs: List[str]) -> List[Prompt]:
     # Sort prompts by score
     prompt_scores = sorted(prompt_scores.items(), key=lambda x: x[1], reverse=True)
     # Start a final list of prompts
-    final_prompts: List[Prompt] = []
-    covered_objects: List[Object] = []
+    final_prompts: list[Prompt] = []
+    covered_objects: list[Object] = []
     # For each prompt, add it to the final list if its objects are not already covered
     for prompt_id, _ in prompt_scores:
         prompt = await Prompt.get_or_none(id=prompt_id)
@@ -303,7 +304,7 @@ def get_pubsub_client() -> pubsub.PublisherClient:
 
 def publish_message(
     *,
-    data: Dict[str, str],
+    data: dict[str, str],
     project_id: str = config.GCP_PUBSUB_PROJECT_ID,
     topic: str = config.GCP_PUBSUB_TOPIC_NAME,
 ):
@@ -311,13 +312,13 @@ def publish_message(
     Publishes a message to a PubSub topic.
 
     Args:
-        data (Dict[str, str]): The data to publish.
+        data (dict[str, str]): The data to publish.
         project_id (str): The project id.
         topic (str): The topic name.
     """
     client = get_pubsub_client()
     topic_name = f"projects/{project_id}/topics/{topic}"
-    byte_data = json.dumps(data).encode("utf-8")
+    byte_data = json.dumps(data, default=str).encode("utf-8")
     future = client.publish(topic_name, byte_data)
     return future.result()
 
@@ -338,7 +339,7 @@ def slugify(text: str) -> str:
 def transform_tortoise_to_pydantic(
     tortoise_model: Model,
     pydantic_model: BaseModel,
-    vars_map: List[Tuple[str, Union[str, Tuple[str, Callable]]]],
+    vars_map: list[tuple[str, str | tuple[str, Callable]]],
 ) -> BaseModel:
     """
     Transform a Tortoise ORM model to a Pydantic model using a variable mapping.
@@ -346,7 +347,7 @@ def transform_tortoise_to_pydantic(
     Args:
         tortoise_model (Model): The Tortoise ORM model to transform.
         pydantic_model (BaseModel): The Pydantic model to transform into.
-        vars_map (Dict[str, str]): A dictionary mapping Tortoise ORM variable names
+        vars_map (dict[str, str]): A dictionary mapping Tortoise ORM variable names
                                    to Pydantic variable names.
 
     Returns:

@@ -1,17 +1,13 @@
 # -*- coding: utf-8 -*-
 from functools import partial
-from typing import Annotated, List
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi_pagination import Page
-from fastapi_pagination.ext.tortoise import paginate as tortoise_paginate
-from tortoise.fields import ReverseRelation
-
 from app.dependencies import get_caller, is_admin
-from app.models import Label, Object
+from app.models import Camera, Label, Object
 from app.pydantic_models import (
     APICaller,
+    CameraOut,
     LabelIn,
     LabelOut,
     LabelUpdate,
@@ -19,6 +15,10 @@ from app.pydantic_models import (
     ObjectOut,
 )
 from app.utils import apply_to_list, transform_tortoise_to_pydantic
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi_pagination import Page
+from fastapi_pagination.ext.tortoise import paginate as tortoise_paginate
+from tortoise.fields import ReverseRelation
 
 router = APIRouter(prefix="/objects", tags=["Objects"])
 
@@ -29,8 +29,8 @@ async def get_objects(
 ) -> Page[ObjectOut]:
     """Get a list of all objects."""
 
-    async def get_labels(labels_relation: ReverseRelation) -> List[LabelOut]:
-        labels: List[Label] = await labels_relation.all()
+    async def get_labels(labels_relation: ReverseRelation) -> list[LabelOut]:
+        labels: list[Label] = await labels_relation.all()
         return [
             LabelOut(
                 id=label.id,
@@ -52,6 +52,8 @@ async def get_objects(
                     ("id", "id"),
                     ("name", "name"),
                     ("slug", "slug"),
+                    ("title", "title"),
+                    ("explanation", "explanation"),
                     ("labels", ("labels", get_labels)),
                 ],
             ),
@@ -70,15 +72,9 @@ async def create_object(
         id=object.id,
         name=object.name,
         slug=object.slug,
-        labels=[
-            LabelOut(
-                id=label.id,
-                value=label.value,
-                criteria=label.criteria,
-                identification_guide=label.identification_guide,
-            )
-            for label in await object.labels.all()
-        ],
+        title=object.title,
+        explanation=object.explanation,
+        labels=[],
     )
 
 
@@ -99,6 +95,8 @@ async def delete_object(
         id=object.id,
         name=object.name,
         slug=object.slug,
+        title=object.title,
+        explanation=object.explanation,
         labels=[
             LabelOut(
                 id=label.id,
@@ -155,9 +153,9 @@ async def add_label_to_object(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Object not found",
         )
-    label = await Label.create(object=object, **label.dict())
+    label_raw = await Label.create(object=object, **label.dict())
     return LabelOut(
-        id=label.id,
+        id=label_raw.id,
         value=label.value,
         criteria=label.criteria,
         identification_guide=label.identification_guide,
@@ -242,4 +240,34 @@ async def delete_object_label(
         value=label_obj.value,
         criteria=label_obj.criteria,
         identification_guide=label_obj.identification_guide,
+    )
+
+
+@router.post("/{object_id}/cameras/{camera_id}", response_model=CameraOut)
+async def add_camera_to_object(
+    object_id: UUID,
+    camera_id: str,
+    _=Depends(is_admin),
+) -> CameraOut:
+    """Add a camera to an object."""
+    object = await Object.get_or_none(id=object_id)
+    if object is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Object not found",
+        )
+    camera = await Camera.get_or_none(id=camera_id)
+    if not camera:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Camera not found",
+        )
+    await object.cameras.add(camera)
+    return CameraOut(
+        id=camera.id,
+        name=camera.name,
+        rtsp_url=camera.rtsp_url,
+        update_interval=camera.update_interval,
+        latitude=camera.latitude,
+        longitude=camera.longitude,
     )

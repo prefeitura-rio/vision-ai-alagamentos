@@ -19,7 +19,7 @@ type AccessToken struct {
 }
 
 func NewAccessToken(credentials OIDCClientCredentials, autoRenew bool) *AccessToken {
-	at := &AccessToken{
+	token := &AccessToken{
 		accessToken: "",
 		tokenType:   "",
 		interval:    time.Second,
@@ -28,15 +28,16 @@ func NewAccessToken(credentials OIDCClientCredentials, autoRenew bool) *AccessTo
 	}
 
 	if autoRenew {
-		go at.autoRenew()
+		go token.autoRenew()
 	}
 
-	return at
+	return token
 }
 
 func (at *AccessToken) GetHeader() string {
 	at.m.RLock()
 	defer at.m.RUnlock()
+
 	return at.tokenType + " " + at.accessToken
 }
 
@@ -71,14 +72,15 @@ func (at *AccessToken) Renew() error {
 		TokenType   string `json:"token_type"`
 		ExpiresIn   int    `json:"expires_in"`
 	}{}
-	err = json.Unmarshal([]byte(body), &accessToken)
+
+	err = json.Unmarshal(body, &accessToken)
 	if err != nil {
 		return fmt.Errorf("error parsing body: %w", err)
 	}
 
 	at.m.Lock()
 	at.accessToken = accessToken.AccessToken
-	at.interval = time.Duration(accessToken.ExpiresIn) * time.Second * 8 / 10
+	at.interval = time.Duration(accessToken.ExpiresIn) * time.Second * 9 / 10 //nolint:gomnd
 	at.tokenType = accessToken.TokenType
 	at.m.Unlock()
 
@@ -97,6 +99,7 @@ func (at *AccessToken) autoRenew() {
 		} else {
 			ticker.Reset(at.interval)
 		}
+
 		<-ticker.C
 	}
 }

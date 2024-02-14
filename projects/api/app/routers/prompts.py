@@ -1,12 +1,7 @@
 # -*- coding: utf-8 -*-
 from functools import partial
-from typing import Annotated, List
+from typing import Annotated
 from uuid import UUID
-
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi_pagination import Page
-from fastapi_pagination.ext.tortoise import paginate as tortoise_paginate
-from tortoise.fields import ReverseRelation
 
 from app.dependencies import get_caller, is_admin
 from app.models import Object, Prompt
@@ -14,10 +9,10 @@ from app.pydantic_models import (
     APICaller,
     LabelOut,
     ObjectOut,
+    ObjectsSlugIn,
     PromptIn,
     PromptOut,
-    PromptsRequest,
-    PromptsResponse,
+    PromptsOut,
 )
 from app.utils import (
     apply_to_list,
@@ -25,6 +20,10 @@ from app.utils import (
     get_prompts_best_fit,
     transform_tortoise_to_pydantic,
 )
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi_pagination import Page
+from fastapi_pagination.ext.tortoise import paginate as tortoise_paginate
+from tortoise.fields import ReverseRelation
 
 router = APIRouter(prefix="/prompts", tags=["Prompts"])
 
@@ -35,8 +34,8 @@ async def get_prompts(
 ) -> Page[PromptOut]:
     """Get a list of all prompts."""
 
-    async def get_objects(objects_relation: ReverseRelation) -> List[str]:
-        objects: List[Object] = await objects_relation.all()
+    async def get_objects(objects_relation: ReverseRelation) -> list[str]:
+        objects: list[Object] = await objects_relation.all()
         return [object_.slug for object_ in objects]
 
     return await tortoise_paginate(
@@ -69,7 +68,7 @@ async def create_prompt(
 ) -> PromptOut:
     """Add a new prompt."""
     prompt = await Prompt.create(**prompt_.dict())
-    objects: List[str] = []
+    objects: list[str] = []
     for object_ in await prompt.objects.all():
         objects.append(object_.slug)
     return PromptOut(
@@ -94,7 +93,7 @@ async def get_prompt(
     prompt = await Prompt.get_or_none(id=prompt_id)
     if prompt is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prompt not found")
-    objects: List[str] = []
+    objects: list[str] = []
     for object_ in await prompt.objects.all():
         objects.append(object_.slug)
     return PromptOut(
@@ -121,7 +120,7 @@ async def update_prompt(
     if prompt is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prompt not found")
     await prompt.update_from_dict(prompt_.dict()).save()
-    objects: List[str] = []
+    objects: list[str] = []
     for object_ in await prompt.objects.all():
         objects.append(object_.slug)
     return PromptOut(
@@ -149,11 +148,11 @@ async def delete_prompt(
     await prompt.delete()
 
 
-@router.get("/{prompt_id}/objects", response_model=List[ObjectOut])
+@router.get("/{prompt_id}/objects", response_model=list[ObjectOut])
 async def get_prompt_objects(
     prompt_id: UUID,
     _: Annotated[APICaller, Depends(get_caller)],  # TODO: Review permissions here
-) -> List[ObjectOut]:
+) -> list[ObjectOut]:
     """Get a prompt's objects."""
     prompt = await Prompt.get_or_none(id=prompt_id)
     if prompt is None:
@@ -163,6 +162,8 @@ async def get_prompt_objects(
             id=object_.id,
             name=object_.name,
             slug=object_.slug,
+            title=object_.title,
+            explanation=object_.explanation,
             labels=[
                 LabelOut(
                     id=label.id,
@@ -195,6 +196,8 @@ async def add_prompt_object(
         id=object_.id,
         name=object_.name,
         slug=object_.slug,
+        title=object_.title,
+        explanation=object_.explanation,
         labels=[
             LabelOut(
                 id=label.id,
@@ -223,11 +226,11 @@ async def remove_prompt_object(
     await prompt.objects.remove(object_)
 
 
-@router.post("/best_fit", response_model=PromptsResponse)
+@router.post("/best_fit", response_model=PromptsOut)
 async def get_best_fit_prompts(
-    request: PromptsRequest,
+    request: ObjectsSlugIn,
     _: Annotated[APICaller, Depends(get_caller)],  # TODO: Review permissions here
-) -> PromptsResponse:
+) -> PromptsOut:
     """Get the best fit prompts for a list of objects."""
     object_slugs = request.objects
     prompts = await get_prompts_best_fit(object_slugs=object_slugs)
@@ -254,6 +257,6 @@ async def get_best_fit_prompts(
                 top_p=prompt.top_p,
             )
         )
-    return PromptsResponse(
+    return PromptsOut(
         prompts=ret_prompts,
     )

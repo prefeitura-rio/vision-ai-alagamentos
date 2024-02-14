@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -15,28 +16,33 @@ import (
 	"google.golang.org/api/iterator"
 )
 
+const tickerDuration = 10 * time.Second
+
 func getZones(projectID string) (map[string]string, error) {
 	ctx := context.Background()
-	c, err := compute.NewZonesRESTClient(ctx)
+
+	client, err := compute.NewZonesRESTClient(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("error creating zone client: %s", err)
+		return nil, fmt.Errorf("error creating zone client: %w", err)
 	}
-	defer c.Close()
+	defer client.Close()
 
 	zones := map[string]string{}
-
 	req := &computepb.ListZonesRequest{
 		Project: projectID,
 	}
-	it := c.List(ctx, req)
+	it := client.List(ctx, req)
+
 	for {
 		resp, err := it.Next()
-		if err == iterator.Done {
+		if errors.Is(err, iterator.Done) {
 			break
 		}
+
 		if err != nil {
-			return nil, fmt.Errorf("error getting zone: %s", err)
+			return nil, fmt.Errorf("error getting zone: %w", err)
 		}
+
 		zones[resp.GetSelfLink()] = resp.GetName()
 	}
 
@@ -45,26 +51,25 @@ func getZones(projectID string) (map[string]string, error) {
 
 func resumeInstances(
 	ctx context.Context,
-	wg *sync.WaitGroup,
+	waitGroup *sync.WaitGroup,
 	instanceClient *compute.InstancesClient,
 	zones map[string]string,
 	projectID string,
 ) {
 	filter := "(name eq '.*vision-ai-benchmarking.*') (status eq TERMINATED)"
-
 	reqInstances := &computepb.AggregatedListInstancesRequest{
 		Project: projectID,
 		Filter:  &filter,
 	}
-
 	instances := []*computepb.Instance{}
-
 	it := instanceClient.AggregatedList(ctx, reqInstances)
+
 	for {
 		resp, err := it.Next()
-		if err == iterator.Done {
+		if errors.Is(err, iterator.Done) {
 			break
 		}
+
 		if err != nil {
 			log.Printf("Error getting instances: %s", err)
 		} else {
@@ -74,15 +79,16 @@ func resumeInstances(
 
 	if len(instances) == 0 {
 		log.Println("All instances is running")
+
 		return
 	}
 
-	wg.Add(len(instances))
+	waitGroup.Add(len(instances))
 
 	for _, instance := range instances {
 		instance := instance
 		go func() {
-			defer wg.Done()
+			defer waitGroup.Done()
 			log.Printf("Starting instance: %s", instance.GetName())
 
 			req := &computepb.StartInstanceRequest{
@@ -90,13 +96,15 @@ func resumeInstances(
 				Project:  projectID,
 				Zone:     zones[instance.GetZone()],
 			}
-			op, err := instanceClient.Start(ctx, req)
+
+			operation, err := instanceClient.Start(ctx, req)
 			if err != nil {
 				log.Printf("Error starting instance '%s': %s", instance.GetName(), err)
+
 				return
 			}
 
-			err = op.Wait(ctx)
+			err = operation.Wait(ctx)
 			if err != nil {
 				log.Printf("Error waiting start '%s': %s", instance.GetName(), err)
 			}
@@ -113,6 +121,7 @@ func main() {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
+
 	instancesClient, err := compute.NewInstancesRESTClient(ctx)
 	if err != nil {
 		log.Fatalf("Error creating instance client: %s", err)
@@ -121,24 +130,31 @@ func main() {
 
 	zones, err := getZones(projectID)
 	if err != nil {
-		log.Fatalf("Error getting zones: %s", err)
+		log.Printf("Error getting zones: %s", err)
+
+		defer os.Exit(1)
+
+		return
 	}
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGHUP, syscall.SIGTERM)
 	log.Println("Waiting stop signal")
 
-	ticker := time.NewTicker(10 * time.Second)
-	wg := sync.WaitGroup{}
+	ticker := time.NewTicker(tickerDuration)
+	waitGroup := sync.WaitGroup{}
+
 	for {
-		go resumeInstances(ctx, &wg, instancesClient, zones, projectID)
+		go resumeInstances(ctx, &waitGroup, instancesClient, zones, projectID)
 		select {
 		case <-ticker.C:
-			wg.Wait()
+			waitGroup.Wait()
+
 			continue
 		case <-sig:
 			cancel()
-			wg.Wait()
+			waitGroup.Wait()
+
 			return
 		}
 	}

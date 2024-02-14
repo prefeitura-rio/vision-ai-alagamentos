@@ -12,6 +12,13 @@ import (
 	"time"
 )
 
+var (
+	errGreaterThanZero       = fmt.Errorf("must be greater than zero")
+	errDecryptingKey         = fmt.Errorf("error decrypting key")
+	errInvalidInfisicalToken = fmt.Errorf("invalid infisical token")
+	errEmptyVariables        = fmt.Errorf("empty variables")
+)
+
 type OIDCClientCredentials struct {
 	TokenURL string
 	Username string
@@ -27,10 +34,11 @@ type infisicalConfig struct {
 }
 
 type config struct {
-	apiBaseURL  string
-	agentID     string
-	credentials OIDCClientCredentials
-	heartbeat   time.Duration
+	apiBaseURL        string
+	agentID           string
+	credentials       OIDCClientCredentials
+	heartbeat         time.Duration
+	parallelSnapshots int
 }
 
 func decrypt(key, nonce, tag, cipherText string) (string, error) {
@@ -38,10 +46,12 @@ func decrypt(key, nonce, tag, cipherText string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("error decoding nonce: %w", err)
 	}
+
 	tagb64, err := base64.StdEncoding.DecodeString(tag)
 	if err != nil {
 		return "", fmt.Errorf("error decoding tag: %w", err)
 	}
+
 	cipherTextb64, err := base64.StdEncoding.DecodeString(cipherText)
 	if err != nil {
 		return "", fmt.Errorf("error decoding cipher text: %w", err)
@@ -51,6 +61,7 @@ func decrypt(key, nonce, tag, cipherText string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("error creating cipher block: %w", err)
 	}
+
 	aesgcm, err := cipher.NewGCMWithNonceSize(block, len(nonceb64))
 	if err != nil {
 		return "", fmt.Errorf("error creating cipher: %w", err)
@@ -65,6 +76,7 @@ func decrypt(key, nonce, tag, cipherText string) (string, error) {
 }
 
 func getInfisicalSecrets(config infisicalConfig) (map[string]string, error) {
+	//nolint:tagliatelle
 	type ServiceToken struct {
 		EncryptedKey string `json:"encryptedKey"`
 		IV           string `json:"iv"`
@@ -72,6 +84,7 @@ func getInfisicalSecrets(config infisicalConfig) (map[string]string, error) {
 		WorkspaceID  string `json:"workspace"`
 	}
 
+	//nolint:tagliatelle
 	type SecretRaw struct {
 		SecretKeyCiphertext   string `json:"secretKeyCiphertext"`
 		SecretKeyIV           string `json:"secretKeyIV"`
@@ -107,7 +120,7 @@ func getInfisicalSecrets(config infisicalConfig) (map[string]string, error) {
 		serviceToken.EncryptedKey,
 	)
 	if err != nil {
-		return secrets, fmt.Errorf("error decrypting project key")
+		return secrets, errDecryptingKey
 	}
 
 	secretURL := fmt.Sprintf(
@@ -116,6 +129,7 @@ func getInfisicalSecrets(config infisicalConfig) (map[string]string, error) {
 		config.environment,
 		serviceToken.WorkspaceID,
 	)
+
 	err = httpGet(secretURL, &token, &secretsRaw)
 	if err != nil {
 		return secrets, fmt.Errorf("error getting secrets: %w", err)
@@ -156,6 +170,7 @@ func getConfig() (config, error) {
 		"API_BASE_URL",
 	}
 	emptyEnvs := []string{}
+
 	for _, env := range envNames {
 		if value := os.Getenv(env); value == "" {
 			emptyEnvs = append(emptyEnvs, env)
@@ -164,7 +179,8 @@ func getConfig() (config, error) {
 
 	if len(emptyEnvs) > 0 {
 		return config{}, fmt.Errorf(
-			"The following environment is empty: %s",
+			"environment: %w: %s",
+			errEmptyVariables,
 			strings.Join(emptyEnvs, ", "),
 		)
 	}
@@ -172,8 +188,9 @@ func getConfig() (config, error) {
 	regex := regexp.MustCompile(`^(st\.[a-f0-9]+\.[a-f0-9]+)\.(?P<secret>[a-f0-9]+)$`)
 	match := (regex.FindStringSubmatch(os.Getenv("INFISICAL_TOKEN")))
 	secretIndex := regex.SubexpIndex("secret")
-	if secretIndex != 2 {
-		return config{}, fmt.Errorf("invalid infisical token")
+
+	if secretIndex != 2 { //nolint:gomnd
+		return config{}, errInvalidInfisicalToken
 	}
 
 	infisicalConfig := infisicalConfig{
@@ -185,7 +202,7 @@ func getConfig() (config, error) {
 
 	secrets, err := getInfisicalSecrets(infisicalConfig)
 	if err != nil {
-		return config{}, fmt.Errorf("error geting infisical secrets: %w", err)
+		return config{}, fmt.Errorf("error getting infisical secrets: %w", err)
 	}
 
 	secretsNames := []string{
@@ -205,8 +222,9 @@ func getConfig() (config, error) {
 
 	if len(emptySecrets) > 0 {
 		return config{}, fmt.Errorf(
-			"The following infisical secrets is empty: %s",
-			strings.Join(emptySecrets, ", "),
+			"infisical: %w: %s",
+			errEmptyVariables,
+			strings.Join(emptyEnvs, ", "),
 		)
 	}
 
@@ -214,8 +232,9 @@ func getConfig() (config, error) {
 	if err != nil {
 		return config{}, fmt.Errorf("error convert HEARTBEAT_SECONDS: %w", err)
 	}
+
 	if heartbeatSeconds <= 0 {
-		return config{}, fmt.Errorf("HEARTBEAT_SECONDS must be greater than zero")
+		return config{}, fmt.Errorf("HEARTBEAT_SECONDS %w", errGreaterThanZero)
 	}
 
 	credentials := OIDCClientCredentials{
@@ -226,6 +245,7 @@ func getConfig() (config, error) {
 	}
 
 	accessToken := NewAccessToken(credentials, false)
+
 	err = accessToken.Renew()
 	if err != nil {
 		return config{}, fmt.Errorf("error getting access token: %w", err)
@@ -233,7 +253,7 @@ func getConfig() (config, error) {
 
 	apiBaseURL := os.Getenv("API_BASE_URL")
 	api := struct {
-		AgentID string `json:"id"`
+		ID string `json:"id"`
 	}{}
 
 	err = httpGet(apiBaseURL+"/agents/me", accessToken, &api)
@@ -241,11 +261,22 @@ func getConfig() (config, error) {
 		return config{}, fmt.Errorf("error getting agent ID: %w", err)
 	}
 
-	config := config{
-		apiBaseURL:  apiBaseURL,
-		agentID:     api.AgentID,
-		credentials: credentials,
-		heartbeat:   time.Second * time.Duration(heartbeatSeconds),
+	parallelSnapshots, err := strconv.ParseInt(secrets["PARALLEL_SNAPSHOTS"], 10, 0)
+	if err != nil {
+		return config{}, fmt.Errorf("error convert HEARTBEAT_SECONDS: %w", err)
 	}
+
+	if parallelSnapshots <= 0 {
+		return config{}, fmt.Errorf("PARALLEL_SNAPSHOTS %w", errGreaterThanZero)
+	}
+
+	config := config{
+		apiBaseURL:        apiBaseURL,
+		agentID:           api.ID,
+		credentials:       credentials,
+		heartbeat:         time.Second * time.Duration(heartbeatSeconds),
+		parallelSnapshots: int(parallelSnapshots),
+	}
+
 	return config, nil
 }

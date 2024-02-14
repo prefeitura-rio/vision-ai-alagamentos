@@ -2,11 +2,17 @@ services:
   postgres:
     image: postgres
     restart: unless-stopped
+    command: -c shared_preload_libraries=pg_stat_statements
     environment:
       POSTGRES_PASSWORD: postgres
       POSTGRES_USER: postgres
     volumes:
       - postgres-data:/var/lib/postgresql/data
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1024m
   api:
     build:
       context: ./projects/api
@@ -20,10 +26,15 @@ services:
     healthcheck:
       test: curl -f http://localhost:80/docs
       interval: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1024m
   agent:
     build:
       context: ./projects/agent
-      dockerfile: Dockerfile
+      dockerfile: debug.Dockerfile
     restart: unless-stopped
     env_file: .env
     ports:
@@ -35,16 +46,24 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '4'
+          cpus: '2'
           memory: 2048m
   stream-server:
     image: bluenviron/mediamtx:latest
+    restart: unless-stopped
     ports:
       - 8888:8888
+      - 8554:8554
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1024m
   send-stream:
     build:
       context: ./scripts
       dockerfile: stream.Dockerfile
+    restart: unless-stopped
     environment:
       DATA_PATH: /data
       STREAM_SERVER: stream-server
@@ -52,6 +71,11 @@ services:
       - stream-data:/data
     depends_on:
       - stream-server
+    deploy:
+      resources:
+        limits:
+          cpus: '3'
+          memory: 3072m
 volumes:
   postgres-data:
   stream-data:
