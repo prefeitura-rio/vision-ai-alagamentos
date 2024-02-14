@@ -210,6 +210,8 @@ func getConfig() (config, error) {
 		"OIDC_USERNAME",
 		"OIDC_PASSWORD",
 		"OIDC_CLIENT_ID",
+		"HEARTBEAT_SECONDS",
+		"PARALLEL_SNAPSHOTS",
 	}
 	emptySecrets := []string{}
 
@@ -224,7 +226,7 @@ func getConfig() (config, error) {
 		return config{}, fmt.Errorf(
 			"infisical: %w: %s",
 			errEmptyVariables,
-			strings.Join(emptyEnvs, ", "),
+			strings.Join(emptySecrets, ", "),
 		)
 	}
 
@@ -263,7 +265,7 @@ func getConfig() (config, error) {
 
 	parallelSnapshots, err := strconv.ParseInt(secrets["PARALLEL_SNAPSHOTS"], 10, 0)
 	if err != nil {
-		return config{}, fmt.Errorf("error convert HEARTBEAT_SECONDS: %w", err)
+		return config{}, fmt.Errorf("error convert PARALLEL_SNAPSHOTS: %w", err)
 	}
 
 	if parallelSnapshots <= 0 {
