@@ -172,6 +172,12 @@ func (camera *Camera) getNextFrame() ([]byte, error) {
 
 	camera.client.OnPacketRTPAny(
 		func(media *description.Media, forma format.Format, pkt *rtp.Packet) {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("error getting next frame: %s", r)
+				}
+			}()
+
 			_, ok := camera.client.PacketPTS(media, pkt)
 			if !ok {
 				return
@@ -443,11 +449,11 @@ func (c *camerasByUpdateInterval) ConsumeQueue(
 	ctx, cancel := context.WithCancel(ctx)
 	c.ctxConsume = ctx
 	c.cancelConsume = cancel
-	buffer := 200
-	metricsCh := make(chan *metrics, maxConcurrency*buffer)
+	bufferSize := 200
+	metricsCh := make(chan *metrics, maxConcurrency*bufferSize)
 
 	go func() {
-		allMetrics := make([]*metrics, 0, maxConcurrency*buffer)
+		allMetrics := make([]*metrics, 0, maxConcurrency*bufferSize)
 		ticker := time.NewTicker(time.Minute)
 
 		defer ticker.Stop()
@@ -458,11 +464,16 @@ func (c *camerasByUpdateInterval) ConsumeQueue(
 				buffer := make([]*metrics, len(allMetrics))
 				copy(buffer, allMetrics)
 				clear(allMetrics)
+				allMetrics = allMetrics[:0]
 
-				go c.metricsAggregation.addMetrics(buffer)
+				go func() {
+					c.metricsAggregation.addMetrics(buffer)
+					c.metricsAggregation.printPercentiles()
+				}()
 			case metrics, more := <-metricsCh:
 				if !more {
 					c.metricsAggregation.addMetrics(allMetrics)
+					c.metricsAggregation.printPercentiles()
 
 					return
 				}

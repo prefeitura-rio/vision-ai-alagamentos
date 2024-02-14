@@ -1,7 +1,9 @@
 package main
 
 import (
-	"fmt"
+	"log"
+	"math"
+	"slices"
 	"sync"
 	"time"
 )
@@ -68,52 +70,53 @@ var defaultBucketsTime = [...]time.Duration{
 	210 * time.Second,
 }
 
+const totalLabel = "total"
+
+type metricData struct {
+	label    string
+	duration time.Duration
+}
+
 type metrics struct {
-	data    map[string]time.Time
-	order   []string
-	success bool
+	data         []metricData
+	startTime    time.Time
+	previousTime time.Time
+	currentLabel string
+	success      bool
+	running      bool
+	total        time.Duration
 }
 
 func newMetrics() *metrics {
+	now := time.Now()
 	metrics := &metrics{
-		data:    map[string]time.Time{},
-		order:   []string{},
-		success: false,
+		data:         []metricData{},
+		startTime:    now,
+		previousTime: time.Now(),
+		currentLabel: "init",
+		success:      false,
+		running:      true,
 	}
-	metrics.add("init")
 
 	return metrics
 }
 
 func (metrics *metrics) add(label string) {
-	metrics.data[label] = time.Now()
-	metrics.order = append(metrics.order, label)
+	now := time.Now()
+	key := metrics.currentLabel + "__" + label
+	metrics.data = append(metrics.data, metricData{key, now.Sub(metrics.previousTime)})
+	metrics.previousTime = now
+	metrics.currentLabel = label
 }
 
-func (metrics *metrics) final() {
-	metrics.add("final")
-}
+func (metrics *metrics) stop(success bool) {
+	if metrics.running {
+		metrics.add("final")
 
-func (metrics *metrics) diff(index int) (string, time.Duration) {
-	previous := metrics.order[index-1]
-	current := metrics.order[index]
-	key := fmt.Sprintf("%d__%s__%s", index, previous, current)
-	value := metrics.data[current].Sub(metrics.data[previous])
-
-	return key, value
-}
-
-func (metrics *metrics) total() (string, time.Duration) {
-	if len(metrics.order) == 0 {
-		return "", 0
+		metrics.total = time.Since(metrics.startTime)
+		metrics.running = false
+		metrics.success = success
 	}
-
-	previous := metrics.order[0]
-	current := metrics.order[len(metrics.order)-1]
-	key := fmt.Sprintf("%d__%s__%s", len(metrics.order), previous, current)
-	value := metrics.data[current].Sub(metrics.data[previous])
-
-	return key, value
 }
 
 type errSuccess[T any] struct {
@@ -126,177 +129,174 @@ type metricsAggregation struct {
 	timeProcessing errSuccess[time.Duration]
 	mutexMetrics   *sync.RWMutex
 	bucketsTimes   []time.Duration
-	metrics        errSuccess[map[string]map[time.Duration]uint]
+	metrics        map[string]map[time.Duration]errSuccess[uint]
 }
 
 func newMetricsAggregation() *metricsAggregation {
-	return &metricsAggregation{
+	aggregation := &metricsAggregation{
 		processedItems: errSuccess[uint]{0, 0},
 		timeProcessing: errSuccess[time.Duration]{0, 0},
 		mutexMetrics:   &sync.RWMutex{},
-		metrics: errSuccess[map[string]map[time.Duration]uint]{
-			err:     map[string]map[time.Duration]uint{},
-			success: map[string]map[time.Duration]uint{},
-		},
-		bucketsTimes: defaultBucketsTime[:],
+		metrics:        map[string]map[time.Duration]errSuccess[uint]{},
+		bucketsTimes:   defaultBucketsTime[:],
 	}
+
+	aggregation.createKey(totalLabel)
+
+	return aggregation
 }
 
-func (m *metricsAggregation) findBucket(current time.Duration) time.Duration {
-	for index, bucket := range m.bucketsTimes {
+func (a *metricsAggregation) findBucket(current time.Duration) time.Duration {
+	for index, bucket := range a.bucketsTimes {
 		if bucket >= current {
-			return m.bucketsTimes[max(index-1, 0)]
+			return a.bucketsTimes[max(index-1, 0)]
 		}
 	}
 
-	return m.bucketsTimes[len(m.bucketsTimes)-1]
+	return a.bucketsTimes[len(a.bucketsTimes)-1]
 }
 
-func (m *metricsAggregation) createKey(success bool, key string) {
-	if success {
-		m.metrics.success[key] = map[time.Duration]uint{}
-		for _, bucket := range m.bucketsTimes {
-			m.metrics.success[key][bucket] = 0
-		}
-	} else {
-		m.metrics.err[key] = map[time.Duration]uint{}
-		for _, bucket := range m.bucketsTimes {
-			m.metrics.err[key][bucket] = 0
+func (a *metricsAggregation) createKey(key string) {
+	a.metrics[key] = map[time.Duration]errSuccess[uint]{}
+	for _, bucket := range a.bucketsTimes {
+		a.metrics[key][bucket] = errSuccess[uint]{
+			err:     0,
+			success: 0,
 		}
 	}
 }
 
-func (m *metricsAggregation) addMetrics(allMetrics []*metrics) {
-	m.mutexMetrics.Lock()
-	defer m.mutexMetrics.Unlock()
+func (a *metricsAggregation) addMetrics(allMetrics []*metrics) {
+	for _, rawMetrics := range allMetrics {
+		rawMetrics.stop(true)
+	}
+
+	a.mutexMetrics.Lock()
+	defer a.mutexMetrics.Unlock()
 
 	for _, rawMetrics := range allMetrics {
-		metrics := map[string]time.Duration{}
+		for _, metricData := range rawMetrics.data {
+			key := metricData.label
+			bucket := a.findBucket(metricData.duration)
 
-		for index := 1; index < len(rawMetrics.order); index++ {
-			key, value := rawMetrics.diff(index)
-			metrics[key] = m.findBucket(value)
+			metrics, ok := a.metrics[key]
+			if !ok {
+				a.createKey(key)
+				metrics = a.metrics[key]
+			}
+
+			count := metrics[bucket]
+
+			if rawMetrics.success {
+				count.success++
+			} else {
+				count.err++
+			}
+
+			a.metrics[key][bucket] = count
 		}
 
-		key, value := rawMetrics.total()
-		metrics[key] = m.findBucket(value)
+		totalBucket := a.findBucket(rawMetrics.total)
+		total := a.metrics[totalLabel][totalBucket]
 
 		if rawMetrics.success {
-			m.processedItems.success++
-			m.timeProcessing.success += value
-
-			for key, value := range metrics {
-				if _, ok := m.metrics.success[key]; !ok {
-					m.createKey(rawMetrics.success, key)
-				}
-
-				m.metrics.success[key][value]++
-			}
+			a.processedItems.success++
+			a.timeProcessing.success += rawMetrics.total
+			total.success++
 		} else {
-			m.processedItems.err++
-			m.timeProcessing.err += value
-
-			for key, value := range metrics {
-				if _, ok := m.metrics.err[key]; !ok {
-					m.createKey(rawMetrics.success, key)
-				}
-
-				m.metrics.err[key][value]++
-			}
+			a.processedItems.err++
+			a.timeProcessing.err += rawMetrics.total
+			total.err++
 		}
+
+		a.metrics[totalLabel][totalBucket] = total
 	}
 }
 
-// func (m *metricsAggregation) percentile(
-// 	key string,
-// 	percentile uint,
-// ) (time.Duration, time.Duration) {
-// 	m.mutexMetrics.RLock()
-// 	defer m.mutexMetrics.RUnlock()
+func (a *metricsAggregation) percentile(
+	key string,
+	limit uint,
+) (time.Duration, time.Duration) {
+	a.mutexMetrics.RLock()
+	defer a.mutexMetrics.RUnlock()
 
-// 	ps := (float64(percentile)/100)*(float64(m.processedItems.success)-1) + 1
-// 	pe := (float64(percentile)/100)*(float64(m.processedItems.err)-1) + 1
-// 	psi, psr := math.Modf(ps)
-// 	pei, per := math.Modf(pe)
+	qtSuccess := (float64(limit)/100)*(float64(a.processedItems.success)-1) + 1 //nolint:gomnd
+	qtSuccessInteger, qtSuccessRemainder := math.Modf(qtSuccess)
+	successLow, successHigh := time.Duration(0), time.Duration(0)
+	successCount := uint(0)
 
-// 	psl, psh := time.Duration(0), time.Duration(0)
-// 	pel, peh := time.Duration(0), time.Duration(0)
-// 	st, et := uint(0), uint(0)
+	qtErr := (float64(limit)/100)*(float64(a.processedItems.err)-1) + 1 //nolint:gomnd
+	qtErrInteger, qtErrRemainder := math.Modf(qtErr)
+	errLow, errHigh := time.Duration(0), time.Duration(0)
+	errCount := uint(0)
 
-// 	for index, bucket := range m.bucketsTimes {
-// 		if _, ok := m.metrics.success[key]; ok {
-// 			st += m.metrics.success[key][bucket]
-// 			if float64(st) > psi && psl == 0 {
-// 				if float64(st)-psi > psr {
-// 					psl, psh = bucket, bucket
-// 				} else {
-// 					psl, psh = bucket, m.bucketsTimes[min(index+1, len(m.bucketsTimes)-1)]
-// 				}
-// 			}
-// 		}
+	for index, bucket := range a.bucketsTimes {
+		successCount += a.metrics[key][bucket].success
+		if float64(successCount) > qtSuccessInteger && successLow == 0 {
+			if float64(successCount)-qtSuccessInteger > qtSuccessRemainder {
+				successLow, successHigh = bucket, bucket
+			} else {
+				successLow, successHigh = bucket, a.bucketsTimes[min(index+1, len(a.bucketsTimes)-1)]
+			}
+		}
 
-// 		if _, ok := m.metrics.err[key]; ok {
-// 			et += m.metrics.err[key][bucket]
-// 			if float64(et) > pei && pel == 0 {
-// 				if float64(et)-pei > per {
-// 					pel, peh = bucket, bucket
-// 				} else {
-// 					pel, peh = bucket, m.bucketsTimes[min(index+1, len(m.bucketsTimes)-1)]
-// 				}
-// 			}
-// 		}
+		errCount += a.metrics[key][bucket].err
+		if float64(errCount) > qtErrInteger && errLow == 0 {
+			if float64(errCount)-qtErrInteger > qtErrRemainder {
+				errLow, errHigh = bucket, bucket
+			} else {
+				errLow, errHigh = bucket, a.bucketsTimes[min(index+1, len(a.bucketsTimes)-1)]
+			}
+		}
 
-// 		if psl != 0 && pel != 0 {
-// 			break
-// 		}
-// 	}
+		if successLow != 0 && errLow != 0 {
+			break
+		}
+	}
 
-// 	return psl + time.Duration(psr*float64(psh-psl)), pel + time.Duration(per*float64(peh-pel))
-// }
+	success := successLow + time.Duration(qtSuccessRemainder*float64(successHigh-successLow))
+	err := errLow + time.Duration(qtErrRemainder*float64(errHigh-errLow))
 
-// func (m *metricsAggregation) percentiles(p uint) {
-// 	m.mutexMetrics.RLock()
-// 	defer m.mutexMetrics.RUnlock()
+	return success, err
+}
 
-// 	keys := make([]string, 0, max(len(m.metrics.err), len(m.metrics.success)))
-// 	for key := range m.metrics.success {
-// 		keys = append(keys, key)
-// 	}
+func (a *metricsAggregation) percentiles(limit uint) {
+	a.mutexMetrics.RLock()
+	defer a.mutexMetrics.RUnlock()
 
-// 	for key := range m.metrics.err {
-// 		if !slices.Contains(keys, key) {
-// 			keys = append(keys, key)
-// 		}
-// 	}
+	keys := make([]string, 0, len(a.metrics))
+	for key := range a.metrics {
+		keys = append(keys, key)
+	}
 
-// 	slices.Sort(keys)
+	slices.Sort(keys)
 
-// 	for _, key := range keys {
-// 		psuccess, perr := m.percentile(key, p)
-// 		log.Printf("%s P%d success: %s err: %s", key, p, psuccess, perr)
-// 	}
-// }
+	for _, key := range keys {
+		psuccess, perr := a.percentile(key, limit)
+		log.Printf("%s P%d success: %s err: %s", key, limit, psuccess, perr)
+	}
+}
 
-// func (m *metricsAggregation) printPercentiles() {
-// 	m.mutexMetrics.RLock()
-// 	defer m.mutexMetrics.RUnlock()
+func (a *metricsAggregation) printPercentiles() {
+	a.mutexMetrics.RLock()
+	defer a.mutexMetrics.RUnlock()
 
-// 	m.percentiles(uint(10))
-// 	m.percentiles(uint(25))
-// 	m.percentiles(uint(50))
-// 	m.percentiles(uint(75))
-// 	m.percentiles(uint(95))
-// 	m.percentiles(uint(99))
-// 	log.Println("processed cameras success:", m.processedItems.success)
-// 	log.Printf("time processing success: %.2f", m.timeProcessing.success.Seconds())
-// 	log.Printf(
-// 		"avg time processing success: %.2f",
-// 		m.timeProcessing.success.Seconds()/float64(m.processedItems.success),
-// 	)
-// 	log.Println("processed cameras err:", m.processedItems.err)
-// 	log.Printf("time processing err: %.2f", m.timeProcessing.err.Seconds())
-// 	log.Printf(
-// 		"avg time processing err: %.2f",
-// 		m.timeProcessing.err.Seconds()/float64(m.processedItems.err),
-// 	)
-// }
+	a.percentiles(uint(10)) //nolint:gomnd
+	a.percentiles(uint(25)) //nolint:gomnd
+	a.percentiles(uint(50)) //nolint:gomnd
+	a.percentiles(uint(75)) //nolint:gomnd
+	a.percentiles(uint(95)) //nolint:gomnd
+	a.percentiles(uint(99)) //nolint:gomnd
+	log.Println("processed cameras success:", a.processedItems.success)
+	log.Printf("time processing success: %.2fs", a.timeProcessing.success.Seconds())
+	log.Printf(
+		"avg time processing success: %.2fs",
+		a.timeProcessing.success.Seconds()/float64(a.processedItems.success),
+	)
+	log.Println("processed cameras err:", a.processedItems.err)
+	log.Printf("time processing err: %.2fs", a.timeProcessing.err.Seconds())
+	log.Printf(
+		"avg time processing err: %.2fs",
+		a.timeProcessing.err.Seconds()/float64(a.processedItems.err),
+	)
+}

@@ -18,7 +18,7 @@ import (
 
 func makeSnapshot(cameraAPI CameraAPI) (*metrics, error) {
 	metrics := newMetrics()
-	defer metrics.final()
+	defer metrics.stop(false)
 
 	camera, err := NewCamera(cameraAPI)
 	if err != nil {
@@ -110,7 +110,7 @@ func makeSnapshot(cameraAPI CameraAPI) (*metrics, error) {
 
 	metrics.add("create_predictions")
 
-	metrics.success = true
+	metrics.stop(true)
 
 	return metrics, nil
 }
