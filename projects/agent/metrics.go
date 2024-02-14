@@ -173,7 +173,7 @@ func (m *metricsAggregation) addMetrics(allMetrics []*metrics) {
 	for _, rawMetrics := range allMetrics {
 		metrics := map[string]time.Duration{}
 
-		for index := range len(rawMetrics.order) {
+		for index := 1; index < len(rawMetrics.order); index++ {
 			key, value := rawMetrics.diff(index)
 			metrics[key] = m.findBucket(value)
 		}

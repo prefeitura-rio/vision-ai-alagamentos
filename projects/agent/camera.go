@@ -64,7 +64,7 @@ func NewCamera(api CameraAPI) (*Camera, error) {
 		updateInterval: updateInterval,
 		accessToken:    api.accessToken,
 		client: &gortsplib.Client{
-			ReadTimeout:       updateInterval,
+			ReadTimeout:       updateInterval / 2, //nolint:gomnd
 			OnTransportSwitch: func(_ error) {},
 			OnPacketLost:      func(_ error) {},
 		},
@@ -224,7 +224,7 @@ func (camera *Camera) getNextFrame() ([]byte, error) {
 		return nil, fmt.Errorf("error playing stream: %w", err)
 	}
 
-	tick := time.NewTicker(camera.updateInterval)
+	tick := time.NewTicker(camera.updateInterval / 2) //nolint:gomnd
 	defer tick.Stop()
 
 	select {
@@ -497,7 +497,7 @@ func (c *camerasByUpdateInterval) ConsumeQueue(
 				go func() {
 					metrics, err := run(camera)
 					if err != nil {
-						log.Printf("error running: %s", err)
+						log.Printf("error running camera with ID '%s': %s", camera.ID, err)
 					}
 
 					count.Add(-1)
