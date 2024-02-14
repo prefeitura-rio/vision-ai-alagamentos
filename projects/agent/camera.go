@@ -124,7 +124,7 @@ func (camera *Camera) setDecoders() error {
 
 	for _, frame := range initFrames {
 		if frame != nil {
-			_, err = camera.frameDecoder.decode(frame)
+			err = camera.frameDecoder.decode(frame)
 			if err != nil {
 				return fmt.Errorf("error adding initial frames: %w", err)
 			}
@@ -143,34 +143,34 @@ func (camera *Camera) closeDecoders() {
 	camera.frameDecoder.close()
 }
 
-func (camera *Camera) decodeRTPPacket(_ format.Format, pkt *rtp.Packet) ([]byte, error) {
+func (camera *Camera) decodeRTPPacket(_ format.Format, pkt *rtp.Packet) error {
 	au, err := camera.rtpDecoder.Decode(pkt)
 	if err != nil {
-		return nil, fmt.Errorf("error decoding rtp: %w", err)
+		return fmt.Errorf("error decoding rtp: %w", err)
 	}
 
 	for _, nalu := range au {
-		img, err := camera.frameDecoder.decode(nalu)
+		err := camera.frameDecoder.decode(nalu)
 		if err != nil {
-			return nil, fmt.Errorf("error decoding frame: %w", err)
+			return fmt.Errorf("error decoding frame: %w", err)
 		}
 
-		if img == nil {
+		if camera.frameDecoder.imageIsEmpty() {
 			continue
 		}
 
-		return img, nil
+		return nil
 	}
 
-	return nil, errAllFrameEmpty
+	return errAllFrameEmpty
 }
 
 func (camera *Camera) getNextFrame() ([]byte, error) {
-	imgch := make(chan []byte)
+	finish := make(chan bool)
 	decoded := false
 	mutex := sync.Mutex{}
 
-	defer close(imgch)
+	defer close(finish)
 
 	camera.client.OnPacketRTPAny(
 		func(media *description.Media, forma format.Format, pkt *rtp.Packet) {
@@ -204,7 +204,7 @@ func (camera *Camera) getNextFrame() ([]byte, error) {
 				return
 			}
 
-			img, err := camera.decodeRTPPacket(forma, pkt)
+			err := camera.decodeRTPPacket(forma, pkt)
 			if err != nil {
 				for _, validErr := range validErrs {
 					if errors.Is(err, validErr) {
@@ -220,13 +220,14 @@ func (camera *Camera) getNextFrame() ([]byte, error) {
 
 				log.Printf("error deconding package: %s", err)
 			} else {
-				imgch <- img
-
 				decoded = true
+				finish <- true
 			}
 		},
 	)
-	defer camera.client.OnPacketRTPAny(func(_ *description.Media, _ format.Format, _ *rtp.Packet) {})
+	defer camera.client.OnPacketRTPAny(
+		func(_ *description.Media, _ format.Format, _ *rtp.Packet) {},
+	)
 
 	_, err := camera.client.Play(nil)
 	if err != nil {
@@ -246,8 +247,8 @@ func (camera *Camera) getNextFrame() ([]byte, error) {
 	select {
 	case <-tick.C:
 		return nil, ErrGetFrameTimeout
-	case img := <-imgch:
-		return img, nil
+	case <-finish:
+		return camera.frameDecoder.image(), nil
 	}
 }
 
