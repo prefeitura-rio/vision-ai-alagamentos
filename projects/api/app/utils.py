@@ -319,7 +319,7 @@ def publish_message(
     """
     client = get_pubsub_client()
     topic_name = f"projects/{project_id}/topics/{topic}"
-    byte_data = json.dumps(data).encode("utf-8")
+    byte_data = json.dumps(data, default=str).encode("utf-8")
     future = client.publish(topic_name, byte_data)
     return future.result()
 

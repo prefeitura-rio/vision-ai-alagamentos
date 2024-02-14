@@ -4,6 +4,8 @@ from typing import Annotated
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
 from fastapi_pagination import Page, Params
 from fastapi_pagination.api import create_page
 from tortoise.expressions import Q
@@ -309,16 +311,16 @@ async def predict(
     print("END OF CAMERA SNAPSHOT POST")
     # Publish data to Pub/Sub
     camera_snapshot_ids = [item.id for item in objects]
-    camera_snpashot_slugs = [item.slug for item in objects]
-    print(f"camera_object_ids: {camera_snapshot_ids}")
-    print(f"camera_object_slugs: {camera_snpashot_slugs}")
+    camera_snapshot_slugs = [item.slug for item in objects]
 
-    if len(camera_snpashot_slugs):
-        print("Start of Publishing to Pub/Sub")
-        prompts = await get_prompts_best_fit(object_slugs=camera_snpashot_slugs)
+    print(f"camera_object_ids: {camera_snapshot_ids}")
+    print(f"camera_object_slugs: {camera_snapshot_slugs}")
+
+    if len(camera_snapshot_slugs):
+        prompts = await get_prompts_best_fit(object_slugs=camera_snapshot_slugs)
         prompt = prompts[0]  # TODO: generalize this
         formatted_text = await get_prompt_formatted_text(
-            prompt=prompt, object_slugs=camera_snpashot_slugs
+            prompt=prompt, object_slugs=camera_snapshot_slugs
         )
         message = {
             "camera_id": camera.id,
@@ -326,7 +328,7 @@ async def predict(
             "image_url": snapshot.public_url,
             "prompt_text": formatted_text,
             "object_ids": camera_snapshot_ids,
-            "object_slugs": camera_snpashot_slugs,
+            "object_slugs": camera_snapshot_slugs,
             "model": prompt.model,
             "max_output_tokens": prompt.max_output_token,
             "temperature": prompt.temperature,
@@ -362,15 +364,15 @@ async def get_identification(
         .values(
             "id",
             "timestamp",
+            "label_explanation",
             "label__value",
-            "label__label_explanation",
             "label__object__slug",
             "label__object__title",
             "label__object__explanation",
         )
     )
 
-    return [
+    identifications = [
         IdentificationOut(
             id=identification["id"],
             object=identification["label__object__slug"],
@@ -378,7 +380,7 @@ async def get_identification(
             explanation=identification["label__object__explanation"],
             timestamp=identification["timestamp"],
             label=identification["label__value"],
-            label_explanation=identification["label__label_explanation"],
+            label_explanation=identification["label_explanation"],
             snapshot=SnapshotOut(
                 id=snapshot.id,
                 camera_id=camera.id,
@@ -388,6 +390,8 @@ async def get_identification(
         )
         for identification in identifications
     ]
+
+    return JSONResponse(content=jsonable_encoder(identifications))  # noqa
 
 
 @router.post(
@@ -451,7 +455,7 @@ async def delete_identification(
     camera = await Camera.get_or_none(id=camera_id)
     if not camera:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Camera not found.")
-    snapshot = await Snapshot.get_or_none(id=snapshot_id)
+    snapshot = await Snapshot.get_or_none(id=snapshot_id, camera=camera)
     if not snapshot:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Snapshot not found.")
-    await Identification.filter(id=identification_id, camera=camera, snapshot=snapshot).delete()
+    await Identification.filter(id=identification_id, snapshot=snapshot).delete()
