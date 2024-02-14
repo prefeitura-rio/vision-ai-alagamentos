@@ -170,6 +170,8 @@ func (camera *Camera) getNextFrame() ([]byte, error) {
 	decoded := false
 	mutex := sync.Mutex{}
 
+	defer close(imgch)
+
 	camera.client.OnPacketRTPAny(
 		func(media *description.Media, forma format.Format, pkt *rtp.Packet) {
 			defer func() {
@@ -224,35 +226,27 @@ func (camera *Camera) getNextFrame() ([]byte, error) {
 			}
 		},
 	)
+	defer camera.client.OnPacketRTPAny(func(_ *description.Media, _ format.Format, _ *rtp.Packet) {})
 
 	_, err := camera.client.Play(nil)
 	if err != nil {
 		return nil, fmt.Errorf("error playing stream: %w", err)
 	}
 
+	defer func() {
+		_, err := camera.client.Pause()
+		if err != nil {
+			log.Printf("error pausing client: %s", err)
+		}
+	}()
+
 	tick := time.NewTicker(camera.updateInterval / 2) //nolint:gomnd
 	defer tick.Stop()
 
 	select {
 	case <-tick.C:
-		camera.client.OnPacketRTPAny(func(_ *description.Media, _ format.Format, _ *rtp.Packet) {})
-		close(imgch)
-
-		_, err := camera.client.Pause()
-		if err != nil {
-			return nil, fmt.Errorf("multiples errs: %w", errors.Join(ErrGetFrameTimeout, err))
-		}
-
 		return nil, ErrGetFrameTimeout
 	case img := <-imgch:
-		camera.client.OnPacketRTPAny(func(_ *description.Media, _ format.Format, _ *rtp.Packet) {})
-		close(imgch)
-
-		_, err := camera.client.Pause()
-		if err != nil {
-			return nil, fmt.Errorf("error pausing client: %w", err)
-		}
-
 		return img, nil
 	}
 }
@@ -265,6 +259,8 @@ func (camera *Camera) start() error {
 
 	err = camera.setDecoders()
 	if err != nil {
+		camera.client.Close()
+
 		return fmt.Errorf("error set decoders: %w", err)
 	}
 
