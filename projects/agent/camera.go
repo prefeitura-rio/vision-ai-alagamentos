@@ -503,9 +503,9 @@ func (c *cameraPool) ConsumeQueue(
 					log.Printf("error running camera with ID '%s': %s", camera.ID, err)
 				}
 
-				count.Add(-1)
-
 				metricsCh <- metrics
+
+				count.Add(-1)
 			}
 		}()
 	}

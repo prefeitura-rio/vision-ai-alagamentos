@@ -4,6 +4,7 @@ package main
 // #cgo pkg-config: libavcodec libavutil libswscale
 // #include <libavcodec/avcodec.h>
 // #include <libavutil/imgutils.h>
+// #include <libavutil/log.h>
 // #include <libswscale/swscale.h>
 import "C"
 
@@ -27,6 +28,10 @@ var (
 	errSwcContext            = fmt.Errorf("sws_getContext failed")
 	errSwsScale              = fmt.Errorf("sws_scale failed")
 )
+
+func init() { //nolint:gochecknoinits
+	C.av_log_set_level(C.AV_LOG_FATAL)
+}
 
 type rtpDecoder interface {
 	Decode(*rtp.Packet) ([][]byte, error)
