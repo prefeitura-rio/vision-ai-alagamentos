@@ -406,11 +406,15 @@ func (c *cameraPool) StartQueue(ctx context.Context) error {
 
 			for {
 				log.Printf("send %d seconds cameras to the queue", updateInterval)
+				cameras := make([]CameraAPI, len(c.cameras[updateInterval]))
+
 				c.mutex.RLock()
-				for _, camera := range c.cameras[updateInterval] {
+				copy(cameras, c.cameras[updateInterval])
+				c.mutex.RUnlock()
+
+				for _, camera := range cameras {
 					c.queue <- camera
 				}
-				c.mutex.RUnlock()
 
 				select {
 				case <-c.ctxStart.Done():
@@ -437,9 +441,40 @@ func (c *cameraPool) RestartQueue(ctx context.Context) error {
 	return c.StartQueue(ctx)
 }
 
+func (c *cameraPool) registerMetrics(metricsCh <-chan *metrics, bufferSize int) {
+	allMetrics := make([]*metrics, 0, bufferSize)
+	ticker := time.NewTicker(time.Minute)
+
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			buffer := make([]*metrics, len(allMetrics))
+			copy(buffer, allMetrics)
+			clear(allMetrics)
+			allMetrics = allMetrics[:0]
+
+			go func() {
+				c.metricsAggregation.addMetrics(buffer)
+				c.metricsAggregation.printPercentiles()
+			}()
+		case metrics, more := <-metricsCh:
+			if !more {
+				c.metricsAggregation.addMetrics(allMetrics)
+				c.metricsAggregation.printPercentiles()
+
+				return
+			}
+
+			allMetrics = append(allMetrics, metrics)
+		}
+	}
+}
+
 func (c *cameraPool) ConsumeQueue(
 	ctx context.Context,
-	maxConcurrency int,
+	maxWorkers int,
 	run func(CameraAPI) (*metrics, error),
 ) error {
 	if !c.consumingQueue.CompareAndSwap(false, true) {
@@ -450,73 +485,44 @@ func (c *cameraPool) ConsumeQueue(
 	c.ctxConsume = ctx
 	c.cancelConsume = cancel
 	bufferSize := 200
-	metricsCh := make(chan *metrics, maxConcurrency*bufferSize)
+	metricsCh := make(chan *metrics, maxWorkers*bufferSize)
+	workerCh := make(chan CameraAPI)
+	count := atomic.Int64{}
 
-	go func() {
-		allMetrics := make([]*metrics, 0, maxConcurrency*bufferSize)
-		ticker := time.NewTicker(time.Minute)
+	c.wgConsume.Add(maxWorkers)
 
-		defer ticker.Stop()
+	for range maxWorkers {
+		go func() {
+			defer c.wgConsume.Done()
 
-		for {
-			select {
-			case <-ticker.C:
-				buffer := make([]*metrics, len(allMetrics))
-				copy(buffer, allMetrics)
-				clear(allMetrics)
-				allMetrics = allMetrics[:0]
+			for camera := range workerCh {
+				count.Add(1)
 
-				go func() {
-					c.metricsAggregation.addMetrics(buffer)
-					c.metricsAggregation.printPercentiles()
-				}()
-			case metrics, more := <-metricsCh:
-				if !more {
-					c.metricsAggregation.addMetrics(allMetrics)
-					c.metricsAggregation.printPercentiles()
-
-					return
+				metrics, err := run(camera)
+				if err != nil {
+					log.Printf("error running camera with ID '%s': %s", camera.ID, err)
 				}
 
-				allMetrics = append(allMetrics, metrics)
+				count.Add(-1)
+
+				metricsCh <- metrics
 			}
-		}
-	}()
+		}()
+	}
+
+	go c.registerMetrics(metricsCh, maxWorkers*bufferSize)
 
 	go func() {
-		count := atomic.Int64{}
-
 		for {
 			select {
 			case <-c.ctxConsume.Done():
+				close(workerCh)
 				c.wgConsume.Wait()
 				close(metricsCh)
 
 				return
 			case camera := <-c.queue:
-				for {
-					if count.Load() < int64(maxConcurrency) {
-						break
-					}
-
-					time.Sleep(time.Second)
-				}
-
-				count.Add(1)
-				c.wgConsume.Add(1)
-
-				go func() {
-					metrics, err := run(camera)
-					if err != nil {
-						log.Printf("error running camera with ID '%s': %s", camera.ID, err)
-					}
-
-					count.Add(-1)
-
-					metricsCh <- metrics
-
-					c.wgConsume.Done()
-				}()
+				workerCh <- camera
 			}
 		}
 	}()

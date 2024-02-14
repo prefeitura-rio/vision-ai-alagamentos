@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"math"
 	"slices"
@@ -10,6 +11,15 @@ import (
 
 //nolint:gochecknoglobals
 var defaultBucketsTime = [...]time.Duration{
+	10 * time.Millisecond,
+	20 * time.Millisecond,
+	30 * time.Millisecond,
+	40 * time.Millisecond,
+	50 * time.Millisecond,
+	60 * time.Millisecond,
+	70 * time.Millisecond,
+	80 * time.Millisecond,
+	90 * time.Millisecond,
 	100 * time.Millisecond,
 	200 * time.Millisecond,
 	300 * time.Millisecond,
@@ -103,7 +113,7 @@ func newMetrics() *metrics {
 
 func (metrics *metrics) add(label string) {
 	now := time.Now()
-	key := metrics.currentLabel + "__" + label
+	key := fmt.Sprintf("%d__%s__%s", len(metrics.data), metrics.currentLabel, label)
 	metrics.data = append(metrics.data, metricData{key, now.Sub(metrics.previousTime)})
 	metrics.previousTime = now
 	metrics.currentLabel = label
@@ -260,20 +270,29 @@ func (a *metricsAggregation) percentile(
 	return success, err
 }
 
-func (a *metricsAggregation) percentiles(limit uint) {
+func (a *metricsAggregation) percentiles(limit uint, validKeys []string) {
 	a.mutexMetrics.RLock()
 	defer a.mutexMetrics.RUnlock()
 
 	keys := make([]string, 0, len(a.metrics))
-	for key := range a.metrics {
-		keys = append(keys, key)
+
+	if len(validKeys) == 0 {
+		for key := range a.metrics {
+			keys = append(keys, key)
+		}
+	} else {
+		for key := range a.metrics {
+			if slices.Contains(validKeys, key) {
+				keys = append(keys, key)
+			}
+		}
 	}
 
 	slices.Sort(keys)
 
 	for _, key := range keys {
 		psuccess, perr := a.percentile(key, limit)
-		log.Printf("%s P%d success: %s err: %s", key, limit, psuccess, perr)
+		log.Printf("%s P%d success: %s, err: %s", key, limit, psuccess, perr)
 	}
 }
 
@@ -281,22 +300,33 @@ func (a *metricsAggregation) printPercentiles() {
 	a.mutexMetrics.RLock()
 	defer a.mutexMetrics.RUnlock()
 
-	a.percentiles(uint(10)) //nolint:gomnd
-	a.percentiles(uint(25)) //nolint:gomnd
-	a.percentiles(uint(50)) //nolint:gomnd
-	a.percentiles(uint(75)) //nolint:gomnd
-	a.percentiles(uint(95)) //nolint:gomnd
-	a.percentiles(uint(99)) //nolint:gomnd
-	log.Println("processed cameras success:", a.processedItems.success)
-	log.Printf("time processing success: %.2fs", a.timeProcessing.success.Seconds())
+	validKeys := []string{}
+	// validKeys := []string{
+	// 	"total",
+	// 	"1__setup__start",
+	// 	"2__start__get_next_frame",
+	// 	"6__unmarshal_snapshot__send_snapshot",
+	// }
+
+	a.percentiles(uint(10), validKeys) //nolint:gomnd
+	a.percentiles(uint(25), validKeys) //nolint:gomnd
+	a.percentiles(uint(50), validKeys) //nolint:gomnd
+	a.percentiles(uint(75), validKeys) //nolint:gomnd
+	a.percentiles(uint(95), validKeys) //nolint:gomnd
+	a.percentiles(uint(99), validKeys) //nolint:gomnd
 	log.Printf(
-		"avg time processing success: %.2fs",
-		a.timeProcessing.success.Seconds()/float64(a.processedItems.success),
+		"processed cameras success: %d, err: %d",
+		a.processedItems.success,
+		a.processedItems.err,
 	)
-	log.Println("processed cameras err:", a.processedItems.err)
-	log.Printf("time processing err: %.2fs", a.timeProcessing.err.Seconds())
 	log.Printf(
-		"avg time processing err: %.2fs",
+		"time processing success: %.2fs, err: %.2fs",
+		a.timeProcessing.success.Seconds(),
+		a.timeProcessing.err.Seconds(),
+	)
+	log.Printf(
+		"avg time processing success: %.2fs, err: %.2fs",
+		a.timeProcessing.success.Seconds()/float64(a.processedItems.success),
 		a.timeProcessing.err.Seconds()/float64(a.processedItems.err),
 	)
 }
