@@ -98,7 +98,7 @@ async def get_cameras(
             "label",
             "label__object",
         )
-        .order_by("timestamp")
+        .order_by("-timestamp")
         .values(
             "id",
             "timestamp",
