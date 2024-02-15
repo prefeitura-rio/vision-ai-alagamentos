@@ -203,7 +203,12 @@ async def get_objects_table(objects: list[Object]) -> str:
     # Create the rows
     rows = ""
     for label in labels:
-        rows += f"| {(await label.object).slug} | {label.criteria} | {label.identification_guide} | {label.value} |\n"  # noqa
+        slug = (await label.object).slug
+
+        if slug != "image_description" and label.value == "null":
+            continue
+
+        rows += f"| {slug} | {label.criteria} | {label.identification_guide} | {label.value} |\n"  # noqa
 
     # Return the table
     return header + rows
