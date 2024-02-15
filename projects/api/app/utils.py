@@ -238,14 +238,9 @@ async def get_prompt_formatted_text(prompt: Prompt, object_slugs: list[str]) -> 
         if slug in [object_.slug for object_ in await prompt.objects.all()]
     ]
     objects = await Object.filter(slug__in=object_slugs).all()
-    print(f"objects: {objects}")
     objects_table_md = await get_objects_table(objects)
-    print(f"objects_table_md: {objects_table_md}")
     output_schema, output_example = get_output_schema_and_sample()
-    print(f"output_schema: {output_schema}")
-    print(f"output_example: {output_example}")
     template = prompt.prompt_text
-    print(f"template: {template}")
     template = template.format(
         objects_table_md=objects_table_md,
         output_schema=output_schema,

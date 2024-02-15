@@ -308,13 +308,9 @@ async def predict(
 
     objects = await Object.filter(cameras=camera).all()
 
-    print("END OF CAMERA SNAPSHOT POST")
     # Publish data to Pub/Sub
     camera_snapshot_ids = [item.id for item in objects]
     camera_snapshot_slugs = [item.slug for item in objects]
-
-    print(f"camera_object_ids: {camera_snapshot_ids}")
-    print(f"camera_object_slugs: {camera_snapshot_slugs}")
 
     if len(camera_snapshot_slugs):
         prompts = await get_prompts_best_fit(object_slugs=camera_snapshot_slugs)
@@ -322,7 +318,6 @@ async def predict(
         formatted_text = await get_prompt_formatted_text(
             prompt=prompt, object_slugs=camera_snapshot_slugs
         )
-        print(f"formatted_text: {formatted_text}")
         message = {
             "camera_id": camera.id,
             "snapshot_id": snapshot.id,
@@ -337,7 +332,6 @@ async def predict(
             "top_p": prompt.top_p,
         }
         publish_message(data=message)
-        print("End of Publishing to Pub/Sub")
 
     return PredictOut(error=False, message="OK")
 
