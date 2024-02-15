@@ -10,8 +10,6 @@ from typing import Any, Callable
 from uuid import uuid4
 
 import nest_asyncio
-from app import config
-from app.models import Label, Object, Prompt
 from fastapi import HTTPException, status
 from google.cloud import pubsub, storage
 from google.cloud.storage.blob import Blob
@@ -20,6 +18,9 @@ from PIL import Image
 from pydantic import BaseModel
 from tortoise.models import Model
 from vision_ai.base.shared_models import Output, OutputFactory
+
+from app import config
+from app.models import Label, Object, Prompt
 
 
 def _to_task(future, as_task, loop):
@@ -237,9 +238,14 @@ async def get_prompt_formatted_text(prompt: Prompt, object_slugs: list[str]) -> 
         if slug in [object_.slug for object_ in await prompt.objects.all()]
     ]
     objects = await Object.filter(slug__in=object_slugs).all()
+    print(f"objects: {objects}")
     objects_table_md = await get_objects_table(objects)
+    print(f"objects_table_md: {objects_table_md}")
     output_schema, output_example = get_output_schema_and_sample()
+    print(f"output_schema: {output_schema}")
+    print(f"output_example: {output_example}")
     template = prompt.prompt_text
+    print(f"template: {template}")
     template = template.format(
         objects_table_md=objects_table_md,
         output_schema=output_schema,

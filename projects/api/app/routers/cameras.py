@@ -3,6 +3,13 @@ from datetime import datetime, timedelta
 from typing import Annotated
 from uuid import UUID, uuid4
 
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
+from fastapi_pagination import Page, Params
+from fastapi_pagination.api import create_page
+from tortoise.expressions import Q
+
 from app import config
 from app.dependencies import get_caller, is_admin
 from app.models import Agent, Camera, Identification, Label, Object, Snapshot
@@ -23,12 +30,6 @@ from app.utils import (
     get_prompts_best_fit,
     publish_message,
 )
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi.encoders import jsonable_encoder
-from fastapi.responses import JSONResponse
-from fastapi_pagination import Page, Params
-from fastapi_pagination.api import create_page
-from tortoise.expressions import Q
 
 
 class BigParams(Params):
@@ -321,6 +322,7 @@ async def predict(
         formatted_text = await get_prompt_formatted_text(
             prompt=prompt, object_slugs=camera_snapshot_slugs
         )
+        print(f"formatted_text: {formatted_text}")
         message = {
             "camera_id": camera.id,
             "snapshot_id": snapshot.id,
