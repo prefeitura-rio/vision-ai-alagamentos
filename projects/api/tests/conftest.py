@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
 import asyncio
+from datetime import datetime
 from os import getenv
 
 import pytest
+from app.db import TORTOISE_ORM
+from app.main import app
+from app.models import Agent, Camera, Identification, Label, Object, Prompt, Snapshot
 from httpx import AsyncClient
 from loguru import logger
 from tortoise import Tortoise
-
-from app.db import TORTOISE_ORM
-from app.main import app
-from app.models import Agent, Camera, CameraIdentification, Label, Object, Prompt
 
 
 @pytest.fixture(scope="session")
@@ -42,7 +42,7 @@ async def initialize_tests():
     logger.info("Tortoise-ORM schemas generated")
     await Agent.all().delete()
     await Camera.all().delete()
-    await CameraIdentification.all().delete()
+    await Identification.all().delete()
     await Label.all().delete()
     await Object.all().delete()
     await Prompt.all().delete()
@@ -87,9 +87,24 @@ async def initialize_tests():
         cameras.append(await Camera.create(**camera))
 
     object_data = [
-        {"name": "Person", "slug": "person"},
-        {"name": "Car", "slug": "car"},
-        {"name": "Bicycle", "slug": "bicycle"},
+        {
+            "name": "Person",
+            "slug": "person",
+            "title": "Tem pessoas",
+            "explanation": "A imagem contém pessoas",
+        },
+        {
+            "name": "Car",
+            "slug": "car",
+            "title": "Tem carros",
+            "explanation": "A imagem contém somente o rosto de uma pessoa",
+        },
+        {
+            "name": "Bicycle",
+            "slug": "bicycle",
+            "title": "Tem bicicletas",
+            "explanation": "A imagem contém bicicletas",
+        },
     ]
     objects = []
     for object in object_data:
@@ -174,34 +189,112 @@ async def initialize_tests():
         for object in objects[: i + 1]:
             await prompt.objects.add(object)
 
+    snapshot_data = [
+        {
+            "public_url": "http://example.com/1",
+            "timestamp": datetime.now(),
+            "camera": cameras[0],
+        },
+        {
+            "public_url": "http://example.com/2",
+            "timestamp": datetime.now(),
+            "camera": cameras[0],
+        },
+        {
+            "public_url": "http://example.com/3",
+            "timestamp": datetime.now(),
+            "camera": cameras[0],
+        },
+        {
+            "public_url": "http://example.com/4",
+            "timestamp": datetime.now(),
+            "camera": cameras[0],
+        },
+        {
+            "public_url": "http://example.com/5",
+            "timestamp": datetime.now(),
+            "camera": cameras[1],
+        },
+        {
+            "public_url": "http://example.com/6",
+            "timestamp": datetime.now(),
+            "camera": cameras[1],
+        },
+        {
+            "public_url": "http://example.com/7",
+            "timestamp": datetime.now(),
+            "camera": cameras[1],
+        },
+        {
+            "public_url": "http://example.com/8",
+            "timestamp": datetime.now(),
+            "camera": cameras[1],
+        },
+        {
+            "public_url": "http://example.com/9",
+            "timestamp": datetime.now(),
+            "camera": cameras[2],
+        },
+        {
+            "public_url": "http://example.com/10",
+            "timestamp": datetime.now(),
+            "camera": cameras[2],
+        },
+        {
+            "public_url": "http://example.com/11",
+            "timestamp": datetime.now(),
+            "camera": cameras[2],
+        },
+        {
+            "public_url": "http://example.com/12",
+            "timestamp": datetime.now(),
+            "camera": cameras[2],
+        },
+    ]
+    snapshots = []
+    for snapshot in snapshot_data:
+        snapshots.append(await Snapshot.create(**snapshot))
+
     identification_data = [
         {
-            "camera": cameras[0],
-            "object": objects[0],
+            "snapshot": snapshots[0],
+            "label": labels[0],
+            "label_explanation": "There is a person in the frame",
+            "timestamp": datetime.now(),
         },
         {
-            "camera": cameras[0],
-            "object": objects[1],
+            "snapshot": snapshots[0],
+            "label": labels[1],
+            "label_explanation": "There is no person in the frame",
+            "timestamp": datetime.now(),
         },
         {
-            "camera": cameras[1],
-            "object": objects[1],
+            "snapshot": snapshots[1],
+            "label": labels[1],
+            "label_explanation": "There is a car in the frame",
+            "timestamp": datetime.now(),
         },
         {
-            "camera": cameras[1],
-            "object": objects[2],
+            "snapshot": snapshots[1],
+            "label": labels[2],
+            "label_explanation": "There is no car in the frame",
+            "timestamp": datetime.now(),
         },
         {
-            "camera": cameras[2],
-            "object": objects[2],
+            "snapshot": snapshots[2],
+            "label": labels[2],
+            "label_explanation": "There is a bicycle in the frame",
+            "timestamp": datetime.now(),
         },
         {
-            "camera": cameras[2],
-            "object": objects[0],
+            "snapshot": snapshots[2],
+            "label": labels[0],
+            "label_explanation": "There is no bicycle in the frame",
+            "timestamp": datetime.now(),
         },
     ]
     for identification in identification_data:
-        await CameraIdentification.create(**identification)
+        await Identification.create(**identification)
     logger.info("Test data initialized")
 
     await Tortoise.close_connections()

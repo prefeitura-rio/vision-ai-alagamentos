@@ -4,20 +4,19 @@ from functools import partial
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi_pagination import Page
-from fastapi_pagination.ext.tortoise import paginate as tortoise_paginate
-
 from app.dependencies import get_caller, is_admin, is_agent
 from app.models import Agent, Camera
 from app.pydantic_models import (
     AgentPydantic,
     APICaller,
-    CameraConnectionInfo,
-    Heartbeat,
-    HeartbeatResponse,
+    CameraOut,
+    HeartbeatIn,
+    HeartbeatOut,
 )
 from app.utils import apply_to_list, transform_tortoise_to_pydantic
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi_pagination import Page
+from fastapi_pagination.ext.tortoise import paginate as tortoise_paginate
 
 router = APIRouter(prefix="/agents", tags=["Agents"])
 
@@ -50,10 +49,10 @@ async def get_agent_me(agent=Depends(is_agent)) -> AgentPydantic:
     return agent
 
 
-@router.get("/cameras", response_model=Page[CameraConnectionInfo])
+@router.get("/cameras", response_model=Page[CameraOut])
 async def get_cameras(
     caller: Annotated[APICaller, Depends(get_caller)],
-) -> Page[CameraConnectionInfo]:
+) -> Page[CameraOut]:
     """Returns the list of cameras that the agent must get snapshots from."""
     if caller.is_admin:
         queryset = Camera
@@ -70,22 +69,25 @@ async def get_cameras(
             apply_to_list,
             fn=partial(
                 transform_tortoise_to_pydantic,
-                pydantic_model=CameraConnectionInfo,
+                pydantic_model=CameraOut,
                 vars_map=[
                     ("id", "id"),
+                    ("name", "name"),
                     ("rtsp_url", "rtsp_url"),
                     ("update_interval", "update_interval"),
+                    ("latitude", "latitude"),
+                    ("longitude", "longitude"),
                 ],
             ),
         ),
     )
 
 
-@router.get("/{agent_id}/cameras", response_model=Page[CameraConnectionInfo])
+@router.get("/{agent_id}/cameras", response_model=Page[CameraOut])
 async def get_agent_cameras(
     agent_id: UUID,
     caller: Annotated[APICaller, Depends(get_caller)],
-) -> Page[CameraConnectionInfo]:
+) -> Page[CameraOut]:
     """Returns the list of cameras that the agent must get snapshots from."""
     # Caller must either be an admin or the agent itself. Also check for null agent.
     if not caller.is_admin and (not caller.agent or caller.agent.id != agent_id):
@@ -99,23 +101,46 @@ async def get_agent_cameras(
             apply_to_list,
             fn=partial(
                 transform_tortoise_to_pydantic,
-                pydantic_model=CameraConnectionInfo,
+                pydantic_model=CameraOut,
                 vars_map=[
                     ("id", "id"),
+                    ("name", "name"),
                     ("rtsp_url", "rtsp_url"),
                     ("update_interval", "update_interval"),
+                    ("latitude", "latitude"),
+                    ("longitude", "longitude"),
                 ],
             ),
         ),
     )
 
 
-@router.post("/{agent_id}/cameras", response_model=CameraConnectionInfo)
+@router.post("/{agent_id}/heartbeat", response_model=HeartbeatOut)
+async def agent_heartbeat(
+    agent_id: UUID,
+    heartbeat: HeartbeatIn,
+    caller: Annotated[APICaller, Depends(get_caller)],
+) -> HeartbeatOut:
+    """Endpoint for agents to send heartbeats to."""
+    # Caller must be the agent itself.
+    if not caller.agent or caller.agent.id != agent_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not allowed to send heartbeats for this agent.",
+        )
+    agent = await Agent.get(id=agent_id)
+    if heartbeat.healthy:
+        agent.last_heartbeat = datetime.now()
+        await agent.save()
+    return HeartbeatOut(command="")  # TODO: Add commands
+
+
+@router.post("/{agent_id}/cameras/{camera_id}", response_model=CameraOut)
 async def add_camera_to_agent(
     agent_id: UUID,
     camera_id: str,
     _=Depends(is_admin),
-) -> CameraConnectionInfo:
+) -> CameraOut:
     """Adds a camera to an agent."""
     agent = await Agent.get_or_none(id=agent_id)
     if not agent:
@@ -130,28 +155,11 @@ async def add_camera_to_agent(
             detail="Camera not found",
         )
     await agent.cameras.add(camera)
-    return CameraConnectionInfo(
+    return CameraOut(
         id=camera.id,
+        name=camera.name,
         rtsp_url=camera.rtsp_url,
         update_interval=camera.update_interval,
+        latitude=camera.latitude,
+        longitude=camera.longitude,
     )
-
-
-@router.post("/{agent_id}/heartbeat", response_model=HeartbeatResponse)
-async def agent_heartbeat(
-    agent_id: UUID,
-    heartbeat: Heartbeat,
-    caller: Annotated[APICaller, Depends(get_caller)],
-) -> HeartbeatResponse:
-    """Endpoint for agents to send heartbeats to."""
-    # Caller must be the agent itself.
-    if not caller.agent or caller.agent.id != agent_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not allowed to send heartbeats for this agent.",
-        )
-    agent = await Agent.get(id=agent_id)
-    if heartbeat.healthy:
-        agent.last_heartbeat = datetime.now()
-        await agent.save()
-    return HeartbeatResponse(command="")  # TODO: Add commands

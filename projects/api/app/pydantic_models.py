@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 from datetime import datetime
-from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -11,55 +10,72 @@ class AgentPydantic(BaseModel):
     name: str
     slug: str
     auth_sub: str
-    last_heartbeat: Optional[datetime]
+    last_heartbeat: datetime | None
 
 
 class APICaller(BaseModel):
-    is_admin: Optional[bool] = False
-    agent: Optional[AgentPydantic]
-
-
-class CameraConnectionInfo(BaseModel):
-    id: str
-    rtsp_url: str
-    update_interval: int
+    is_admin: bool | None = False
+    agent: AgentPydantic | None
 
 
 class CameraIn(BaseModel):
     id: str
-    name: Optional[str]
+    name: str | None
     rtsp_url: str
     update_interval: int
     latitude: float
     longitude: float
+
+
+class CameraIdentificationOut(BaseModel):
+    id: str
+    name: str | None
+    rtsp_url: str
+    update_interval: int
+    latitude: float
+    longitude: float
+    objects: list[str]
+    identifications: list["IdentificationOut"]
 
 
 class CameraOut(BaseModel):
     id: str
-    name: Optional[str]
+    name: str | None
     rtsp_url: str
     update_interval: int
     latitude: float
     longitude: float
-    snapshot_url: Optional[str]
-    snapshot_timestamp: Optional[datetime]
-    objects: List[str]
-    identifications: List["IdentificationDetails"]
 
 
-class Heartbeat(BaseModel):
+class HeartbeatIn(BaseModel):
     healthy: bool
 
 
-class HeartbeatResponse(BaseModel):
-    command: Optional[str]
+class HeartbeatOut(BaseModel):
+    command: str | None
 
 
-class IdentificationDetails(BaseModel):
+class SnapshotIn(BaseModel):
+    hash_md5: str
+    content_length: int
+
+
+class SnapshotOut(BaseModel):
+    id: UUID
+    camera_id: str
+    image_url: str
+    timestamp: datetime | None
+
+
+class IdentificationOut(BaseModel):
+    id: UUID
     object: str
-    timestamp: Optional[datetime]
-    label: Optional[str]
-    label_explanation: Optional[str]
+    title: str | None
+    explanation: str | None
+    timestamp: datetime
+    label: str
+    label_explanation: str
+    snapshot: SnapshotOut
 
 
 class LabelIn(BaseModel):
@@ -76,21 +92,25 @@ class LabelOut(BaseModel):
 
 
 class LabelUpdate(BaseModel):
-    value: Optional[str]
-    criteria: Optional[str]
-    identification_guide: Optional[str]
+    value: str | None
+    criteria: str | None
+    identification_guide: str | None
 
 
 class ObjectIn(BaseModel):
     name: str
     slug: str
+    title: str
+    explanation: str
 
 
 class ObjectOut(BaseModel):
     id: UUID
     name: str
     slug: str
-    labels: List[LabelOut]
+    title: str | None
+    explanation: str | None
+    labels: list[LabelOut]
 
 
 class PromptIn(BaseModel):
@@ -112,26 +132,20 @@ class PromptOut(BaseModel):
     temperature: float
     top_k: int
     top_p: float
-    objects: List[str]
+    objects: list[str]
 
 
-class PromptsRequest(BaseModel):
-    objects: List[str]
+class ObjectsSlugIn(BaseModel):
+    objects: list[str]
 
 
-class PromptsResponse(BaseModel):
-    prompts: List[PromptOut]
+class PromptsOut(BaseModel):
+    prompts: list[PromptOut]
 
 
-class Snapshot(BaseModel):
-    camera_id: str
-    image_url: str
-    timestamp: datetime
-
-
-class SnapshotPostResponse(BaseModel):
+class PredictOut(BaseModel):
     error: bool
-    message: Optional[str]
+    message: str | None
 
 
 class Token(BaseModel):
@@ -149,22 +163,21 @@ class UserInfo(BaseModel):
     acr: str
     azp: str
     uid: str
-    email: Optional[str]
-    email_verified: Optional[bool]
-    name: Optional[str]
-    given_name: Optional[str]
-    preferred_username: Optional[str]
-    nickname: Optional[str]
-    groups: Optional[List[str]]
+    email: str | None
+    email_verified: bool | None
+    name: str | None
+    given_name: str | None
+    preferred_username: str | None
+    nickname: str
+    groups: list[str]
 
 
 AgentPydantic.update_forward_refs()
 APICaller.update_forward_refs()
-CameraConnectionInfo.update_forward_refs()
-CameraOut.update_forward_refs()
-IdentificationDetails.update_forward_refs()
+CameraIdentificationOut.update_forward_refs()
+IdentificationOut.update_forward_refs()
 ObjectOut.update_forward_refs()
 PromptOut.update_forward_refs()
-Snapshot.update_forward_refs()
-SnapshotPostResponse.update_forward_refs()
+SnapshotOut.update_forward_refs()
+PredictOut.update_forward_refs()
 UserInfo.update_forward_refs()

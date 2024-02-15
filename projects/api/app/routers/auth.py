@@ -1,11 +1,10 @@
 # -*- coding: utf-8 -*-
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
-from fastapi.security import OAuth2PasswordRequestForm
-
 from app.oidc import authenticate_user
 from app.pydantic_models import Token
+from fastapi import APIRouter, Depends
+from fastapi.security import OAuth2PasswordRequestForm
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
