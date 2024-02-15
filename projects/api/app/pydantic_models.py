@@ -70,8 +70,8 @@ class SnapshotOut(BaseModel):
 class IdentificationOut(BaseModel):
     id: UUID
     object: str
-    title: str
-    explanation: str
+    title: str | None
+    explanation: str | None
     timestamp: datetime
     label: str
     label_explanation: str
