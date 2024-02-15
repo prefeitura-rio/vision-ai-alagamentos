@@ -30,8 +30,8 @@ CREATE TABLE IF NOT EXISTS "object" (
     "id" UUID NOT NULL  PRIMARY KEY,
     "name" VARCHAR(255) NOT NULL UNIQUE,
     "slug" VARCHAR(255) NOT NULL UNIQUE,
-    "title" VARCHAR(255) NOT NULL UNIQUE,
-    "explanation" TEXT NOT NULL
+    "title" VARCHAR(255) UNIQUE,
+    "explanation" NULL
 );
 CREATE TABLE IF NOT EXISTS "label" (
     "id" UUID NOT NULL  PRIMARY KEY,

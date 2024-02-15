@@ -67,7 +67,7 @@ class Object(Model):
     id = fields.UUIDField(pk=True)
     name = fields.CharField(max_length=255, unique=True)
     slug = fields.CharField(max_length=255, unique=True)
-    title = fields.CharField(max_length=255, unique=True)
-    explanation = fields.TextField()
+    title = fields.CharField(max_length=255, unique=True, null=True)
+    explanation = fields.TextField(null=True)
     cameras: fields.ManyToManyRelation[Camera]
     prompts: fields.ManyToManyRelation[Prompt]

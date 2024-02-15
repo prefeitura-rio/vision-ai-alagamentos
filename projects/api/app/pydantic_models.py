@@ -108,8 +108,8 @@ class ObjectOut(BaseModel):
     id: UUID
     name: str
     slug: str
-    title: str
-    explanation: str
+    title: str | None
+    explanation: str | None
     labels: list[LabelOut]
 
 
