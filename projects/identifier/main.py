@@ -76,7 +76,7 @@ class APIVisionAI:
         self, camera_id: str, snapshot_id: str, object_id: str, label_explanation: str, label: str
     ) -> requests.Response:
         return self._post(
-            f"/cameras/{camera_id}/snapshots/{snapshot_id}/identifications?object_id={object_id}label_value={label}&label_explanation={label_explanation}"  # noqa
+            f"/cameras/{camera_id}/snapshots/{snapshot_id}/identifications?object_id={object_id}&label_value={label}&label_explanation={label_explanation}"  # noqa
         )
 
 
