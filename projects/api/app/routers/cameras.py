@@ -45,7 +45,7 @@ router = APIRouter(prefix="/cameras", tags=["Cameras"])
 
 @router.get("", response_model=BigPage)
 async def get_cameras(
-    params: BigParams = Depends(), _=Depends(is_admin), minute_interval: int = 30
+    params: BigParams = Depends(), _=Depends(is_admin), minute_interval: int = 5
 ) -> Page[CameraIdentificationOut]:
     """Get a list of all cameras."""
     cameras_out: dict[str, CameraIdentificationOut] = {}
@@ -98,6 +98,7 @@ async def get_cameras(
             "label",
             "label__object",
         )
+        .order_by("timestamp")
         .values(
             "id",
             "timestamp",
@@ -113,12 +114,21 @@ async def get_cameras(
         )
     )
 
+    identifications_slug: list[str] = []
+
     for identification in identifications:
+        slug = identification["label__object__slug"]
         id = identification["snapshot__camera__id"]
+
+        if slug in identifications_slug:
+            continue
+
+        identifications_slug.append(slug)
+
         cameras_out[id].identifications.append(
             IdentificationOut(
                 id=identification["id"],
-                object=identification["label__object__slug"],
+                object=slug,
                 title=identification["label__object__title"],
                 explanation=identification["label__object__explanation"],
                 timestamp=identification["timestamp"],
