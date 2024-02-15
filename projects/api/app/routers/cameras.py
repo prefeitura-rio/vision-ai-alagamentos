@@ -114,16 +114,19 @@ async def get_cameras(
         )
     )
 
-    identifications_slug: list[str] = []
+    identifications_slug: dict[str, list[str]] = {}
 
     for identification in identifications:
         slug = identification["label__object__slug"]
         id = identification["snapshot__camera__id"]
 
-        if slug in identifications_slug:
+        if id not in identifications_slug:
+            identifications_slug[id] = []
+
+        if slug in identifications_slug[id]:
             continue
 
-        identifications_slug.append(slug)
+        identifications_slug[id].append(slug)
 
         cameras_out[id].identifications.append(
             IdentificationOut(
