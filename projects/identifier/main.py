@@ -24,14 +24,12 @@ DATASET_ID = "vision_ai"
 TABLE_ID = "cameras_predicoes"
 vertexai.init(project=PROJECT_ID, location=LOCATION)
 
-SAFETY_CONFIG = (
-    {
-        generative_models.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: generative_models.HarmBlockThreshold.BLOCK_NONE,
-        generative_models.HarmCategory.HARM_CATEGORY_HARASSMENT: generative_models.HarmBlockThreshold.BLOCK_NONE,
-        generative_models.HarmCategory.HARM_CATEGORY_HATE_SPEECH: generative_models.HarmBlockThreshold.BLOCK_NONE,
-        generative_models.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: generative_models.HarmBlockThreshold.BLOCK_NONE,
-    },
-)
+SAFETY_CONFIG = {
+    generative_models.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: generative_models.HarmBlockThreshold.BLOCK_NONE,
+    generative_models.HarmCategory.HARM_CATEGORY_HARASSMENT: generative_models.HarmBlockThreshold.BLOCK_NONE,
+    generative_models.HarmCategory.HARM_CATEGORY_HATE_SPEECH: generative_models.HarmBlockThreshold.BLOCK_NONE,
+    generative_models.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: generative_models.HarmBlockThreshold.BLOCK_NONE,
+}
 
 
 def get_datetime() -> str:
@@ -39,14 +37,14 @@ def get_datetime() -> str:
     return timestamp.strftime("%Y-%m-%dT%H:%M:%S.%f")
 
 
-class Object(BaseModel):
+class Snapshot(BaseModel):
     object: str
     label_explanation: str
     label: Union[bool, str, None]
 
 
 class Output(BaseModel):
-    objects: List[Object]
+    objects: List[Snapshot]
 
 
 class APIVisionAI:
@@ -68,15 +66,15 @@ class APIVisionAI:
         if time.time() - self.token_renewal_time >= 60 * 50:
             self.headers, self.token_renewal_time = self._get_headers()
 
-    def _put(self, path: str) -> requests.Response:
+    def _post(self, path: str) -> requests.Response:
         self._refresh_token_if_needed()
-        return requests.put(f"{self.BASE_URL}{path}", headers=self.headers)
+        return requests.post(f"{self.BASE_URL}{path}", headers=self.headers)
 
-    def put_camera_object(
-        self, camera_id: str, object_id: str, label_explanation: str, label: str
+    def post_identification(
+        self, camera_id: str, snapshot_id: str, object_id: str, label_explanation: str, label: str
     ) -> requests.Response:
-        return self._put(
-            f"/cameras/{camera_id}/objects/{object_id}?label={label}&label_explanation={label_explanation}"  # noqa
+        return self._post(
+            f"/cameras/{camera_id}/snapshots/{snapshot_id}/identifications?object_id={object_id}&label_value={label}&label_explanation={label_explanation}"  # noqa
         )
 
 
@@ -279,20 +277,21 @@ def predict(cloud_event: dict) -> None:
                 item["label"] = label
                 if object_id is not None:
                     try:
-                        put_response = vision_ai_api.put_camera_object(
+                        post_response = vision_ai_api.post_identification(
                             camera_id=camera_id,
+                            snapshot_id=data["snapshot_id"],
                             object_id=object_id,
                             label_explanation=label_explanation,
                             label=label,
                         )
                         if (
-                            put_response.status_code != 200
+                            post_response.status_code != 200
                         ):  # TODO pensar o que fazer com o label que nao existem, criar ou so ignora? # noqa
                             item["api_error_step"] = "api_object_not_exists"
-                            item["api_error_message"] = json.dumps(put_response.json())
-                        item["api_status_code"] = put_response.status_code
+                            item["api_error_message"] = json.dumps(post_response.json())
+                        item["api_status_code"] = post_response.status_code
                     except Exception as exception:
-                        item["api_error_step"] = "api_put_object"
+                        item["api_error_step"] = "api_post_object"
                         item["api_error_name"] = type(exception).__name__
                         item["api_error_message"] = traceback.format_exc(chain=False)
                 else:

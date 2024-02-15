@@ -36,6 +36,7 @@ class APIVisionAI:
         self._refresh_token_if_needed()
         try:
             response = requests.get(f"{self.BASE_URL}{path}", headers=self.headers, timeout=timeout)
+
             response.raise_for_status()
             return response.json()
         except requests.exceptions.ReadTimeout as _:  # noqa
@@ -57,6 +58,7 @@ class APIVisionAI:
         return response
 
     def _get_all_pages(self, path, page_size=100, timeout=120):
+
         # Function to get a single page
         def get_page(page, total_pages):
             # time each execution
@@ -67,6 +69,7 @@ class APIVisionAI:
             return response
 
         if isinstance(path, str):
+
             print(f"Getting all pages for {path}")
             # Initial request to determine the number of pages
             initial_response = self._get(path=f"{path}?page=1&size=1", timeout=timeout)  # noqa
@@ -208,7 +211,11 @@ class APIVisionAI:
 
         # Ensure label exists or create it
 
-        if (criteria is not None) and (identification_guide is not None):
+        if (
+            (criteria is not None)
+            and (identification_guide is not None)
+            and (label_slug is not None)
+        ):
             self._ensure_label_exists(
                 object_id=object_id,
                 object_slug=object_slug,
@@ -303,6 +310,7 @@ class APIVisionAI:
     def _associate_object_with_camera(
         self, object_id: str, object_slug: str, camera_id: str, cameras: list = None
     ) -> None:
+
         # Prepare the endpoint path
         if cameras is not None:
             camera_data = next((cam for cam in cameras if cam.get("id") == camera_id), None)
@@ -312,11 +320,11 @@ class APIVisionAI:
                 )
                 return
 
-        path = f"/cameras/{camera_id}/objects"
+        path = f"/objects/{object_id}/cameras/{camera_id}"
         # Prepare the query parameters
-        params = {"object_id": object_id}
+        # params = {"object_id": object_id}
         # Make the POST request with the required parameters
-        response = requests.post(f"{self.BASE_URL}{path}", headers=self.headers, params=params)
+        response = requests.post(f"{self.BASE_URL}{path}", headers=self.headers)
         # Check the response status and handle accordingly
         if response.status_code == 200:
             print(f"Camera {camera_id}: Object '{object_slug}' associated successfully.")
@@ -336,6 +344,7 @@ class APIVisionAI:
     def _associate_object_with_prompt(
         self, object_id: str, object_slug: str, prompt_id: str, prompts: list = None
     ) -> None:
+
         if prompts is not None:
             prompt_data = next(
                 (prompt for prompt in prompts if prompt.get("id") == prompt_id), None
@@ -449,6 +458,7 @@ class APIVisionAI:
     def _process_single_item_remove(
         self, item: Dict, objects: list, cameras: list = None, prompts: list = None
     ):
+
         camera_id = item.get("camera_id")
         object_slug = item["object_slug"]
         label_slug = item.get("label_slug")
@@ -495,6 +505,7 @@ class APIVisionAI:
         label_slug: str,
         labels=None,
     ) -> None:
+
         label_data = next((lbl for lbl in labels if lbl.get("value") == label_slug), None)
         if not label_data:
             print(f"Label '{label_slug}' not found on object '{object_slug}' . Local Test!")
@@ -533,6 +544,7 @@ class APIVisionAI:
     def _remove_object_from_prompt(
         self, prompt_id: str, object_slug: str, object_id: str, prompts=None
     ) -> None:
+
         if prompts is not None:
             prompt_data = next((prmt for prmt in prompts if prmt.get("id") == prompt_id), None)
             if object_slug not in prompt_data.get("objects", []):
