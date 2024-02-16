@@ -183,7 +183,7 @@ async def get_prompts_best_fit(objects: list[Object], one: bool = False) -> list
         await Prompt.filter(objects__id__in=objects_id)
         .group_by("id", "name")
         .annotate(object_count=Count("objects__id"))
-        .order_by("-object_count")
+        .order_by("-object_count", "name")
         .all()
         .values("object_count", prompt_id="id", prompt_name="name")
     )
