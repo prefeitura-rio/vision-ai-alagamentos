@@ -94,9 +94,21 @@ async def get_objects_table(objects: list[Object]) -> str:
         str: The markdown table.
     """
     # Fetch all labels for the objects
-    labels = set()
-    for object_ in objects:
-        labels.update(await Label.filter(object__id=object_.id).all())
+    objects_id = [object_.id for object_ in objects]
+    raw_labels = (
+        await Label.filter(object__id__in=objects_id)
+        .all()
+        .select_related("object__slug")
+        .values("id", "criteria", "identification_guide", "value", "object__slug")
+    )
+
+    # dont use dict[str, dict[str, str]] to preserve labels order
+    labels: list[dict[str, str]] = []
+    labels_id: list[str] = []
+    for label in raw_labels:
+        if label["id"] not in labels_id:
+            labels.append(label)
+            labels_id.append(label["id"])
 
     # Create the header
     header = "| object | criteria | identification_guide | label |\n"
@@ -105,12 +117,12 @@ async def get_objects_table(objects: list[Object]) -> str:
     # Create the rows
     rows = ""
     for label in labels:
-        slug = (await label.object).slug
+        slug = label["object__slug"]
 
-        if slug != "image_description" and label.value == "null":
+        if slug != "image_description" and label["value"] == "null":
             continue
 
-        rows += f"| {slug} | {label.criteria} | {label.identification_guide} | {label.value} |\n"  # noqa
+        rows += f"| {slug} | {label['criteria']} | {label['identification_guide']} | {label['value']} |\n"  # noqa
 
     # Return the table
     return header + rows
@@ -128,7 +140,7 @@ def get_output_schema_and_sample() -> tuple[str, str]:
     return output_schema, output_sample
 
 
-async def get_prompt_formatted_text(prompt: Prompt, object_slugs: list[str]) -> str:
+async def get_prompt_formatted_text(prompt: Prompt, objects: list[Object]) -> str:
     """
     Gets the full text of a prompt.
 
@@ -139,13 +151,9 @@ async def get_prompt_formatted_text(prompt: Prompt, object_slugs: list[str]) -> 
         str: The full text of the prompt.
     """
     # Filter object slugs that are in the prompt objects
-    object_slugs = [
-        slug
-        for slug in object_slugs
-        if slug in [object_.slug for object_ in await prompt.objects.all()]
-    ]
-    objects = await Object.filter(slug__in=object_slugs).all()
-    objects_table_md = await get_objects_table(objects)
+    prompt_slugs = await prompt.objects.all().values_list("slug", flat=True)
+    objects_filtered = [object_ for object_ in objects if object_.slug in prompt_slugs]
+    objects_table_md = await get_objects_table(objects_filtered)
     output_schema, output_example = get_output_schema_and_sample()
     template = prompt.prompt_text
     template = template.format(
