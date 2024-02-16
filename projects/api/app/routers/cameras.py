@@ -293,36 +293,28 @@ async def predict(
     caller: Annotated[APICaller, Depends(get_caller)],
 ) -> PredictOut:
     """Post a camera snapshot to the server."""
-    camera = await Camera.get_or_none(id=camera_id)
-    if not camera:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Camera not found.")
-
     # Caller must be an agent that has access to the camera.
     if not caller.agent:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not allowed to post snapshots for this camera.",
         )
-    agent = await Agent.get_or_none(id=caller.agent.id)
+
+    agent = await Agent.get_or_none(id=caller.agent.id, cameras__id=camera_id)
     if not agent:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not allowed to post snapshots for this camera.",
         )
-    if not agent.cameras.filter(id=camera_id):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not allowed to post snapshots for this camera.",
-        )
 
-    snapshot = await Snapshot.get_or_none(id=snapshot_id, camera=camera)
+    snapshot = await Snapshot.get_or_none(id=snapshot_id, camera__id=camera_id)
     if not snapshot:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Snapshot not found")
 
     snapshot.timestamp = datetime.now()
     await snapshot.save()
 
-    objects = await Object.filter(cameras=camera).all()
+    objects = await Object.filter(cameras__id=camera_id).all()
 
     # Publish data to Pub/Sub
     camera_snapshot_ids = [item.id for item in objects]
@@ -333,7 +325,7 @@ async def predict(
         prompt = prompts[0]  # TODO: generalize this
         formatted_text = await get_prompt_formatted_text(prompt=prompt, objects=objects)
         message = {
-            "camera_id": camera.id,
+            "camera_id": camera_id,
             "snapshot_id": snapshot.id,
             "image_url": snapshot.public_url,
             "prompt_text": formatted_text,
@@ -425,7 +417,7 @@ async def create_identification(
     if not label:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Label not found.")
 
-    object_ = await label.object.get()
+    object_ = await label.object.get(id=object_id)
 
     identification = await Identification.create(
         snapshot=snapshot,

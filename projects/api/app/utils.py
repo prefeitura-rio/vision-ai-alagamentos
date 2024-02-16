@@ -179,27 +179,20 @@ async def get_prompts_best_fit(objects: list[Object], one: bool = False) -> list
     objects_id = [object_.id for object_ in objects]
 
     # Rank prompts id by number of objects in common
-    prompts_count = (
+    prompts = (
         await Prompt.filter(objects__id__in=objects_id)
         .group_by("id", "name")
         .annotate(object_count=Count("objects__id"))
         .order_by("-object_count", "name")
         .all()
-        .values("object_count", prompt_id="id", prompt_name="name")
     )
-    prompts_ids = [prompt["prompt_id"] for prompt in prompts_count]
+    print(prompts)
 
-    if len(prompts_ids) == 0:
+    if len(prompts) == 0:
         return []
 
     if one:
-        return [await Prompt.get(id=prompts_ids[0])]
-
-    # Get prompts
-    prompts = await Prompt.filter(id__in=prompts_ids).all().prefetch_related("objects")
-    # Sort prompts by rank
-    order = {v: i for i, v in enumerate(prompts_ids)}
-    prompts = sorted(prompts, key=lambda x: order[x.id])
+        return [prompts[0]]
 
     final_prompts: list[Prompt] = []
     covered_objects: list[Object] = []
