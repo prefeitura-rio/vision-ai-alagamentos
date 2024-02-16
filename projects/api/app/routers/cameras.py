@@ -416,18 +416,16 @@ async def create_identification(
     _=Depends(is_admin),  # TODO: Review permissions here
 ) -> IdentificationOut:
     """Update a camera snapshot identifications."""
-    camera = await Camera.get_or_none(id=camera_id)
-    if not camera:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Camera not found.")
-    snapshot = await Snapshot.get_or_none(id=snapshot_id, camera=camera)
+    snapshot = await Snapshot.get_or_none(id=snapshot_id, camera__id=camera_id)
     if not snapshot:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Snapshot not found.")
-    object_ = await Object.get_or_none(id=object_id)
-    if not object_:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Object not found.")
-    label = await Label.get_or_none(object=object_, value=label_value)
+    label = await Label.get_or_none(object__id=object_id, value=label_value).prefetch_related(
+        "object"
+    )
     if not label:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Label not found.")
+
+    object_ = await label.object.get()
 
     identification = await Identification.create(
         snapshot=snapshot,
