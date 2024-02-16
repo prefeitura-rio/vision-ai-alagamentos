@@ -329,11 +329,9 @@ async def predict(
     camera_snapshot_slugs = [item.slug for item in objects]
 
     if len(camera_snapshot_slugs):
-        prompts = await get_prompts_best_fit(object_slugs=camera_snapshot_slugs)
+        prompts = await get_prompts_best_fit(objects=objects, one=True)
         prompt = prompts[0]  # TODO: generalize this
-        formatted_text = await get_prompt_formatted_text(
-            prompt=prompt, object_slugs=camera_snapshot_slugs
-        )
+        formatted_text = await get_prompt_formatted_text(prompt=prompt, objects=objects)
         message = {
             "camera_id": camera.id,
             "snapshot_id": snapshot.id,

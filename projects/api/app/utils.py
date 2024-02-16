@@ -7,10 +7,10 @@ from asyncio import Task
 from typing import Any, Callable
 
 import nest_asyncio
-from fastapi import HTTPException, status
 from google.cloud import pubsub
 from google.oauth2 import service_account
 from pydantic import BaseModel
+from tortoise.functions import Count
 from tortoise.models import Model
 from vision_ai.base.shared_models import Output, OutputFactory
 
@@ -146,6 +146,7 @@ async def get_prompt_formatted_text(prompt: Prompt, objects: list[Object]) -> st
 
     Args:
         prompt (Prompt): The prompt.
+        objects (list[Object]): The objects to fetch.
 
     Returns:
         str: The full text of the prompt.
@@ -164,52 +165,57 @@ async def get_prompt_formatted_text(prompt: Prompt, objects: list[Object]) -> st
     return template
 
 
-async def get_prompts_best_fit(object_slugs: list[str]) -> list[Prompt]:
+async def get_prompts_best_fit(objects: list[Object], one: bool = False) -> list[Prompt]:
     """
     Gets the best fit prompts for a list of objects.
 
     Args:
-        object_slugs (list[str]): The slugs for the objects.
+        objects (list[Object]): The objects to fetch.
+        one bool = false: Return only the best prompt
 
     Returns:
         list[Prompt]: The best fit prompts.
     """
-    prompts: list[Prompt] = []
-    objects: list[Object] = []
-    for object_slug in object_slugs:
-        object_ = await Object.get_or_none(slug=object_slug)
-        if object_ is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Object not found")
-        objects.append(object_)
-        prompts += list(await Prompt.filter(objects__id=object_.id).all())
-    # Rank prompts by number of objects in common
-    prompt_scores = {}
-    for prompt in prompts:
-        for object_ in objects:
-            if object_ in await prompt.objects.all():
-                prompt_scores[prompt.id] = prompt_scores.get(prompt.id, 0) + 1
-    # Sort prompts by score
-    prompt_scores = sorted(prompt_scores.items(), key=lambda x: x[1], reverse=True)
-    # Start a final list of prompts
+    objects_id = [object_.id for object_ in objects]
+
+    # Rank prompts id by number of objects in common
+    prompts_count = (
+        await Prompt.filter(objects__id__in=objects_id)
+        .group_by("id", "name")
+        .annotate(object_count=Count("objects__id"))
+        .order_by("-object_count")
+        .all()
+        .values("object_count", prompt_id="id", prompt_name="name")
+    )
+    prompts_ids = [prompt["prompt_id"] for prompt in prompts_count]
+
+    if len(prompts_ids) == 0:
+        return []
+
+    if one:
+        return [await Prompt.get(id=prompts_ids[0])]
+
+    # Get prompts
+    prompts = await Prompt.filter(id__in=prompts_ids).all().prefetch_related("objects")
+    # Sort prompts by rank
+    order = {v: i for i, v in enumerate(prompts_ids)}
+    prompts = sorted(prompts, key=lambda x: order[x.id])
+
     final_prompts: list[Prompt] = []
     covered_objects: list[Object] = []
-    # For each prompt, add it to the final list if its objects are not already covered
-    for prompt_id, _ in prompt_scores:
-        prompt = await Prompt.get_or_none(id=prompt_id)
-        if prompt is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prompt not found")
-        if not set(await prompt.objects.all()).intersection(set(covered_objects)):
+
+    for prompt in prompts:
+        prompt_objects = await prompt.objects.all()
+        if not set(prompt_objects).intersection(set(covered_objects)):
             final_prompts.append(prompt)
-            covered_objects += list(await prompt.objects.all())
+            covered_objects += list(prompt_objects)
+
     return final_prompts
 
 
 def get_pubsub_client() -> pubsub.PublisherClient:
     """
     Get a PubSub client with the credentials from the environment.
-
-    Args:
-        mode (str): The mode to filter by (prod or staging).
 
     Returns:
         storage.Client: The GCS client.
