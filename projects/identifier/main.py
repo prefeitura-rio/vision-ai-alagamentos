@@ -211,6 +211,15 @@ def get_prediction(
     return response_parsed.dict()
 
 
+# Get secrets
+vision_ai_secrets_str = get_secret("vision-ai-cloud-function-secrets")
+vision_ai_secrets = json.loads(vision_ai_secrets_str)
+vision_ai_api = APIVisionAI(
+    username=vision_ai_secrets["vision_ai_api_username"],
+    password=vision_ai_secrets["vision_ai_api_password"],
+)
+
+
 @functions_framework.cloud_event
 def predict(cloud_event: dict) -> None:
     """
@@ -220,10 +229,6 @@ def predict(cloud_event: dict) -> None:
     # Decodes and loads the data from the Cloud Event
     data_bytes = base64.b64decode(cloud_event.data["message"]["data"])
     data = json.loads(data_bytes.decode("utf-8"))
-
-    # Get secrets
-    vision_ai_secrets_str = get_secret("vision-ai-cloud-function-secrets")
-    vision_ai_secrets = json.loads(vision_ai_secrets_str)
 
     sentry_sdk.init(vision_ai_secrets["sentry_dns"])
     camera_id = data.get("camera_id")
@@ -256,11 +261,6 @@ def predict(cloud_event: dict) -> None:
     retry_count = 5
     while retry_count > 0:
         try:
-            vision_ai_api = APIVisionAI(
-                username=vision_ai_secrets["vision_ai_api_username"],
-                password=vision_ai_secrets["vision_ai_api_password"],
-            )
-
             camera_objects_from_api = dict(zip(data["object_slugs"], data["object_ids"]))
             ai_response_parsed_bq = []
             for item in ai_response_parsed["objects"]:
