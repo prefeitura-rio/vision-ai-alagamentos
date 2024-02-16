@@ -8,6 +8,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from fastapi_pagination import Page, Params
 from fastapi_pagination.api import create_page
+from google.cloud import storage
 from tortoise.expressions import Q
 
 from app import config
@@ -24,8 +25,7 @@ from app.pydantic_models import (
     SnapshotOut,
 )
 from app.utils import (
-    generate_blob_path,
-    get_gcs_client,
+    get_gcp_credentials,
     get_prompt_formatted_text,
     get_prompts_best_fit,
     publish_message,
@@ -257,9 +257,12 @@ async def create_camera_snapshot(
 
     id = uuid4()
 
-    storage_client = get_gcs_client()
+    credentials = get_gcp_credentials()
+    storage_client = storage.Client(credentials=credentials)
     bucket = storage_client.bucket(config.GCS_BUCKET_NAME)
-    blob = bucket.blob(blob_name=generate_blob_path(camera_id, str(id)))
+    path_data = datetime.now().strftime("ano=%Y/mes=%m/dia=%d")
+    blob_path = f"{config.GCS_BUCKET_PATH_PREFIX}/{path_data}/camera_id={camera_id}/{id}.png"
+    blob = bucket.blob(blob_name=blob_path)
     url = blob.generate_signed_url(
         version="v4",
         expiration=timedelta(minutes=15),
