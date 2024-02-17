@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from tortoise import fields
 from tortoise.models import Model
+from tortoise.validators import MinValueValidator
 
 
 class Agent(Model):
@@ -51,16 +52,27 @@ class Label(Model):
         unique_together = (("object", "value"),)
 
 
+class PromptObject(Model):
+    id = fields.UUIDField(pk=True)
+    prompt = fields.ForeignKeyField("app.Prompt", related_name="objects")
+    object = fields.ForeignKeyField("app.Object", related_name="prompts")
+    order = fields.IntField(validators=[MinValueValidator(0)])
+
+    class Meta:
+        table = "prompt_object"
+        unique_together = (("prompt", "object"), ("prompt", "order"))
+
+
 class Prompt(Model):  # TODO: Add platform (GCP, OpenAI, etc.)
     id = fields.UUIDField(pk=True)
     name = fields.CharField(max_length=255, unique=True)
-    objects = fields.ManyToManyField("app.Object", related_name="prompts")
     model = fields.CharField(max_length=255)
     prompt_text = fields.TextField()
     max_output_token = fields.IntField()
     temperature = fields.FloatField()
     top_k = fields.IntField()
     top_p = fields.FloatField()
+    objects = fields.ReverseRelation["PromptObject"]
 
 
 class Object(Model):
@@ -70,4 +82,5 @@ class Object(Model):
     title = fields.CharField(max_length=255, unique=True, null=True)
     explanation = fields.TextField(null=True)
     cameras: fields.ManyToManyRelation[Camera]
-    prompts: fields.ManyToManyRelation[Prompt]
+    prompts = fields.ReverseRelation["PromptObject"]
+    labels = fields.ReverseRelation["Label"]

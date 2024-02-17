@@ -152,7 +152,7 @@ async def get_prompt_formatted_text(prompt: Prompt, objects: list[Object]) -> st
         str: The full text of the prompt.
     """
     # Filter object slugs that are in the prompt objects
-    prompt_slugs = await prompt.objects.all().values_list("slug", flat=True)
+    prompt_slugs = await Object.filter(prompts__prompt=prompt).all().values_list("slug", flat=True)
     objects_filtered = [object_ for object_ in objects if object_.slug in prompt_slugs]
     objects_table_md = await get_objects_table(objects_filtered)
     output_schema, output_example = get_output_schema_and_sample()
@@ -180,13 +180,12 @@ async def get_prompts_best_fit(objects: list[Object], one: bool = False) -> list
 
     # Rank prompts id by number of objects in common
     prompts = (
-        await Prompt.filter(objects__id__in=objects_id)
+        await Prompt.filter(objects__object__id__in=objects_id)
         .group_by("id", "name")
-        .annotate(object_count=Count("objects__id"))
+        .annotate(object_count=Count("objects__object__id"))
         .order_by("-object_count", "name")
         .all()
     )
-    print(prompts)
 
     if len(prompts) == 0:
         return []
@@ -198,7 +197,7 @@ async def get_prompts_best_fit(objects: list[Object], one: bool = False) -> list
     covered_objects: list[Object] = []
 
     for prompt in prompts:
-        prompt_objects = await prompt.objects.all()
+        prompt_objects = await Object.filter(prompts__prompt=prompt).all()
         if not set(prompt_objects).intersection(set(covered_objects)):
             final_prompts.append(prompt)
             covered_objects += list(prompt_objects)

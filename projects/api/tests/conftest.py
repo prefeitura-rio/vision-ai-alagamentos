@@ -4,12 +4,22 @@ from datetime import datetime
 from os import getenv
 
 import pytest
-from app.db import TORTOISE_ORM
-from app.main import app
-from app.models import Agent, Camera, Identification, Label, Object, Prompt, Snapshot
 from httpx import AsyncClient
 from loguru import logger
 from tortoise import Tortoise
+
+from app.db import TORTOISE_ORM
+from app.main import app
+from app.models import (
+    Agent,
+    Camera,
+    Identification,
+    Label,
+    Object,
+    Prompt,
+    PromptObject,
+    Snapshot,
+)
 
 
 @pytest.fixture(scope="session")
@@ -186,8 +196,8 @@ async def initialize_tests():
         prompts.append(await Prompt.create(**prompt))
 
     for i, prompt in enumerate(prompts):
-        for object in objects[: i + 1]:
-            await prompt.objects.add(object)
+        for j, object in enumerate(objects[: i + 1]):
+            await PromptObject.create(prompt=prompt, object=object, order=j)
 
     snapshot_data = [
         {

@@ -9,7 +9,7 @@ from fastapi_pagination.ext.tortoise import paginate as tortoise_paginate
 from tortoise.fields import ReverseRelation
 
 from app.dependencies import get_caller, is_admin
-from app.models import Object, Prompt
+from app.models import Object, Prompt, PromptObject
 from app.pydantic_models import (
     APICaller,
     LabelOut,
@@ -36,7 +36,7 @@ async def get_prompts(
     """Get a list of all prompts."""
 
     async def get_objects(objects_relation: ReverseRelation) -> list[str]:
-        objects: list[Object] = await objects_relation.all()
+        objects: list[Object] = await Object.filter(prompts__in=await objects_relation.all()).all()
         return [object_.slug for object_ in objects]
 
     return await tortoise_paginate(
@@ -69,9 +69,6 @@ async def create_prompt(
 ) -> PromptOut:
     """Add a new prompt."""
     prompt = await Prompt.create(**prompt_.dict())
-    objects: list[str] = []
-    for object_ in await prompt.objects.all():
-        objects.append(object_.slug)
     return PromptOut(
         id=prompt.id,
         name=prompt.name,
@@ -81,7 +78,7 @@ async def create_prompt(
         temperature=prompt.temperature,
         top_k=prompt.top_k,
         top_p=prompt.top_p,
-        objects=objects,
+        objects=[],
     )
 
 
@@ -95,7 +92,7 @@ async def get_prompt(
     if prompt is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prompt not found")
     objects: list[str] = []
-    for object_ in await prompt.objects.all():
+    for object_ in await Object.filter(prompts__prompt=prompt).all():
         objects.append(object_.slug)
     return PromptOut(
         id=prompt.id,
@@ -122,7 +119,7 @@ async def update_prompt(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prompt not found")
     await prompt.update_from_dict(prompt_.dict()).save()
     objects: list[str] = []
-    for object_ in await prompt.objects.all():
+    for object_ in await Object.filter(prompts__prompt=prompt).all():
         objects.append(object_.slug)
     return PromptOut(
         id=prompt.id,
@@ -175,7 +172,7 @@ async def get_prompt_objects(
                 for label in await object_.labels.all()
             ],
         )
-        for object_ in await prompt.objects.all()
+        for object_ in await Object.filter(prompts__prompt=prompt).all()
     ]
 
 
@@ -192,7 +189,14 @@ async def add_prompt_object(
     object_ = await Object.get_or_none(id=object_id)
     if object_ is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Object not found")
-    await prompt.objects.add(object_)
+
+    order = 0
+    prompt_object = await PromptObject.filter(prompt=prompt).order_by("-order").first()
+    if prompt_object is not None:
+        order = prompt_object.order + 1
+
+    await PromptObject.create(prompt=prompt, object=object_, order=order)
+
     return ObjectOut(
         id=object_.id,
         name=object_.name,
@@ -224,7 +228,7 @@ async def remove_prompt_object(
     object_ = await Object.get_or_none(id=object_id)
     if object_ is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Object not found")
-    await prompt.objects.remove(object_)
+    await PromptObject.filter(prompt=prompt, object=object_).delete()
 
 
 @router.post("/best_fit", response_model=PromptsOut)
@@ -251,7 +255,7 @@ async def get_best_fit_prompts(
     ret_prompts = []
     for prompt, prompt_formatted_text in zip(prompts, prompts_formatted_text):
         object_slugs = []
-        for object_ in await prompt.objects.all():
+        for object_ in await Object.filter(prompts__prompt=prompt).all():
             object_slugs.append(object_.slug)
         ret_prompts.append(
             PromptOut(
