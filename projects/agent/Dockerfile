@@ -5,6 +5,7 @@ RUN apt update
 RUN apt install -y libavcodec-dev libavutil-dev libswscale-dev
 
 COPY go.mod go.sum ./
+COPY libs ../../libs
 RUN go mod download && go mod verify
 
 COPY *.go ./

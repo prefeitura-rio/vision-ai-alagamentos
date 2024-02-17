@@ -1,4 +1,4 @@
-package main
+package libs
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 
 var errInvalidStatusCode = fmt.Errorf("invalid status code")
 
-func httpGet(url string, accessToken *AccessToken, body any) error {
+func HTTPGet(url string, accessToken *AccessToken, body any) error {
 	request, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
 	if err != nil {
 		return fmt.Errorf("error creating request: %w", err)
@@ -43,7 +43,7 @@ func httpGet(url string, accessToken *AccessToken, body any) error {
 	return nil
 }
 
-func httpPost(
+func HTTPPost(
 	url string,
 	accessToken *AccessToken,
 	contentType string,
@@ -83,7 +83,7 @@ func httpPost(
 	return body, nil
 }
 
-func httpPut(
+func HTTPPut(
 	url string,
 	headers map[string]string,
 	requestBody io.Reader,

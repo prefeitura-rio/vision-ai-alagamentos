@@ -3,6 +3,7 @@ module github.com/prefeitura-rio/vision-ai/projects/agent
 go 1.22.0
 
 require (
+  github.com/prefeitura-rio/vision-ai/libs v0.0.0
 	github.com/bluenviron/gortsplib/v4 v4.7.2
 	github.com/pion/rtp v1.8.3
 )
@@ -16,3 +17,5 @@ require (
 	golang.org/x/net v0.21.0 // indirect
 	golang.org/x/sys v0.17.0 // indirect
 )
+
+replace github.com/prefeitura-rio/vision-ai/libs v0.0.0 => ../../libs

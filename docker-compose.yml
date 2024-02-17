@@ -32,9 +32,7 @@ services:
           cpus: '1'
           memory: 1024m
   agent:
-    build:
-      context: ./projects/agent
-      dockerfile: debug.Dockerfile
+    image: vision-ai-agent:compose
     restart: unless-stopped
     env_file: .env
     ports:
