@@ -36,8 +36,12 @@ async def get_prompts(
     """Get a list of all prompts."""
 
     async def get_objects(objects_relation: ReverseRelation) -> list[str]:
-        objects: list[Object] = await Object.filter(prompts__in=await objects_relation.all()).all()
-        return [object_.slug for object_ in objects]
+        return (
+            await Object.filter(prompts__in=await objects_relation.all())
+            .all()
+            .order_by("prompts__order")
+            .values_list("slug", flat=True)
+        )
 
     return await tortoise_paginate(
         Prompt,
@@ -91,9 +95,12 @@ async def get_prompt(
     prompt = await Prompt.get_or_none(id=prompt_id)
     if prompt is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prompt not found")
-    objects: list[str] = []
-    for object_ in await Object.filter(prompts__prompt=prompt).all():
-        objects.append(object_.slug)
+    objects = (
+        await Object.filter(prompts__prompt=prompt)
+        .order_by("prompts__order")
+        .all()
+        .values_list("slug", flat=True)
+    )
     return PromptOut(
         id=prompt.id,
         name=prompt.name,
@@ -118,9 +125,12 @@ async def update_prompt(
     if prompt is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prompt not found")
     await prompt.update_from_dict(prompt_.dict()).save()
-    objects: list[str] = []
-    for object_ in await Object.filter(prompts__prompt=prompt).all():
-        objects.append(object_.slug)
+    objects = (
+        await Object.filter(prompts__prompt=prompt)
+        .order_by("prompts__order")
+        .all()
+        .values_list("slug", flat=True)
+    )
     return PromptOut(
         id=prompt.id,
         name=prompt.name,
@@ -172,7 +182,7 @@ async def get_prompt_objects(
                 for label in await object_.labels.all()
             ],
         )
-        for object_ in await Object.filter(prompts__prompt=prompt).all()
+        for object_ in await Object.filter(prompts__prompt=prompt).order_by("prompts__order").all()
     ]
 
 
@@ -215,6 +225,59 @@ async def add_prompt_object(
     )
 
 
+@router.post("/{prompt_id}/objects/order", response_model=ObjectOut)
+async def order_prompt_object(
+    prompt_id: UUID,
+    objects_in: ObjectsSlugIn,
+    _=Depends(is_admin),
+) -> PromptOut:
+    """Add an object to a prompt."""
+    prompt = await Prompt.get_or_none(id=prompt_id)
+    if prompt is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prompt not found")
+
+    object_slugs = objects_in.objects
+    objects = (
+        await Object.filter(prompts__prompt=prompt)
+        .all()
+        .select_related("prompts")
+        .values("prompts__id", "slug")
+    )
+
+    if len(object_slugs) != len(objects):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Must contain all object slugs in order"
+        )
+
+    for object_ in objects:
+        if object_["slug"] not in object_slugs:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Must contain all object slugs in order",
+            )
+
+    object_order = {v: k for k, v in enumerate(object_slugs)}
+    slug_by_prompt = {object_["prompts__id"]: object_["slug"] for object_ in objects}
+    prompt_objects = await PromptObject.filter(prompt=prompt).all()
+
+    for i in range(len(prompt_objects)):
+        prompt_objects[i].order = object_order[slug_by_prompt[prompt_objects[i].id]]
+
+    await PromptObject.bulk_update(prompt_objects, fields=["order"])
+
+    return PromptOut(
+        id=prompt.id,
+        name=prompt.name,
+        model=prompt.model,
+        prompt_text=prompt.prompt_text,
+        max_output_token=prompt.max_output_token,
+        temperature=prompt.temperature,
+        top_k=prompt.top_k,
+        top_p=prompt.top_p,
+        objects=object_slugs,
+    )
+
+
 @router.delete("/{prompt_id}/objects/{object_id}")
 async def remove_prompt_object(
     prompt_id: UUID,
@@ -254,9 +317,12 @@ async def get_best_fit_prompts(
         )
     ret_prompts = []
     for prompt, prompt_formatted_text in zip(prompts, prompts_formatted_text):
-        object_slugs = []
-        for object_ in await Object.filter(prompts__prompt=prompt).all():
-            object_slugs.append(object_.slug)
+        object_slugs = (
+            await Object.filter(prompts__prompt=prompt)
+            .all()
+            .order_by("prompts__order")
+            .values_list("slug", flat=True)
+        )
         ret_prompts.append(
             PromptOut(
                 id=prompt.id,
