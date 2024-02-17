@@ -322,6 +322,9 @@ async def predict(
 
     if len(camera_snapshot_slugs):
         prompts = await get_prompts_best_fit(objects=objects, one=True)
+        if len(prompts) == 0:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prompts not found")
+
         prompt = prompts[0]  # TODO: generalize this
         formatted_text = await get_prompt_formatted_text(prompt=prompt, objects=objects)
         message = {
