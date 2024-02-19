@@ -3,6 +3,11 @@ from functools import partial
 from typing import Annotated
 from uuid import UUID
 
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi_pagination import Page
+from fastapi_pagination.ext.tortoise import paginate as tortoise_paginate
+from tortoise.fields import ReverseRelation
+
 from app.dependencies import get_caller, is_admin
 from app.models import Object, Prompt
 from app.pydantic_models import (
@@ -20,10 +25,6 @@ from app.utils import (
     get_prompts_best_fit,
     transform_tortoise_to_pydantic,
 )
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi_pagination import Page
-from fastapi_pagination.ext.tortoise import paginate as tortoise_paginate
-from tortoise.fields import ReverseRelation
 
 router = APIRouter(prefix="/prompts", tags=["Prompts"])
 
@@ -233,23 +234,31 @@ async def get_best_fit_prompts(
 ) -> PromptsOut:
     """Get the best fit prompts for a list of objects."""
     object_slugs = request.objects
-    prompts = await get_prompts_best_fit(object_slugs=object_slugs)
+
+    objects: list[Object] = []
+    for object_slug in object_slugs:
+        object_ = await Object.get_or_none(slug=object_slug)
+        if object_ is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Object not found")
+        objects.append(object_)
+
+    prompts = await get_prompts_best_fit(objects=objects)
     prompts_formatted_text = []
     for prompt in prompts:
         prompts_formatted_text.append(
-            await get_prompt_formatted_text(prompt=prompt, object_slugs=object_slugs)
+            await get_prompt_formatted_text(prompt=prompt, objects=objects)
         )
     ret_prompts = []
     for prompt, prompt_formatted_text in zip(prompts, prompts_formatted_text):
-        objects = []
+        object_slugs = []
         for object_ in await prompt.objects.all():
-            objects.append(object_.slug)
+            object_slugs.append(object_.slug)
         ret_prompts.append(
             PromptOut(
                 id=prompt.id,
                 name=prompt.name,
                 model=prompt.model,
-                objects=objects,
+                objects=object_slugs,
                 prompt_text=prompt_formatted_text,
                 max_output_token=prompt.max_output_token,
                 temperature=prompt.temperature,

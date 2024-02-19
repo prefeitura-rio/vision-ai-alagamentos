@@ -8,6 +8,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from fastapi_pagination import Page, Params
 from fastapi_pagination.api import create_page
+from google.cloud import storage
 from tortoise.expressions import Q
 
 from app import config
@@ -24,8 +25,7 @@ from app.pydantic_models import (
     SnapshotOut,
 )
 from app.utils import (
-    generate_blob_path,
-    get_gcs_client,
+    get_gcp_credentials,
     get_prompt_formatted_text,
     get_prompts_best_fit,
     publish_message,
@@ -257,9 +257,12 @@ async def create_camera_snapshot(
 
     id = uuid4()
 
-    storage_client = get_gcs_client()
+    credentials = get_gcp_credentials()
+    storage_client = storage.Client(credentials=credentials)
     bucket = storage_client.bucket(config.GCS_BUCKET_NAME)
-    blob = bucket.blob(blob_name=generate_blob_path(camera_id, str(id)))
+    path_data = datetime.now().strftime("ano=%Y/mes=%m/dia=%d")
+    blob_path = f"{config.GCS_BUCKET_PATH_PREFIX}/{path_data}/camera_id={camera_id}/{id}.png"
+    blob = bucket.blob(blob_name=blob_path)
     url = blob.generate_signed_url(
         version="v4",
         expiration=timedelta(minutes=15),
@@ -290,49 +293,42 @@ async def predict(
     caller: Annotated[APICaller, Depends(get_caller)],
 ) -> PredictOut:
     """Post a camera snapshot to the server."""
-    camera = await Camera.get_or_none(id=camera_id)
-    if not camera:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Camera not found.")
-
     # Caller must be an agent that has access to the camera.
     if not caller.agent:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not allowed to post snapshots for this camera.",
         )
-    agent = await Agent.get_or_none(id=caller.agent.id)
+
+    agent = await Agent.get_or_none(id=caller.agent.id, cameras__id=camera_id)
     if not agent:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not allowed to post snapshots for this camera.",
         )
-    if not agent.cameras.filter(id=camera_id):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not allowed to post snapshots for this camera.",
-        )
 
-    snapshot = await Snapshot.get_or_none(id=snapshot_id, camera=camera)
+    snapshot = await Snapshot.get_or_none(id=snapshot_id, camera__id=camera_id)
     if not snapshot:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Snapshot not found")
 
     snapshot.timestamp = datetime.now()
     await snapshot.save()
 
-    objects = await Object.filter(cameras=camera).all()
+    objects = await Object.filter(cameras__id=camera_id).all()
 
     # Publish data to Pub/Sub
     camera_snapshot_ids = [item.id for item in objects]
     camera_snapshot_slugs = [item.slug for item in objects]
 
     if len(camera_snapshot_slugs):
-        prompts = await get_prompts_best_fit(object_slugs=camera_snapshot_slugs)
+        prompts = await get_prompts_best_fit(objects=objects, one=True)
+        if len(prompts) == 0:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prompts not found")
+
         prompt = prompts[0]  # TODO: generalize this
-        formatted_text = await get_prompt_formatted_text(
-            prompt=prompt, object_slugs=camera_snapshot_slugs
-        )
+        formatted_text = await get_prompt_formatted_text(prompt=prompt, objects=objects)
         message = {
-            "camera_id": camera.id,
+            "camera_id": camera_id,
             "snapshot_id": snapshot.id,
             "image_url": snapshot.public_url,
             "prompt_text": formatted_text,
@@ -415,18 +411,16 @@ async def create_identification(
     _=Depends(is_admin),  # TODO: Review permissions here
 ) -> IdentificationOut:
     """Update a camera snapshot identifications."""
-    camera = await Camera.get_or_none(id=camera_id)
-    if not camera:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Camera not found.")
-    snapshot = await Snapshot.get_or_none(id=snapshot_id, camera=camera)
+    snapshot = await Snapshot.get_or_none(id=snapshot_id, camera__id=camera_id)
     if not snapshot:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Snapshot not found.")
-    object_ = await Object.get_or_none(id=object_id)
-    if not object_:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Object not found.")
-    label = await Label.get_or_none(object=object_, value=label_value)
+    label = await Label.get_or_none(object__id=object_id, value=label_value).prefetch_related(
+        "object"
+    )
     if not label:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Label not found.")
+
+    object_ = await label.object.get(id=object_id)
 
     identification = await Identification.create(
         snapshot=snapshot,

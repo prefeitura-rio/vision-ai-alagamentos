@@ -2,20 +2,15 @@
 import asyncio
 import base64
 import inspect
-import io
 import json
 from asyncio import Task
-from datetime import datetime
 from typing import Any, Callable
-from uuid import uuid4
 
 import nest_asyncio
-from fastapi import HTTPException, status
-from google.cloud import pubsub, storage
-from google.cloud.storage.blob import Blob
+from google.cloud import pubsub
 from google.oauth2 import service_account
-from PIL import Image
 from pydantic import BaseModel
+from tortoise.functions import Count
 from tortoise.models import Model
 from vision_ai.base.shared_models import Output, OutputFactory
 
@@ -54,53 +49,6 @@ def asyncio_run(future, as_task=True):
         return asyncio.run(_to_task(future, as_task, loop))
 
 
-def download_camera_snapshot_from_bucket(*, camera_id: str) -> str:
-    """
-    Downloads a camera snapshot from the bucket.
-    Mode needs to be "prod" or "staging"
-
-    Args:
-        camera_id (str): The camera id.
-
-    Returns:
-        str: The base64 encoded image.
-    """
-    # Set blob path
-    blob_path = generate_blob_path(camera_id)
-    # Download file
-    tmp_fname = f"/tmp/{uuid4()}.png"
-    download_file_from_bucket(
-        bucket_name=config.GCS_BUCKET_NAME,
-        source_blob_name=blob_path,
-        destination_file_name=tmp_fname,
-    )
-    # Read file
-    with open(tmp_fname, "rb") as f:
-        image_base64 = base64.b64encode(f.read()).decode("utf-8")
-    return image_base64
-
-
-def download_file_from_bucket(
-    bucket_name: str, source_blob_name: str, destination_file_name: str
-) -> None:
-    """
-    Downloads a file from the bucket.
-    Mode needs to be "prod" or "staging"
-
-    Args:
-        bucket_name (str): The name of the bucket.
-        source_blob_name (str): The name of the blob.
-        destination_file_name (str): The path of the file to download to.
-
-    Returns:
-        None
-    """
-    storage_client = get_gcs_client()
-    bucket = storage_client.bucket(bucket_name)
-    blob = bucket.blob(source_blob_name)
-    blob.download_to_filename(destination_file_name)
-
-
 def fn_is_async(fn: Callable) -> bool:
     """
     Checks if a function is async.
@@ -114,40 +62,8 @@ def fn_is_async(fn: Callable) -> bool:
     return inspect.iscoroutinefunction(fn) or inspect.isasyncgenfunction(fn)
 
 
-def generate_blob_path(camera_id: str, snapshot_id: str = str(uuid4)) -> str:
-    """
-    Generates a blob path for a camera snapshot.
-
-    Args:
-        camera_id (str): The camera id.
-
-    Returns:
-        str: The blob path.
-    """
-    path_data = datetime.now().strftime("ano=%Y/mes=%m/dia=%d")
-    return f"{config.GCS_BUCKET_PATH_PREFIX}/{path_data}/camera_id={camera_id}/{snapshot_id}.png"
-
-
-def get_camera_snapshot_blob_url(*, camera_id: str) -> str:
-    """
-    Gets the blob URL for a camera snapshot.
-
-    Args:
-        camera_id (str): The camera id.
-
-    Returns:
-        str: The blob URL.
-    """
-    blob_path = generate_blob_path(camera_id)
-    bucket_name = config.GCS_BUCKET_NAME
-    storage_client = get_gcs_client()
-    bucket = storage_client.bucket(bucket_name)
-    blob = bucket.blob(blob_path)
-    return blob.public_url
-
-
 def get_gcp_credentials(
-    scopes: list[str] = None,
+    scopes: list[str] | None = None,
 ) -> service_account.Credentials:
     """
     Gets credentials from env vars
@@ -160,20 +76,6 @@ def get_gcp_credentials(
     if scopes:
         cred = cred.with_scopes(scopes)
     return cred
-
-
-def get_gcs_client() -> storage.Client:
-    """
-    Get a GCS client with the credentials from the environment.
-
-    Args:
-        mode (str): The mode to filter by (prod or staging).
-
-    Returns:
-        storage.Client: The GCS client.
-    """
-    credentials = get_gcp_credentials()
-    return storage.Client(credentials=credentials)
 
 
 async def get_objects_table(objects: list[Object]) -> str:
@@ -192,9 +94,21 @@ async def get_objects_table(objects: list[Object]) -> str:
         str: The markdown table.
     """
     # Fetch all labels for the objects
-    labels = set()
-    for object_ in objects:
-        labels.update(await Label.filter(object__id=object_.id).all())
+    objects_id = [object_.id for object_ in objects]
+    raw_labels = (
+        await Label.filter(object__id__in=objects_id)
+        .all()
+        .select_related("object__slug")
+        .values("id", "criteria", "identification_guide", "value", "object__slug")
+    )
+
+    # dont use dict[str, dict[str, str]] to preserve labels order
+    labels: list[dict[str, str]] = []
+    labels_id: list[str] = []
+    for label in raw_labels:
+        if label["id"] not in labels_id:
+            labels.append(label)
+            labels_id.append(label["id"])
 
     # Create the header
     header = "| object | criteria | identification_guide | label |\n"
@@ -203,7 +117,12 @@ async def get_objects_table(objects: list[Object]) -> str:
     # Create the rows
     rows = ""
     for label in labels:
-        rows += f"| {(await label.object).slug} | {label.criteria} | {label.identification_guide} | {label.value} |\n"  # noqa
+        slug = label["object__slug"]
+
+        if slug != "image_description" and label["value"] == "null":
+            continue
+
+        rows += f"| {slug} | {label['criteria']} | {label['identification_guide']} | {label['value']} |\n"  # noqa
 
     # Return the table
     return header + rows
@@ -221,24 +140,21 @@ def get_output_schema_and_sample() -> tuple[str, str]:
     return output_schema, output_sample
 
 
-async def get_prompt_formatted_text(prompt: Prompt, object_slugs: list[str]) -> str:
+async def get_prompt_formatted_text(prompt: Prompt, objects: list[Object]) -> str:
     """
     Gets the full text of a prompt.
 
     Args:
         prompt (Prompt): The prompt.
+        objects (list[Object]): The objects to fetch.
 
     Returns:
         str: The full text of the prompt.
     """
     # Filter object slugs that are in the prompt objects
-    object_slugs = [
-        slug
-        for slug in object_slugs
-        if slug in [object_.slug for object_ in await prompt.objects.all()]
-    ]
-    objects = await Object.filter(slug__in=object_slugs).all()
-    objects_table_md = await get_objects_table(objects)
+    prompt_slugs = await prompt.objects.all().values_list("slug", flat=True)
+    objects_filtered = [object_ for object_ in objects if object_.slug in prompt_slugs]
+    objects_table_md = await get_objects_table(objects_filtered)
     output_schema, output_example = get_output_schema_and_sample()
     template = prompt.prompt_text
     template = template.format(
@@ -249,52 +165,50 @@ async def get_prompt_formatted_text(prompt: Prompt, object_slugs: list[str]) -> 
     return template
 
 
-async def get_prompts_best_fit(object_slugs: list[str]) -> list[Prompt]:
+async def get_prompts_best_fit(objects: list[Object], one: bool = False) -> list[Prompt]:
     """
     Gets the best fit prompts for a list of objects.
 
     Args:
-        object_slugs (list[str]): The slugs for the objects.
+        objects (list[Object]): The objects to fetch.
+        one bool = false: Return only the best prompt
 
     Returns:
         list[Prompt]: The best fit prompts.
     """
-    prompts: list[Prompt] = []
-    objects: list[Object] = []
-    for object_slug in object_slugs:
-        object_ = await Object.get_or_none(slug=object_slug)
-        if object_ is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Object not found")
-        objects.append(object_)
-        prompts += list(await Prompt.filter(objects__id=object_.id).all())
-    # Rank prompts by number of objects in common
-    prompt_scores = {}
-    for prompt in prompts:
-        for object_ in objects:
-            if object_ in await prompt.objects.all():
-                prompt_scores[prompt.id] = prompt_scores.get(prompt.id, 0) + 1
-    # Sort prompts by score
-    prompt_scores = sorted(prompt_scores.items(), key=lambda x: x[1], reverse=True)
-    # Start a final list of prompts
+    objects_id = [object_.id for object_ in objects]
+
+    # Rank prompts id by number of objects in common
+    prompts = (
+        await Prompt.filter(objects__id__in=objects_id)
+        .group_by("id", "name")
+        .annotate(object_count=Count("objects__id"))
+        .order_by("-object_count", "name")
+        .all()
+    )
+    print(prompts)
+
+    if len(prompts) == 0:
+        return []
+
+    if one:
+        return [prompts[0]]
+
     final_prompts: list[Prompt] = []
     covered_objects: list[Object] = []
-    # For each prompt, add it to the final list if its objects are not already covered
-    for prompt_id, _ in prompt_scores:
-        prompt = await Prompt.get_or_none(id=prompt_id)
-        if prompt is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prompt not found")
-        if not set(await prompt.objects.all()).intersection(set(covered_objects)):
+
+    for prompt in prompts:
+        prompt_objects = await prompt.objects.all()
+        if not set(prompt_objects).intersection(set(covered_objects)):
             final_prompts.append(prompt)
-            covered_objects += list(await prompt.objects.all())
+            covered_objects += list(prompt_objects)
+
     return final_prompts
 
 
 def get_pubsub_client() -> pubsub.PublisherClient:
     """
     Get a PubSub client with the credentials from the environment.
-
-    Args:
-        mode (str): The mode to filter by (prod or staging).
 
     Returns:
         storage.Client: The GCS client.
@@ -377,51 +291,3 @@ def transform_tortoise_to_pydantic(
     transformed_pydantic_model = pydantic_model(**pydantic_values)
 
     return transformed_pydantic_model
-
-
-def upload_camera_snapshot_to_bucket(*, image_base64: str, camera_id: str) -> str:
-    """
-    Uploads a camera snapshot to the bucket.
-    Mode needs to be "prod" or "staging"
-
-    Args:
-        image_base64 (str): The base64 encoded image.
-        camera_id (str): The camera id.
-
-    Returns:
-        str: The public URL of the uploaded image.
-    """
-    # Save image to temp file
-    tmp_fname = f"/tmp/{uuid4()}.png"
-    img = Image.open(io.BytesIO(base64.b64decode(image_base64)))
-    with open(tmp_fname, "wb") as f:
-        img.save(f, format="PNG")
-    # Set blob path
-    blob_path = generate_blob_path(camera_id)
-    blob = upload_file_to_bucket(
-        bucket_name=config.GCS_BUCKET_NAME,
-        file_path=tmp_fname,
-        destination_blob_name=blob_path,
-    )
-    # Return public URL
-    return blob.public_url
-
-
-def upload_file_to_bucket(bucket_name: str, file_path: str, destination_blob_name: str) -> "Blob":
-    """
-    Uploads a file to the bucket.
-    Mode needs to be "prod" or "staging"
-
-    Args:
-        bucket_name (str): The name of the bucket.
-        file_path (str): The path of the file to upload.
-        destination_blob_name (str): The name of the blob.
-
-    Returns:
-        Blob: The uploaded blob.
-    """
-    storage_client = get_gcs_client()
-    bucket = storage_client.bucket(bucket_name)
-    blob = bucket.blob(destination_blob_name)
-    blob.upload_from_filename(file_path)
-    return blob
