@@ -47,6 +47,14 @@ class CameraOut(BaseModel):
     longitude: float
 
 
+class CameraUpdate(BaseModel):
+    name: str | None
+    rtsp_url: str | None
+    update_interval: int | None
+    latitude: float | None
+    longitude: float | None
+
+
 class HeartbeatIn(BaseModel):
     healthy: bool
 

@@ -19,6 +19,7 @@ from app.pydantic_models import (
     CameraIdentificationOut,
     CameraIn,
     CameraOut,
+    CameraUpdate,
     IdentificationOut,
     PredictOut,
     SnapshotIn,
@@ -186,7 +187,7 @@ async def get_camera(
 @router.put("/{camera_id}", response_model=CameraOut)
 async def update_camera(
     camera_id: str,
-    camera_: CameraIn,
+    camera_: CameraUpdate,
     _=Depends(is_admin),
 ) -> CameraOut:
     """Update a camera."""
