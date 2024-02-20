@@ -183,6 +183,28 @@ async def get_camera(
     )
 
 
+@router.put("/{camera_id}", response_model=CameraOut)
+async def update_camera(
+    camera_id: str,
+    camera_: CameraIn,
+    _=Depends(is_admin),
+) -> CameraOut:
+    """Update a camera."""
+    camera = await Camera.get_or_none(id=camera_id)
+    if not camera:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Camera not found.")
+
+    await Camera.filter(id=camera_id).update(**camera_.dict(exclude_unset=True))
+    return CameraOut(
+        id=camera.id,
+        name=camera.name,
+        rtsp_url=camera.rtsp_url,
+        update_interval=camera.update_interval,
+        latitude=camera.latitude,
+        longitude=camera.longitude,
+    )
+
+
 @router.delete("/{camera_id}")
 async def delete_camera(
     camera_id: str,
