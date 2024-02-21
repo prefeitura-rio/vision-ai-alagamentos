@@ -3,25 +3,28 @@ import io
 import json
 import textwrap
 from typing import Dict, List, Union
-import mlflow
-import pandas as pd
-from sklearn.metrics import (
-    accuracy_score,
-    precision_score,
-    recall_score,
-    f1_score,
-    confusion_matrix,
-)
+
 import matplotlib.pyplot as plt
-import seaborn as sns
 import mlflow
 import pandas as pd
 import requests
+import seaborn as sns
 import vertexai
 from langchain.output_parsers import PydanticOutputParser
 from pydantic import BaseModel, Field
+from sklearn.metrics import (
+    accuracy_score,
+    confusion_matrix,
+    f1_score,
+    precision_score,
+    recall_score,
+)
 from vertexai.preview import generative_models
 from vertexai.preview.generative_models import GenerativeModel, Part
+
+# import os
+# os.environ["MLFLOW_TRACKING_USERNAME"] = secret["mlflow_tracking_username"]
+# os.environ["MLFLOW_TRACKING_PASSWORD"] = secret["mlflow_tracking_password"]
 
 PROJECT_ID = "rj-escritorio-dev"
 LOCATION = "us-central1"
@@ -137,9 +140,151 @@ def get_prompt(prompt_parameters, prompt_template=None, objects_table_md=None):
     return filled_prompt, prompt_template
 
 
-backup = """
+class Snapshot(BaseModel):
+    object: str
+    label_explanation: str
+    label: Union[bool, str, None]
 
-"""
+
+class OutputPrediction(BaseModel):
+    objects: List[Snapshot]
+
+
+def get_prediction(
+    image_url: str,
+    prompt_text: str,
+    google_api_model: str,
+    max_output_tokens: int,
+    temperature: float,
+    top_k: int,
+    top_p: int,
+) -> Dict:
+
+    try:
+        image_response = requests.get(image_url)
+        model = GenerativeModel(google_api_model)
+        responses = model.generate_content(
+            contents=[prompt_text, Part.from_data(image_response.content, "image/png")],
+            generation_config={
+                "max_output_tokens": max_output_tokens,
+                "temperature": temperature,
+                "top_k": top_k,
+                "top_p": top_p,
+            },
+            safety_settings=SAFETY_CONFIG,
+        )
+
+        ai_response = responses.text
+
+    except Exception as exception:
+        raise exception
+
+    output_parser = PydanticOutputParser(pydantic_object=OutputPrediction)
+
+    try:
+        response_parsed = output_parser.parse(ai_response)
+    except Exception as exception:
+        raise exception
+
+    return response_parsed.dict()
+
+
+def explode_df(dataframe, column_to_explode, prefix=None):
+    df = dataframe.copy()
+    exploded_df = df.explode(column_to_explode)
+    new_df = pd.json_normalize(exploded_df[column_to_explode])
+
+    if prefix:
+        new_df = new_df.add_prefix(f"{prefix}_")
+
+    df.drop(columns=column_to_explode, inplace=True)
+    new_df.index = exploded_df.index
+    result_df = df.join(new_df)
+
+    return result_df
+
+
+# Define a function to handle null values
+def calculate_metrics(y_true, y_pred, average):
+    # ... (same as before) ...
+    # Filter out null values
+    valid_indices = y_true.notnull() & y_pred.notnull()
+    y_true_filtered = y_true[valid_indices]
+    y_pred_filtered = y_pred[valid_indices]
+
+    accuracy = accuracy_score(y_true_filtered, y_pred_filtered)
+    precision = precision_score(y_true_filtered, y_pred_filtered, average=average, zero_division=0)
+    recall = recall_score(y_true_filtered, y_pred_filtered, average=average, zero_division=0)
+    f1 = f1_score(y_true_filtered, y_pred_filtered, average=average, zero_division=0)
+
+    return accuracy, precision, recall, f1
+
+
+snapshots = [
+    {
+        "snapshot_id": "https://storage.googleapis.com/datario-public/flooding_detection/classified_images/images_predicted_as_flood/000326_2023-02-13%2021%3A23%3A25.png",
+        "ia_identifications": [
+            {"object": "image_corrupted", "label": "true"},
+            {"object": "road_blockade", "label": "partially"},
+            {"object": "water_level", "label": "low"},
+            {"object": "rain", "label": "true"},
+        ],
+        "human_identifications": [
+            {"object": "image_corrupted", "label": "true", "count": 10},
+            {"object": "image_corrupted", "label": "false", "count": 0},
+            {"object": "road_blockade", "label": "partially", "count": 0},
+            {"object": "road_blockade", "label": "totally", "count": 0},
+            {"object": "road_blockade", "label": "free", "count": 0},
+            {"object": "water_level", "label": "low", "count": 0},
+            {"object": "water_level", "label": "medium", "count": 0},
+            {"object": "water_level", "label": "high", "count": 0},
+            {"object": "rain", "label": "true", "count": 0},
+            {"object": "rain", "label": "false", "count": 0},
+        ],
+    },
+    {
+        "snapshot_id": "https://storage.googleapis.com/datario-public/flooding_detection/classified_images/images_predicted_as_flood/000398_2024-01-13%2023%3A14%3A20.jpeg",
+        "ia_identifications": [
+            {"object": "image_corrupted", "label": "true"},
+            {"object": "road_blockade", "label": "partially"},
+            {"object": "water_level", "label": "low"},
+            {"object": "rain", "label": "true"},
+        ],
+        "human_identifications": [
+            {"object": "image_corrupted", "label": "true", "count": 0},
+            {"object": "image_corrupted", "label": "false", "count": 10},
+            {"object": "road_blockade", "label": "partially", "count": 10},
+            {"object": "road_blockade", "label": "totally", "count": 0},
+            {"object": "road_blockade", "label": "free", "count": 0},
+            {"object": "water_level", "label": "low", "count": 0},
+            {"object": "water_level", "label": "medium", "count": 10},
+            {"object": "water_level", "label": "high", "count": 0},
+            {"object": "rain", "label": "true", "count": 10},
+            {"object": "rain", "label": "false", "count": 0},
+        ],
+    },
+    {
+        "snapshot_id": "https://storage.googleapis.com/datario-public/flooding_detection/classified_images/images_predicted_as_flood/000398_2024-01-14%2001%3A22%3A19.jpeg",
+        "ia_identifications": [
+            {"object": "image_corrupted", "label": "true"},
+            {"object": "road_blockade", "label": "partially"},
+            {"object": "water_level", "label": "low"},
+            {"object": "rain", "label": "true"},
+        ],
+        "human_identifications": [
+            {"object": "image_corrupted", "label": "true", "count": 0},
+            {"object": "image_corrupted", "label": "false", "count": 10},
+            {"object": "road_blockade", "label": "partially", "count": 0},
+            {"object": "road_blockade", "label": "totally", "count": 10},
+            {"object": "road_blockade", "label": "free", "count": 0},
+            {"object": "water_level", "label": "low", "count": 0},
+            {"object": "water_level", "label": "medium", "count": 0},
+            {"object": "water_level", "label": "high", "count": 10},
+            {"object": "rain", "label": "true", "count": 10},
+            {"object": "rain", "label": "false", "count": 0},
+        ],
+    },
+]
 
 
 prompt_text_local = """
@@ -303,152 +448,6 @@ As an Expert Urban Road Image Analyst, you specialize in interpreting CCTV image
 """
 
 
-class Snapshot(BaseModel):
-    object: str
-    label_explanation: str
-    label: Union[bool, str, None]
-
-
-class OutputPrediction(BaseModel):
-    objects: List[Snapshot]
-
-
-def get_prediction(
-    image_url: str,
-    prompt_text: str,
-    google_api_model: str,
-    max_output_tokens: int,
-    temperature: float,
-    top_k: int,
-    top_p: int,
-) -> Dict:
-
-    try:
-        image_response = requests.get(image_url)
-        model = GenerativeModel(google_api_model)
-        responses = model.generate_content(
-            contents=[prompt_text, Part.from_data(image_response.content, "image/png")],
-            generation_config={
-                "max_output_tokens": max_output_tokens,
-                "temperature": temperature,
-                "top_k": top_k,
-                "top_p": top_p,
-            },
-            safety_settings=SAFETY_CONFIG,
-        )
-
-        ai_response = responses.text
-
-    except Exception as exception:
-        raise exception
-
-    output_parser = PydanticOutputParser(pydantic_object=OutputPrediction)
-
-    try:
-        response_parsed = output_parser.parse(ai_response)
-    except Exception as exception:
-        raise exception
-
-    return response_parsed.dict()
-
-
-def explode_df(dataframe, column_to_explode, prefix=None):
-    df = dataframe.copy()
-    exploded_df = df.explode(column_to_explode)
-    new_df = pd.json_normalize(exploded_df[column_to_explode])
-
-    if prefix:
-        new_df = new_df.add_prefix(f"{prefix}_")
-
-    df.drop(columns=column_to_explode, inplace=True)
-    new_df.index = exploded_df.index
-    result_df = df.join(new_df)
-
-    return result_df
-
-
-# Define a function to handle null values
-def calculate_metrics(y_true, y_pred, average):
-    # ... (same as before) ...
-    # Filter out null values
-    valid_indices = y_true.notnull() & y_pred.notnull()
-    y_true_filtered = y_true[valid_indices]
-    y_pred_filtered = y_pred[valid_indices]
-
-    accuracy = accuracy_score(y_true_filtered, y_pred_filtered)
-    precision = precision_score(y_true_filtered, y_pred_filtered, average=average, zero_division=0)
-    recall = recall_score(y_true_filtered, y_pred_filtered, average=average, zero_division=0)
-    f1 = f1_score(y_true_filtered, y_pred_filtered, average=average, zero_division=0)
-
-    return accuracy, precision, recall, f1
-
-
-snapshots = [
-    {
-        "snapshot_id": "https://storage.googleapis.com/datario-public/flooding_detection/classified_images/images_predicted_as_flood/000326_2023-02-13%2021%3A23%3A25.png",
-        "ia_identifications": [
-            {"object": "image_corrupted", "label": "true"},
-            {"object": "road_blockade", "label": "partially"},
-            {"object": "water_level", "label": "low"},
-            {"object": "rain", "label": "true"},
-        ],
-        "human_identifications": [
-            {"object": "image_corrupted", "label": "true", "count": 10},
-            {"object": "image_corrupted", "label": "false", "count": 0},
-            {"object": "road_blockade", "label": "partially", "count": 0},
-            {"object": "road_blockade", "label": "totally", "count": 0},
-            {"object": "road_blockade", "label": "free", "count": 0},
-            {"object": "water_level", "label": "low", "count": 0},
-            {"object": "water_level", "label": "medium", "count": 0},
-            {"object": "water_level", "label": "high", "count": 0},
-            {"object": "rain", "label": "true", "count": 0},
-            {"object": "rain", "label": "false", "count": 0},
-        ],
-    },
-    {
-        "snapshot_id": "https://storage.googleapis.com/datario-public/flooding_detection/classified_images/images_predicted_as_flood/000398_2024-01-13%2023%3A14%3A20.jpeg",
-        "ia_identifications": [
-            {"object": "image_corrupted", "label": "true"},
-            {"object": "road_blockade", "label": "partially"},
-            {"object": "water_level", "label": "low"},
-            {"object": "rain", "label": "true"},
-        ],
-        "human_identifications": [
-            {"object": "image_corrupted", "label": "true", "count": 0},
-            {"object": "image_corrupted", "label": "false", "count": 10},
-            {"object": "road_blockade", "label": "partially", "count": 10},
-            {"object": "road_blockade", "label": "totally", "count": 0},
-            {"object": "road_blockade", "label": "free", "count": 0},
-            {"object": "water_level", "label": "low", "count": 0},
-            {"object": "water_level", "label": "medium", "count": 10},
-            {"object": "water_level", "label": "high", "count": 0},
-            {"object": "rain", "label": "true", "count": 10},
-            {"object": "rain", "label": "false", "count": 0},
-        ],
-    },
-    {
-        "snapshot_id": "https://storage.googleapis.com/datario-public/flooding_detection/classified_images/images_predicted_as_flood/000398_2024-01-14%2001%3A22%3A19.jpeg",
-        "ia_identifications": [
-            {"object": "image_corrupted", "label": "true"},
-            {"object": "road_blockade", "label": "partially"},
-            {"object": "water_level", "label": "low"},
-            {"object": "rain", "label": "true"},
-        ],
-        "human_identifications": [
-            {"object": "image_corrupted", "label": "true", "count": 0},
-            {"object": "image_corrupted", "label": "false", "count": 10},
-            {"object": "road_blockade", "label": "partially", "count": 0},
-            {"object": "road_blockade", "label": "totally", "count": 10},
-            {"object": "road_blockade", "label": "free", "count": 0},
-            {"object": "water_level", "label": "low", "count": 0},
-            {"object": "water_level", "label": "medium", "count": 0},
-            {"object": "water_level", "label": "high", "count": 10},
-            {"object": "rain", "label": "true", "count": 10},
-            {"object": "rain", "label": "false", "count": 0},
-        ],
-    },
-]
-
 df = pd.DataFrame(snapshots)
 df = explode_df(df, "human_identifications")
 df = df.drop(columns=["ia_identifications"])
@@ -474,45 +473,15 @@ for snapshot_id in df["snapshot_id"].unique().tolist():
     snapshot_df = df[df["snapshot_id"] == snapshot_id]
     print(snapshot_id)
 
-    # prediction = get_prediction(
-    #     image_url=snapshot_id,
-    #     prompt_text=prompt,
-    #     google_api_model=google_api_model,
-    #     max_output_tokens=max_output_tokens,
-    #     temperature=temperature,
-    #     top_k=top_k,
-    #     top_p=top_p,
-    # )
-
-    prediction = {
-        "objects": [
-            {
-                "object": "image_corrupted",
-                "label_explanation": "The image is clear, with no signs of data loss or corruption.",
-                "label": "false",
-            },
-            {
-                "object": "image_description",
-                "label_explanation": "The image shows a night view of an urban road with street lights reflecting on the wet road surface. There are no vehicles visible in the image.",
-                "label": "null",
-            },
-            {
-                "object": "rain",
-                "label_explanation": "The road surface is wet, indicating that it has been raining.",
-                "label": "true",
-            },
-            {
-                "object": "water_level",
-                "label_explanation": "The water level on the road is low, with only small puddles visible.",
-                "label": "low",
-            },
-            {
-                "object": "road_blockade",
-                "label_explanation": "The road is completely free of obstructions, with no visible blockades.",
-                "label": "free",
-            },
-        ]
-    }
+    prediction = get_prediction(
+        image_url=snapshot_id,
+        prompt_text=prompt,
+        google_api_model=google_api_model,
+        max_output_tokens=max_output_tokens,
+        temperature=temperature,
+        top_k=top_k,
+        top_p=top_p,
+    )
 
     prediction = pd.DataFrame.from_dict(prediction["objects"])
     prediction = prediction[["object", "label", "label_explanation"]].rename(
@@ -521,7 +490,6 @@ for snapshot_id in df["snapshot_id"].unique().tolist():
     final_prediction = snapshot_df.merge(prediction, on="object", how="left")
     final_predictions = pd.concat([final_predictions, final_prediction])
 
-    break
 
 params = {
     # "prompt_template": prompt_text_local,
@@ -533,23 +501,10 @@ params = {
     "max_output_tokens": max_output_tokens,
 }
 
-# Set our tracking server uri for logging
-
-
-params = {
-    # "prompt_template": prompt_text_local,
-    # "objects_table_md": objects_table_md,
-    "google_api_model": google_api_model,
-    "temperature": temperature,
-    "top_k": top_k,
-    "top_p": top_p,
-    "max_output_tokens": max_output_tokens,
-}
-
-mlflow.set_tracking_uri(uri="http://127.0.0.1:5000")
+mlflow.set_tracking_uri(uri="https://mlflow.dados.rio")
 
 # Create a new MLflow Experiment
-mlflow.set_experiment("test2")
+mlflow.set_experiment("test")
 
 # Start an MLflow run
 with mlflow.start_run():
