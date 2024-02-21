@@ -3,29 +3,30 @@ from functools import partial
 from typing import Annotated
 from uuid import UUID
 
-from app.dependencies import get_caller, is_admin
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi_pagination import Page
+from fastapi_pagination.ext.tortoise import paginate as tortoise_paginate
+from tortoise.fields import ReverseRelation
+
+from app.dependencies import is_admin, is_agent
 from app.models import Camera, Label, Object
 from app.pydantic_models import (
-    APICaller,
     CameraOut,
     LabelIn,
     LabelOut,
     LabelUpdate,
     ObjectIn,
     ObjectOut,
+    User,
 )
 from app.utils import apply_to_list, transform_tortoise_to_pydantic
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi_pagination import Page
-from fastapi_pagination.ext.tortoise import paginate as tortoise_paginate
-from tortoise.fields import ReverseRelation
 
 router = APIRouter(prefix="/objects", tags=["Objects"])
 
 
 @router.get("", response_model=Page[ObjectOut])
 async def get_objects(
-    _: Annotated[APICaller, Depends(get_caller)],  # TODO: Review permissions here
+    _: Annotated[User, Depends(is_agent)],
 ) -> Page[ObjectOut]:
     """Get a list of all objects."""
 

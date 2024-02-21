@@ -5,17 +5,19 @@ from uuid import UUID
 from pydantic import BaseModel
 
 
-class AgentPydantic(BaseModel):
+class User(BaseModel):
+    id: UUID
+    is_admin: bool
+    is_agent: bool
+    is_ai: bool
+
+
+class AgentOut(BaseModel):
     id: UUID
     name: str
     slug: str
     auth_sub: str
     last_heartbeat: datetime | None
-
-
-class APICaller(BaseModel):
-    is_admin: bool | None = False
-    agent: AgentPydantic | None
 
 
 class CameraIn(BaseModel):
@@ -84,6 +86,23 @@ class IdentificationOut(BaseModel):
     label: str
     label_explanation: str
     snapshot: SnapshotOut
+
+
+class IdentificationAIOut(BaseModel):
+    id: UUID
+    object: str
+    title: str
+    explanation: str
+    timestamp: datetime
+    label: str
+    ai_explanation: str
+    posible_labels: list[str]
+    snapshot_url: str
+
+
+class IdentificationHumanIN(BaseModel):
+    identification_ai: UUID
+    label: str
 
 
 class LabelIn(BaseModel):
@@ -180,8 +199,8 @@ class UserInfo(BaseModel):
     groups: list[str]
 
 
-AgentPydantic.update_forward_refs()
-APICaller.update_forward_refs()
+User.update_forward_refs()
+AgentOut.update_forward_refs()
 CameraIdentificationOut.update_forward_refs()
 IdentificationOut.update_forward_refs()
 ObjectOut.update_forward_refs()

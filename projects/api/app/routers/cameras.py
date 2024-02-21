@@ -12,10 +12,9 @@ from google.cloud import storage
 from tortoise.expressions import Q
 
 from app import config
-from app.dependencies import get_caller, is_admin
+from app.dependencies import is_admin, is_agent, is_ai
 from app.models import Agent, Camera, Identification, Label, Object, Snapshot
 from app.pydantic_models import (
-    APICaller,
     CameraIdentificationOut,
     CameraIn,
     CameraOut,
@@ -24,6 +23,7 @@ from app.pydantic_models import (
     PredictOut,
     SnapshotIn,
     SnapshotOut,
+    User,
 )
 from app.utils import (
     get_gcp_credentials,
@@ -167,7 +167,7 @@ async def create_camera(camera_: CameraIn, _=Depends(is_admin)) -> CameraOut:
 @router.get("/{camera_id}", response_model=CameraOut)
 async def get_camera(
     camera_id: str,
-    _: Annotated[APICaller, Depends(get_caller)],  # TODO: Review permissions here
+    _: Annotated[User, Depends(is_agent)],
 ) -> CameraOut:
     """Get information about a camera."""
     camera = await Camera.get_or_none(id=camera_id)
@@ -222,7 +222,7 @@ async def delete_camera(
 @router.get("/{camera_id}/snapshots", response_model=Page[SnapshotOut])
 async def get_camera_snapshots(
     camera_id: str,
-    _: Annotated[APICaller, Depends(get_caller)],  # TODO: Review permissions here
+    _: Annotated[User, Depends(is_agent)],
     params: Params = Depends(),
     minute_interval: int = 30,
 ) -> Page[SnapshotOut]:
@@ -253,15 +253,10 @@ async def get_camera_snapshots(
 async def create_camera_snapshot(
     camera_id: str,
     snapshot_in: SnapshotIn,
-    caller: Annotated[APICaller, Depends(get_caller)],
+    agent: Annotated[User, Depends(is_agent)],
 ) -> SnapshotOut:
     """Post a camera snapshot to the server."""
-    if not caller.agent:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not allowed to post snapshots for this camera.",
-        )
-    camera = await Camera.get_or_none(id=camera_id, agents=caller.agent.id)
+    camera = await Camera.get_or_none(id=camera_id, agents=agent.id)
     if not camera:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -303,17 +298,10 @@ async def create_camera_snapshot(
 async def predict(
     camera_id: str,
     snapshot_id: str,
-    caller: Annotated[APICaller, Depends(get_caller)],
+    api_agent: Annotated[User, Depends(is_agent)],
 ) -> PredictOut:
     """Post a camera snapshot to the server."""
-    # Caller must be an agent that has access to the camera.
-    if not caller.agent:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not allowed to post snapshots for this camera.",
-        )
-
-    agent = await Agent.get_or_none(id=caller.agent.id, cameras__id=camera_id)
+    agent = await Agent.get_or_none(id=api_agent.id, cameras__id=camera_id)
     if not agent:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -364,7 +352,7 @@ async def predict(
 async def get_identification(
     camera_id: str,
     snapshot_id: UUID,
-    _: Annotated[APICaller, Depends(get_caller)],  # TODO: Review permissions here
+    _: Annotated[User, Depends(is_agent)],
 ) -> list[IdentificationOut]:
     """Get a camera snapshot identification."""
     camera = await Camera.get_or_none(id=camera_id)
@@ -421,7 +409,7 @@ async def create_identification(
     object_id: UUID,
     label_value: str,
     label_explanation: str,
-    _=Depends(is_admin),  # TODO: Review permissions here
+    _=Depends(is_ai),
 ) -> IdentificationOut:
     """Update a camera snapshot identifications."""
     snapshot = await Snapshot.get_or_none(id=snapshot_id, camera__id=camera_id)

@@ -8,16 +8,16 @@ from fastapi_pagination import Page
 from fastapi_pagination.ext.tortoise import paginate as tortoise_paginate
 from tortoise.fields import ReverseRelation
 
-from app.dependencies import get_caller, is_admin
+from app.dependencies import is_admin, is_agent
 from app.models import Object, Prompt, PromptObject
 from app.pydantic_models import (
-    APICaller,
     LabelOut,
     ObjectOut,
     ObjectsSlugIn,
     PromptIn,
     PromptOut,
     PromptsOut,
+    User,
 )
 from app.utils import (
     apply_to_list,
@@ -89,7 +89,7 @@ async def create_prompt(
 @router.get("/{prompt_id}", response_model=PromptOut)
 async def get_prompt(
     prompt_id: UUID,
-    _: Annotated[APICaller, Depends(get_caller)],  # TODO: Review permissions here
+    _: Annotated[User, Depends(is_agent)],
 ) -> PromptOut:
     """Get a prompt by id."""
     prompt = await Prompt.get_or_none(id=prompt_id)
@@ -159,7 +159,7 @@ async def delete_prompt(
 @router.get("/{prompt_id}/objects", response_model=list[ObjectOut])
 async def get_prompt_objects(
     prompt_id: UUID,
-    _: Annotated[APICaller, Depends(get_caller)],  # TODO: Review permissions here
+    _: Annotated[User, Depends(is_agent)],
 ) -> list[ObjectOut]:
     """Get a prompt's objects."""
     prompt = await Prompt.get_or_none(id=prompt_id)
@@ -297,7 +297,7 @@ async def remove_prompt_object(
 @router.post("/best_fit", response_model=PromptsOut)
 async def get_best_fit_prompts(
     request: ObjectsSlugIn,
-    _: Annotated[APICaller, Depends(get_caller)],  # TODO: Review permissions here
+    _: Annotated[User, Depends(is_agent)],
 ) -> PromptsOut:
     """Get the best fit prompts for a list of objects."""
     object_slugs = request.objects

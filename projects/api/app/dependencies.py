@@ -1,61 +1,71 @@
 # -*- coding: utf-8 -*-
 from typing import Annotated
+from uuid import UUID
+
+from fastapi import Depends, HTTPException, Security, status
 
 from app.models import Agent
 from app.oidc import get_current_user
-from app.pydantic_models import AgentPydantic, APICaller, UserInfo
+from app.pydantic_models import User, UserInfo
 from app.utils import slugify
-from fastapi import Depends, HTTPException, Security, status
 
 
-async def get_caller(
-    user_info: Annotated[UserInfo, Security(get_current_user, scopes=["profile"])]
-):
-    # If "vision-ai" not in groups, raise an exception.
+async def get_user(user_info: Annotated[UserInfo, Security(get_current_user, scopes=["profile"])]):
     if "vision-ai" not in user_info.groups:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="You do not have access to this application.",
         )
-    # If "vision-ai-admin" is in groups, it's an admin.
+
     is_admin = "vision-ai-admin" in user_info.groups
-    # If "vision-ai-agent" is in groups, look for an agent with the same sub
-    agent = None
-    if "vision-ai-agent" in user_info.groups:
-        agent_raw = await Agent.get_or_none(auth_sub=user_info.sub)
-        if agent_raw is None:
-            agent_raw = await Agent.create(
+    is_agent = "vision-ai-agent" in user_info.groups
+    is_ai = "vision-ai-ai" in user_info.groups
+    id = UUID("00000000-0000-0000-0000-000000000000")
+
+    if is_agent:
+        agent = await Agent.get_or_none(auth_sub=user_info.sub)
+        if agent is None:
+            agent = await Agent.create(
                 name=user_info.nickname,
                 slug=slugify(user_info.nickname),
                 auth_sub=user_info.sub,
             )
-        agent = AgentPydantic(
-            id=agent_raw.id,
-            name=agent_raw.name,
-            slug=agent_raw.slug,
-            auth_sub=agent_raw.auth_sub,
-            last_heartbeat=agent_raw.last_heartbeat,
-        )
-    return APICaller(is_admin=is_admin, agent=agent)
+
+        id = agent.id
+
+    return User(
+        id=id,
+        is_admin=is_admin,
+        is_agent=is_agent,
+        is_ai=is_ai,
+    )
 
 
-async def is_admin(
-    caller: Annotated[APICaller, Depends(get_caller)],
-) -> None:
-    if not caller.is_admin:
+async def is_admin(user: Annotated[User, Depends(get_user)]) -> User:
+    if not user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="You don't have permission to do this.",
         )
 
+    return user
 
-async def is_agent(
-    caller: Annotated[APICaller, Depends(get_caller)],
-) -> AgentPydantic:
-    if caller.agent is None:
+
+async def is_agent(user: Annotated[User, Depends(get_user)]) -> User:
+    if not user.is_agent and not user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="You don't have permission to do this.",
         )
 
-    return caller.agent
+    return user
+
+
+async def is_ai(user: Annotated[User, Depends(get_user)]) -> User:
+    if not user.is_ai and not user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="You don't have permission to do this.",
+        )
+
+    return user
