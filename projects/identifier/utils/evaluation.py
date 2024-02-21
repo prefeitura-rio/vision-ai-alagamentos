@@ -552,3 +552,53 @@ with mlflow.start_run():
         }
         mlflow.log_metrics(metrics)
         mlflow.log_artifact(f"./data/mlflow/cm_{obj}.png")
+
+
+def _get_prediction(
+    image_url: str,
+    prompt_text: str,
+    google_api_model: str,
+    max_output_tokens: int,
+    temperature: float,
+    top_k: int,
+    top_p: int,
+) -> Dict:
+
+    try:
+
+        from langchain_google_vertexai import VertexAI
+        from langchain_core.messages import HumanMessage
+
+        model = VertexAI(
+            model_name=google_api_model,
+            temperature=temperature,
+            top_k=top_k,
+            top_p=top_p,
+            max_output_tokens=max_output_tokens,
+            safety_settings=SAFETY_CONFIG,
+            project=PROJECT_ID,
+            location=LOCATION,
+        )
+
+        content = [
+            {"type": "image_url", "image_url": {"url": image_url}},
+            {
+                "type": "text",
+                "text": prompt_text,
+            },
+        ]
+        message = HumanMessage(content=content)
+
+        ai_response = model.invoke([message])
+
+    except Exception as exception:
+        raise exception
+
+    output_parser = PydanticOutputParser(pydantic_object=OutputPrediction)
+
+    try:
+        response_parsed = output_parser.parse(ai_response)
+    except Exception as exception:
+        raise exception
+
+    return response_parsed.dict()
