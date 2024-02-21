@@ -46,7 +46,7 @@ router = APIRouter(prefix="/cameras", tags=["Cameras"])
 
 @router.get("", response_model=BigPage)
 async def get_cameras(
-    params: BigParams = Depends(), _=Depends(is_admin), minute_interval: int = 5
+    params: BigParams = Depends(), _=Depends(is_admin), minute_interval: int = 30
 ) -> Page[CameraIdentificationOut]:
     """Get a list of all cameras."""
     cameras_out: dict[str, CameraIdentificationOut] = {}
@@ -256,23 +256,13 @@ async def create_camera_snapshot(
     caller: Annotated[APICaller, Depends(get_caller)],
 ) -> SnapshotOut:
     """Post a camera snapshot to the server."""
-    # Caller must be an agent that has access to the camera.
-    camera = await Camera.get_or_none(id=camera_id)
-    if not camera:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Camera not found.")
     if not caller.agent:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not allowed to post snapshots for this camera.",
         )
-    agent = await Agent.get_or_none(id=caller.agent.id)
-    if not agent:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not allowed to post snapshots for this camera.",
-        )
-    cameras = await agent.cameras.filter(id=camera_id)
-    if not cameras:
+    camera = await Camera.get_or_none(id=camera_id, agents=caller.agent.id)
+    if not camera:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not allowed to post snapshots for this camera.",
