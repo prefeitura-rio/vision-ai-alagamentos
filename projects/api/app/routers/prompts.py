@@ -31,7 +31,7 @@ router = APIRouter(prefix="/prompts", tags=["Prompts"])
 
 @router.get("", response_model=Page[PromptOut])
 async def get_prompts(
-    _=Depends(is_admin),
+    _: Annotated[User, Depends(is_admin)],
 ) -> Page[PromptOut]:
     """Get a list of all prompts."""
 
@@ -69,7 +69,7 @@ async def get_prompts(
 @router.post("", response_model=PromptOut)
 async def create_prompt(
     prompt_: PromptIn,
-    _=Depends(is_admin),
+    _: Annotated[User, Depends(is_admin)],
 ) -> PromptOut:
     """Add a new prompt."""
     prompt = await Prompt.create(**prompt_.dict())
@@ -118,7 +118,7 @@ async def get_prompt(
 async def update_prompt(
     prompt_id: UUID,
     prompt_: PromptIn,
-    _=Depends(is_admin),
+    _: Annotated[User, Depends(is_admin)],
 ) -> PromptOut:
     """Update a prompt."""
     prompt = await Prompt.get_or_none(id=prompt_id)
@@ -147,7 +147,7 @@ async def update_prompt(
 @router.delete("/{prompt_id}")
 async def delete_prompt(
     prompt_id: UUID,
-    _=Depends(is_admin),
+    _: Annotated[User, Depends(is_admin)],
 ) -> None:
     """Delete a prompt."""
     prompt = await Prompt.get_or_none(id=prompt_id)
@@ -190,7 +190,7 @@ async def get_prompt_objects(
 async def add_prompt_object(
     prompt_id: UUID,
     object_id: UUID,
-    _=Depends(is_admin),
+    _: Annotated[User, Depends(is_admin)],
 ) -> ObjectOut:
     """Add an object to a prompt."""
     prompt = await Prompt.get_or_none(id=prompt_id)
@@ -229,7 +229,7 @@ async def add_prompt_object(
 async def order_prompt_object(
     prompt_id: UUID,
     objects_in: ObjectsSlugIn,
-    _=Depends(is_admin),
+    _: Annotated[User, Depends(is_admin)],
 ) -> PromptOut:
     """Add an object to a prompt."""
     prompt = await Prompt.get_or_none(id=prompt_id)
@@ -282,7 +282,7 @@ async def order_prompt_object(
 async def remove_prompt_object(
     prompt_id: UUID,
     object_id: UUID,
-    _=Depends(is_admin),
+    _: Annotated[User, Depends(is_admin)],
 ) -> None:
     """Remove an object from a prompt."""
     prompt = await Prompt.get_or_none(id=prompt_id)

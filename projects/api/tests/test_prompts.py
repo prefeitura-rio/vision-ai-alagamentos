@@ -43,7 +43,9 @@ async def test_prompts_get(client: AsyncClient, authorization_header: dict) -> N
 @pytest.mark.anyio
 @pytest.mark.run(order=12)
 async def test_prompts_create(
-    client: AsyncClient, authorization_header: dict, context: dict
+    client: AsyncClient,
+    authorization_header: dict,
+    context: dict,
 ) -> None:
     response = await client.post(
         "/prompts",
@@ -92,7 +94,9 @@ async def test_prompts_create(
 @pytest.mark.anyio
 @pytest.mark.run(order=13)
 async def test_prompts_get_by_id(
-    client: AsyncClient, authorization_header: dict, context: dict
+    client: AsyncClient,
+    authorization_header: dict,
+    context: dict,
 ) -> None:
     response = await client.get(
         f"/prompts/{context['test_prompt_id']}", headers=authorization_header
@@ -127,7 +131,9 @@ async def test_prompts_get_by_id(
 @pytest.mark.anyio
 @pytest.mark.run(order=14)
 async def test_prompts_update(
-    client: AsyncClient, authorization_header: dict, context: dict
+    client: AsyncClient,
+    authorization_header: dict,
+    context: dict,
 ) -> None:
     response = await client.put(
         f"/prompts/{context['test_prompt_id']}",
@@ -172,7 +178,9 @@ async def test_prompts_update(
 @pytest.mark.anyio
 @pytest.mark.run(order=15)
 async def test_prompts_add_objects(
-    client: AsyncClient, authorization_header: dict, context: dict
+    client: AsyncClient,
+    authorization_header: dict,
+    context: dict,
 ) -> None:
     response = await client.post(
         f"/prompts/{context['test_prompt_id']}/objects?object_id={context['test_object_id']}",
@@ -193,7 +201,9 @@ async def test_prompts_add_objects(
 @pytest.mark.anyio
 @pytest.mark.run(order=16)
 async def test_prompts_get_objects(
-    client: AsyncClient, authorization_header: dict, context: dict
+    client: AsyncClient,
+    authorization_header: dict,
+    context: dict,
 ) -> None:
     response = await client.get(
         f"/prompts/{context['test_prompt_id']}/objects", headers=authorization_header
@@ -277,7 +287,9 @@ async def test_prompts_best_fit(client: AsyncClient, authorization_header: dict)
 @pytest.mark.anyio
 @pytest.mark.run(order=998)
 async def test_prompts_delete_objects(
-    client: AsyncClient, authorization_header: dict, context: dict
+    client: AsyncClient,
+    authorization_header: dict,
+    context: dict,
 ) -> None:
     response = await client.delete(
         f"/prompts/{context['test_prompt_id']}/objects/{context['test_object_id']}",
@@ -289,7 +301,9 @@ async def test_prompts_delete_objects(
 @pytest.mark.anyio
 @pytest.mark.run(order=999)
 async def test_prompts_delete(
-    client: AsyncClient, authorization_header: dict, context: dict
+    client: AsyncClient,
+    authorization_header: dict,
+    context: dict,
 ) -> None:
     response = await client.delete(
         f"/prompts/{context['test_prompt_id']}", headers=authorization_header

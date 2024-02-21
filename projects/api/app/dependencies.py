@@ -6,11 +6,11 @@ from fastapi import Depends, HTTPException, Security, status
 
 from app.models import Agent
 from app.oidc import get_current_user
-from app.pydantic_models import User, UserInfo
+from app.pydantic_models import OIDCUser, User
 from app.utils import slugify
 
 
-async def get_user(user_info: Annotated[UserInfo, Security(get_current_user, scopes=["profile"])]):
+async def get_user(user_info: Annotated[OIDCUser, Security(get_current_user, scopes=["profile"])]):
     if "vision-ai" not in user_info.groups:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -20,7 +20,7 @@ async def get_user(user_info: Annotated[UserInfo, Security(get_current_user, sco
     is_admin = "vision-ai-admin" in user_info.groups
     is_agent = "vision-ai-agent" in user_info.groups
     is_ai = "vision-ai-ai" in user_info.groups
-    id = UUID("00000000-0000-0000-0000-000000000000")
+    agent_id = UUID("00000000-0000-0000-0000-000000000000")
 
     if is_agent:
         agent = await Agent.get_or_none(auth_sub=user_info.sub)
@@ -31,10 +31,11 @@ async def get_user(user_info: Annotated[UserInfo, Security(get_current_user, sco
                 auth_sub=user_info.sub,
             )
 
-        id = agent.id
+        agent_id = agent.id
 
     return User(
-        id=id,
+        agent_id=agent_id,
+        name=user_info.nickname,
         is_admin=is_admin,
         is_agent=is_agent,
         is_ai=is_ai,
@@ -63,6 +64,16 @@ async def is_agent(user: Annotated[User, Depends(get_user)]) -> User:
 
 async def is_ai(user: Annotated[User, Depends(get_user)]) -> User:
     if not user.is_ai and not user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="You don't have permission to do this.",
+        )
+
+    return user
+
+
+async def is_human(user: Annotated[User, Depends(get_user)]) -> User:
+    if user.is_ai:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="You don't have permission to do this.",

@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 from typing import Annotated
 
-from app import config
-from app.pydantic_models import Token, UserInfo
 from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from httpx import AsyncClient
 from jose import jwt
+
+from app import config
+from app.pydantic_models import OIDCUser, Token
 
 oidc_scheme = OAuth2PasswordBearer(tokenUrl="auth/token")
 
@@ -93,4 +94,4 @@ async def get_current_user(authorization_header: Annotated[str, Depends(oidc_sch
             401,
         )
 
-    return UserInfo(**payload)
+    return OIDCUser(**payload)

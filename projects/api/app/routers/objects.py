@@ -65,7 +65,7 @@ async def get_objects(
 @router.post("", response_model=ObjectOut)
 async def create_object(
     object_: ObjectIn,
-    _=Depends(is_admin),
+    _: Annotated[User, Depends(is_admin)],
 ) -> ObjectOut:
     """Add a new object."""
     object = await Object.create(**object_.dict())
@@ -82,7 +82,7 @@ async def create_object(
 @router.delete("/{object_id}", response_model=ObjectOut)
 async def delete_object(
     object_id: UUID,
-    _=Depends(is_admin),
+    _: Annotated[User, Depends(is_admin)],
 ) -> ObjectOut:
     """Delete an object."""
     object = await Object.get_or_none(id=object_id)
@@ -113,7 +113,7 @@ async def delete_object(
 @router.get("/{object_id}/labels", response_model=Page[LabelOut])
 async def get_object_labels(
     object_id: UUID,
-    _=Depends(is_admin),
+    _: Annotated[User, Depends(is_admin)],
 ) -> Page[LabelOut]:
     """Get a list of all labels for an object."""
     object = await Object.get_or_none(id=object_id)
@@ -145,7 +145,7 @@ async def get_object_labels(
 async def add_label_to_object(
     object_id: UUID,
     label: LabelIn,
-    _=Depends(is_admin),
+    _: Annotated[User, Depends(is_admin)],
 ) -> LabelOut:
     """Add a label to an object."""
     object = await Object.get_or_none(id=object_id)
@@ -168,7 +168,7 @@ async def update_object_label(
     object_id: UUID,
     label: str | UUID,
     label_: LabelUpdate,
-    _=Depends(is_admin),
+    _: Annotated[User, Depends(is_admin)],
 ) -> LabelOut:
     """Update a label for an object."""
     # If `label` is a valid UUID, it's the label ID, otherwise it's the label value
@@ -211,7 +211,7 @@ async def update_object_label(
 async def delete_object_label(
     object_id: UUID,
     label: str | UUID,
-    _=Depends(is_admin),
+    _: Annotated[User, Depends(is_admin)],
 ) -> LabelOut:
     """Delete a label from an object."""
     # If `label` is a valid UUID, it's the label ID, otherwise it's the label value
@@ -248,7 +248,7 @@ async def delete_object_label(
 async def add_camera_to_object(
     object_id: UUID,
     camera_id: str,
-    _=Depends(is_admin),
+    _: Annotated[User, Depends(is_admin)],
 ) -> CameraOut:
     """Add a camera to an object."""
     object = await Object.get_or_none(id=object_id)

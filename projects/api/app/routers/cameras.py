@@ -46,7 +46,7 @@ router = APIRouter(prefix="/cameras", tags=["Cameras"])
 
 @router.get("", response_model=BigPage)
 async def get_cameras(
-    params: BigParams = Depends(), _=Depends(is_admin), minute_interval: int = 30
+    _: Annotated[User, Depends(is_admin)], params: BigParams = Depends(), minute_interval: int = 30
 ) -> Page[CameraIdentificationOut]:
     """Get a list of all cameras."""
     cameras_out: dict[str, CameraIdentificationOut] = {}
@@ -151,7 +151,7 @@ async def get_cameras(
 
 
 @router.post("", response_model=CameraOut)
-async def create_camera(camera_: CameraIn, _=Depends(is_admin)) -> CameraOut:
+async def create_camera(camera_: CameraIn, _: Annotated[User, Depends(is_admin)]) -> CameraOut:
     """Add a new camera."""
     camera = await Camera.create(**camera_.dict())
     return CameraOut(
@@ -188,7 +188,7 @@ async def get_camera(
 async def update_camera(
     camera_id: str,
     camera_: CameraUpdate,
-    _=Depends(is_admin),
+    _: Annotated[User, Depends(is_admin)],
 ) -> CameraOut:
     """Update a camera."""
     camera = await Camera.get_or_none(id=camera_id)
@@ -209,7 +209,7 @@ async def update_camera(
 @router.delete("/{camera_id}")
 async def delete_camera(
     camera_id: str,
-    _=Depends(is_admin),
+    _: Annotated[User, Depends(is_admin)],
 ) -> None:
     """Delete a camera."""
     camera = await Camera.get_or_none(id=camera_id)
@@ -253,10 +253,10 @@ async def get_camera_snapshots(
 async def create_camera_snapshot(
     camera_id: str,
     snapshot_in: SnapshotIn,
-    agent: Annotated[User, Depends(is_agent)],
+    user: Annotated[User, Depends(is_agent)],
 ) -> SnapshotOut:
     """Post a camera snapshot to the server."""
-    camera = await Camera.get_or_none(id=camera_id, agents=agent.id)
+    camera = await Camera.get_or_none(id=camera_id, agents=user.agent_id)
     if not camera:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -298,10 +298,10 @@ async def create_camera_snapshot(
 async def predict(
     camera_id: str,
     snapshot_id: str,
-    api_agent: Annotated[User, Depends(is_agent)],
+    user: Annotated[User, Depends(is_agent)],
 ) -> PredictOut:
     """Post a camera snapshot to the server."""
-    agent = await Agent.get_or_none(id=api_agent.id, cameras__id=camera_id)
+    agent = await Agent.get_or_none(id=user.agent_id, cameras__id=camera_id)
     if not agent:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -409,7 +409,7 @@ async def create_identification(
     object_id: UUID,
     label_value: str,
     label_explanation: str,
-    _=Depends(is_ai),
+    _: Annotated[User, Depends(is_ai)],
 ) -> IdentificationOut:
     """Update a camera snapshot identifications."""
     snapshot = await Snapshot.get_or_none(id=snapshot_id, camera__id=camera_id)
@@ -452,7 +452,7 @@ async def delete_identification(
     camera_id: str,
     snapshot_id: UUID,
     identification_id: UUID,
-    _=Depends(is_admin),
+    _: Annotated[User, Depends(is_admin)],
 ) -> None:
     """Delete a camera snapshot identification."""
     camera = await Camera.get_or_none(id=camera_id)

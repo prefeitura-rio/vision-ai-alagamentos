@@ -2,16 +2,17 @@
 import sys
 
 import sentry_sdk
-from app import config
-from app.db import TORTOISE_ORM
-from app.oidc import AuthError
-from app.routers import agents, auth, cameras, objects, prompts
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi_pagination import add_pagination
 from loguru import logger
 from starlette.responses import JSONResponse
 from tortoise.contrib.fastapi import register_tortoise
+
+from app import config
+from app.db import TORTOISE_ORM
+from app.oidc import AuthError
+from app.routers import agents, auth, cameras, identifications, objects, prompts
 
 logger.remove()
 logger.add(sys.stdout, level=config.LOG_LEVEL)
@@ -49,6 +50,7 @@ app.include_router(agents.router)
 app.include_router(cameras.router)
 app.include_router(objects.router)
 app.include_router(prompts.router)
+app.include_router(identifications.router)
 
 
 register_tortoise(

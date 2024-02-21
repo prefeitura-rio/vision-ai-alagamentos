@@ -78,7 +78,9 @@ async def test_agents_get_cameras(client: AsyncClient, authorization_header: dic
 @pytest.mark.anyio
 @pytest.mark.run(order=35)
 async def test_agents_get_by_id_cameras(
-    client: AsyncClient, authorization_header: dict, context: dict
+    client: AsyncClient,
+    authorization_header: dict,
+    context: dict,
 ):
     response = await client.get(
         f"/agents/{context['agent_id']}/cameras", headers=authorization_header
@@ -103,7 +105,9 @@ async def test_agents_get_by_id_cameras(
 @pytest.mark.anyio
 @pytest.mark.run(order=36)
 async def test_agents_post_heartbeat_to_other(
-    client: AsyncClient, authorization_header: dict, context: dict
+    client: AsyncClient,
+    authorization_header: dict,
+    context: dict,
 ):
     response = await client.post(
         f"/agents/{uuid4()}/heartbeat",

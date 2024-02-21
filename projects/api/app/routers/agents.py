@@ -17,7 +17,7 @@ router = APIRouter(prefix="/agents", tags=["Agents"])
 
 
 @router.get("", response_model=Page[AgentOut])
-async def get_agents(_=Depends(is_admin)) -> Page[AgentOut]:
+async def get_agents(_: Annotated[User, Depends(is_admin)]) -> Page[AgentOut]:
     """Returns the list of registered agents."""
     return await tortoise_paginate(
         Agent,
@@ -39,9 +39,9 @@ async def get_agents(_=Depends(is_admin)) -> Page[AgentOut]:
 
 
 @router.get("/me", response_model=AgentOut)
-async def get_agent_me(agent=Depends(is_agent)) -> AgentOut:
+async def get_agent_me(user: Annotated[User, Depends(is_agent)]) -> AgentOut:
     """Returns the agent informations."""
-    agent = await Agent.get(id=agent.id)
+    agent = await Agent.get(id=user.agent_id)
 
     return AgentOut(
         id=agent.id,
@@ -60,7 +60,7 @@ async def get_cameras(
     if user.is_admin:
         queryset = Camera
     elif user.is_agent:
-        queryset = Camera.filter(agents__id=user.id)
+        queryset = Camera.filter(agents__id=user.agent_id)
     else:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -94,7 +94,7 @@ async def get_agent_cameras(
 ) -> Page[CameraOut]:
     """Returns the list of cameras that the agent must get snapshots from."""
     # user must either be an admin or the agent itself.
-    if not user.is_admin and (not user.is_agent or user.id != agent_id):
+    if not user.is_admin and (not user.is_agent or user.agent_id != agent_id):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not allowed to list cameras for this agent.",
@@ -128,7 +128,7 @@ async def agent_heartbeat(
 ) -> HeartbeatOut:
     """Endpoint for agents to send heartbeats to."""
     # user must be the agent itself.
-    if not user.is_agent or user.id != agent_id:
+    if not user.is_agent or user.agent_id != agent_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not allowed to send heartbeats for this agent.",
@@ -144,7 +144,7 @@ async def agent_heartbeat(
 async def add_camera_to_agent(
     agent_id: UUID,
     camera_id: str,
-    _=Depends(is_admin),
+    _: Annotated[User, Depends(is_admin)],
 ) -> CameraOut:
     """Adds a camera to an agent."""
     agent = await Agent.get_or_none(id=agent_id)

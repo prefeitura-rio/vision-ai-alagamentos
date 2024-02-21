@@ -41,6 +41,18 @@ class Identification(Model):
     label_explanation = fields.TextField()
 
 
+class UserIdentification(Model):
+    id = fields.UUIDField(pk=True)
+    timestamp = fields.DatetimeField()
+    username = fields.CharField(max_length=255)
+    label = fields.ForeignKeyField("app.Label")
+    identification = fields.ForeignKeyField("app.Identification")
+
+    class Meta:
+        table = "users_identification"
+        unique_together = ("username", "identification")
+
+
 class Label(Model):
     id = fields.UUIDField(pk=True)
     object = fields.ForeignKeyField("app.Object", related_name="labels")

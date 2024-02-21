@@ -6,7 +6,8 @@ from pydantic import BaseModel
 
 
 class User(BaseModel):
-    id: UUID
+    agent_id: UUID
+    name: str
     is_admin: bool
     is_agent: bool
     is_ai: bool
@@ -95,13 +96,13 @@ class IdentificationAIOut(BaseModel):
     explanation: str
     timestamp: datetime
     label: str
+    possible_labels: list[str]
     ai_explanation: str
-    posible_labels: list[str]
     snapshot_url: str
 
 
 class IdentificationHumanIN(BaseModel):
-    identification_ai: UUID
+    identification_id: UUID
     label: str
 
 
@@ -180,7 +181,7 @@ class Token(BaseModel):
     token_type: str
 
 
-class UserInfo(BaseModel):
+class OIDCUser(BaseModel):
     iss: str
     sub: str
     aud: str
@@ -207,4 +208,4 @@ ObjectOut.update_forward_refs()
 PromptOut.update_forward_refs()
 SnapshotOut.update_forward_refs()
 PredictOut.update_forward_refs()
-UserInfo.update_forward_refs()
+OIDCUser.update_forward_refs()

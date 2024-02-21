@@ -45,7 +45,9 @@ async def test_objects_get(client: AsyncClient, authorization_header: dict) -> N
 @pytest.mark.anyio
 @pytest.mark.run(order=2)
 async def test_objects_create(
-    client: AsyncClient, authorization_header: dict, context: dict
+    client: AsyncClient,
+    authorization_header: dict,
+    context: dict,
 ) -> None:
     response = await client.post(
         "/objects",
@@ -81,7 +83,9 @@ async def test_objects_create(
 @pytest.mark.anyio
 @pytest.mark.run(order=3)
 async def test_object_add_labels(
-    client: AsyncClient, authorization_header: dict, context: dict
+    client: AsyncClient,
+    authorization_header: dict,
+    context: dict,
 ) -> None:
     object_id = context["test_object_id"]
     label_value = "test-label"
@@ -113,7 +117,9 @@ async def test_object_add_labels(
 @pytest.mark.anyio
 @pytest.mark.run(order=4)
 async def test_object_get_labels(
-    client: AsyncClient, authorization_header: dict, context: dict
+    client: AsyncClient,
+    authorization_header: dict,
+    context: dict,
 ) -> None:
     object_id = context["test_object_id"]
     response = await client.get(
@@ -149,7 +155,9 @@ async def test_object_get_labels(
 @pytest.mark.anyio
 @pytest.mark.run(order=5)
 async def test_object_update_label_by_value(
-    client: AsyncClient, authorization_header: dict, context: dict
+    client: AsyncClient,
+    authorization_header: dict,
+    context: dict,
 ) -> None:
     object_id = context["test_object_id"]
     label_value = context["test_label_value"]
@@ -181,7 +189,9 @@ async def test_object_update_label_by_value(
 @pytest.mark.anyio
 @pytest.mark.run(order=6)
 async def test_object_update_label_by_id(
-    client: AsyncClient, authorization_header: dict, context: dict
+    client: AsyncClient,
+    authorization_header: dict,
+    context: dict,
 ) -> None:
     object_id = context["test_object_id"]
     label_id = context["test_label_id"]
@@ -213,7 +223,9 @@ async def test_object_update_label_by_id(
 @pytest.mark.anyio
 @pytest.mark.run(order=999)
 async def test_object_delete_label_by_id(
-    client: AsyncClient, authorization_header: dict, context: dict
+    client: AsyncClient,
+    authorization_header: dict,
+    context: dict,
 ) -> None:
     object_id = context["test_object_id"]
     label_id = context["test_label_id"]
@@ -235,7 +247,9 @@ async def test_object_delete_label_by_id(
 @pytest.mark.anyio
 @pytest.mark.run(order=1000)
 async def test_objects_delete(
-    client: AsyncClient, authorization_header: dict, context: dict
+    client: AsyncClient,
+    authorization_header: dict,
+    context: dict,
 ) -> None:
     object_id = context["test_object_id"]
     response = await client.delete(
