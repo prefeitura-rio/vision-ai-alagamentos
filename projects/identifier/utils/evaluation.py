@@ -3,8 +3,18 @@ import io
 import json
 import textwrap
 from typing import Dict, List, Union
-
-# import mlflow
+import mlflow
+import pandas as pd
+from sklearn.metrics import (
+    accuracy_score,
+    precision_score,
+    recall_score,
+    f1_score,
+    confusion_matrix,
+)
+import matplotlib.pyplot as plt
+import seaborn as sns
+import mlflow
 import pandas as pd
 import requests
 import vertexai
@@ -357,6 +367,22 @@ def explode_df(dataframe, column_to_explode, prefix=None):
     return result_df
 
 
+# Define a function to handle null values
+def calculate_metrics(y_true, y_pred, average):
+    # ... (same as before) ...
+    # Filter out null values
+    valid_indices = y_true.notnull() & y_pred.notnull()
+    y_true_filtered = y_true[valid_indices]
+    y_pred_filtered = y_pred[valid_indices]
+
+    accuracy = accuracy_score(y_true_filtered, y_pred_filtered)
+    precision = precision_score(y_true_filtered, y_pred_filtered, average=average, zero_division=0)
+    recall = recall_score(y_true_filtered, y_pred_filtered, average=average, zero_division=0)
+    f1 = f1_score(y_true_filtered, y_pred_filtered, average=average, zero_division=0)
+
+    return accuracy, precision, recall, f1
+
+
 snapshots = [
     {
         "snapshot_id": "https://storage.googleapis.com/datario-public/flooding_detection/classified_images/images_predicted_as_flood/000326_2023-02-13%2021%3A23%3A25.png",
@@ -448,15 +474,46 @@ for snapshot_id in df["snapshot_id"].unique().tolist():
     snapshot_df = df[df["snapshot_id"] == snapshot_id]
     print(snapshot_id)
 
-    prediction = get_prediction(
-        image_url=snapshot_id,
-        prompt_text=prompt,
-        google_api_model=google_api_model,
-        max_output_tokens=max_output_tokens,
-        temperature=temperature,
-        top_k=top_k,
-        top_p=top_p,
-    )
+    # prediction = get_prediction(
+    #     image_url=snapshot_id,
+    #     prompt_text=prompt,
+    #     google_api_model=google_api_model,
+    #     max_output_tokens=max_output_tokens,
+    #     temperature=temperature,
+    #     top_k=top_k,
+    #     top_p=top_p,
+    # )
+
+    prediction = {
+        "objects": [
+            {
+                "object": "image_corrupted",
+                "label_explanation": "The image is clear, with no signs of data loss or corruption.",
+                "label": "false",
+            },
+            {
+                "object": "image_description",
+                "label_explanation": "The image shows a night view of an urban road with street lights reflecting on the wet road surface. There are no vehicles visible in the image.",
+                "label": "null",
+            },
+            {
+                "object": "rain",
+                "label_explanation": "The road surface is wet, indicating that it has been raining.",
+                "label": "true",
+            },
+            {
+                "object": "water_level",
+                "label_explanation": "The water level on the road is low, with only small puddles visible.",
+                "label": "low",
+            },
+            {
+                "object": "road_blockade",
+                "label_explanation": "The road is completely free of obstructions, with no visible blockades.",
+                "label": "free",
+            },
+        ]
+    }
+
     prediction = pd.DataFrame.from_dict(prediction["objects"])
     prediction = prediction[["object", "label", "label_explanation"]].rename(
         columns={"label": "label_ia"}
@@ -465,3 +522,78 @@ for snapshot_id in df["snapshot_id"].unique().tolist():
     final_predictions = pd.concat([final_predictions, final_prediction])
 
     break
+
+params = {
+    # "prompt_template": prompt_text_local,
+    # "objects_table_md": objects_table_md,
+    "google_api_model": google_api_model,
+    "temperature": temperature,
+    "top_k": top_k,
+    "top_p": top_p,
+    "max_output_tokens": max_output_tokens,
+}
+
+# Set our tracking server uri for logging
+
+
+params = {
+    # "prompt_template": prompt_text_local,
+    # "objects_table_md": objects_table_md,
+    "google_api_model": google_api_model,
+    "temperature": temperature,
+    "top_k": top_k,
+    "top_p": top_p,
+    "max_output_tokens": max_output_tokens,
+}
+
+mlflow.set_tracking_uri(uri="http://127.0.0.1:5000")
+
+# Create a new MLflow Experiment
+mlflow.set_experiment("test2")
+
+# Start an MLflow run
+with mlflow.start_run():
+    # Log the hyperparameters
+    mlflow.log_params(params)
+    mlflow.log_text(prompt, "prompt.md")
+    mlflow.log_input(mlflow.data.from_pandas(df), context="input")
+    mlflow.log_input(mlflow.data.from_pandas(final_predictions), context="output")
+
+    # Calculate metrics for each object
+    results = {}
+    for obj in final_predictions["object"].unique():
+        df_obj = final_predictions[final_predictions["object"] == obj]
+        y_true = df_obj["label"]
+        y_pred = df_obj["label_ia"]
+
+        # Choose an appropriate average method (e.g., 'micro', 'macro', or 'weighted')
+        average_method = "macro"
+        accuracy, precision, recall, f1 = calculate_metrics(y_true, y_pred, average_method)
+        unique_labels = sorted(set(y_true) | set(y_pred))
+        print(unique_labels)
+        cm = confusion_matrix(y_true, y_pred, labels=unique_labels)
+
+        plt.figure(figsize=(8, 6))
+        sns.heatmap(
+            cm,
+            annot=True,
+            fmt="d",
+            cmap="Blues",
+            xticklabels=unique_labels,
+            yticklabels=unique_labels,
+        )
+        plt.ylabel("Actual")
+        plt.xlabel("Predicted")
+        plt.title(f"Confusion Matrix for {obj}")
+        # Save image temporarily
+        temp_image_path = f"./data/mlflow/cm_{obj}.png"
+        plt.savefig(temp_image_path)
+
+        metrics = {
+            f"{obj}_accuracy": accuracy,
+            f"{obj}_precision": precision,
+            f"{obj}_recall": recall,
+            f"{obj}_f1_score": f1,
+        }
+        mlflow.log_metrics(metrics)
+        mlflow.log_artifact(f"./data/mlflow/cm_{obj}.png")
