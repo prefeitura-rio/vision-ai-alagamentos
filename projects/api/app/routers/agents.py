@@ -168,3 +168,33 @@ async def add_camera_to_agent(
         latitude=camera.latitude,
         longitude=camera.longitude,
     )
+
+
+@router.delete("/{agent_id}/cameras/{camera_id}", response_model=CameraOut)
+async def remove_camera_from_agent(
+    agent_id: UUID,
+    camera_id: str,
+    _: Annotated[User, Depends(is_admin)],
+) -> CameraOut:
+    """Removes a camera from an agent."""
+    agent = await Agent.get_or_none(id=agent_id)
+    if not agent:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Agent not found",
+        )
+    camera = await Camera.get_or_none(id=camera_id)
+    if not camera:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Camera not found",
+        )
+    await agent.cameras.remove(camera)
+    return CameraOut(
+        id=camera.id,
+        name=camera.name,
+        rtsp_url=camera.rtsp_url,
+        update_interval=camera.update_interval,
+        latitude=camera.latitude,
+        longitude=camera.longitude,
+    )
