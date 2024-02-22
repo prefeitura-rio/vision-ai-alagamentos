@@ -52,9 +52,8 @@ if st.button("Update Data"):
 
 
 cameras_identifications = treat_data(cameras)
-# st.dataframe(cameras_identifications)
 
-if len(cameras_identifications) > 0:
+if not all(x is None for x in cameras_identifications):
 
     col1, col2 = st.columns(2)
     with col1:
@@ -169,19 +168,29 @@ if len(cameras_identifications) > 0:
     #         row=row, cameras_identifications_df=cameras_identifications
     #     )
     #     time.sleep(2)
+
+    with st.expander("Mais Detalhes"):
+
+        # show number of unique cameras
+        st.markdown(
+            f"#### 📷 Câmeras com identificações: {len(cameras_identifications['id'].unique())}"
+        )
+
+        # show aggregated count of labels
+        st.markdown("#### 📊 Contagem de labels")
+        labels_count = (
+            cameras_identifications.groupby(["title", "label_text"])
+            .size()
+            .reset_index(name="count")
+        )
+        st.dataframe(labels_count)
 else:
-    st.error("No cameras with identifications")
+    st.error(
+        """
+        Ops, parece que não há dados disponíveis, tente atualizar a página. 
+        
+        Se o problema persistir, entre em contato com o administrador.
 
-with st.expander("Mais Detalhes"):
-
-    # show number of unique cameras
-    st.markdown(
-        f"#### 📷 Câmeras com identificações: {len(cameras_identifications['id'].unique())}"
+        
+        """
     )
-
-    # show aggregated count of labels
-    st.markdown("#### 📊 Contagem de labels")
-    labels_count = (
-        cameras_identifications.groupby(["title", "label_text"]).size().reset_index(name="count")
-    )
-    st.dataframe(labels_count)
