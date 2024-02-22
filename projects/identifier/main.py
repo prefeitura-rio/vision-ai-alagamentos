@@ -82,6 +82,9 @@ def predict(cloud_event: dict) -> None:
 
     # Generates a prediction using the Google Generative AI model
     ai_response_parsed = get_prediction(
+        project_id=PROJECT_ID,
+        dataset_id=DATASET_ID,
+        table_id=TABLE_ID,
         bq_data_json=bq_data,
         image_url=data["image_url"],
         prompt=data["prompt_text"],
@@ -135,6 +138,9 @@ def predict(cloud_event: dict) -> None:
                 ai_response_parsed_bq.append(item)
 
             save_data_in_bq(
+                project_id=PROJECT_ID,
+                dataset_id=DATASET_ID,
+                table_id=TABLE_ID,
                 json_data=bq_data,
                 error_step=None,
                 ai_response_parsed=json.dumps(ai_response_parsed_bq),
@@ -154,6 +160,9 @@ def predict(cloud_event: dict) -> None:
                     ai_response_parsed_bq.append(item)
 
                 save_data_in_bq(
+                    project_id=PROJECT_ID,
+                    dataset_id=DATASET_ID,
+                    table_id=TABLE_ID,
                     json_data=bq_data,
                     error_step="api_authentication_error",
                     ai_response_parsed=json.dumps(ai_response_parsed_bq),
