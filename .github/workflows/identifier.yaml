@@ -44,7 +44,7 @@ jobs:
       GCF_NAME: vision-ai-function
       GCF_RUNTIME: python311
       GCF_ENTRY_POINT: predict
-      GCF_MEMORY_MB: 256
+      GCF_MEMORY_MB: 512
       GCF_REGION: us-central1
       GCF_TIMEOUT: 60
       GCF_MIN_INSTANCES: 0

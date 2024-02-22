@@ -100,7 +100,6 @@ class IdentificationAIOut(BaseModel):
     timestamp: datetime
     label: str
     label_text: str
-    possible_labels: list[str]
     ai_explanation: str
     snapshot_url: str
 

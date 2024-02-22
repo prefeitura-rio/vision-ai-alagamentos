@@ -17,6 +17,9 @@ def get_prediction(
     top_k: int,
     top_p: int,
     safety_settings: dict,
+    project_id: str,
+    dataset_id: str,
+    table_id: str,
 ):
     try:
         model = Model()
@@ -34,6 +37,9 @@ def get_prediction(
 
     except Exception as exception:
         save_data_in_bq(
+            project_id=project_id,
+            dataset_id=dataset_id,
+            table_id=table_id,
             json_data=bq_data_json,
             error_step="ai_request",
             ai_response_parsed=None,
@@ -49,6 +55,9 @@ def get_prediction(
         response_parsed = output_parser.parse(ai_response)
     except Exception as exception:
         save_data_in_bq(
+            project_id=project_id,
+            dataset_id=dataset_id,
+            table_id=table_id,
             json_data=bq_data_json,
             error_step="ai_response_parser",
             ai_response_parsed=None,

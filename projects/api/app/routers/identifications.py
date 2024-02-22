@@ -70,21 +70,6 @@ async def get_ai_identifications(
         )
     )
 
-    objects_ids = list(
-        set([identification["label__object__id"] for identification in identifications])
-    )
-    labels = await Label.all().filter(object__id__in=objects_ids).values("value", "object__slug")
-    possible_labels: dict[str, list[str]] = {}
-
-    for label in labels:
-        slug = label["object__slug"]
-        value = label["value"]
-
-        if slug not in possible_labels:
-            possible_labels[slug] = [value]
-        else:
-            possible_labels[slug].append(value)
-
     out = [
         IdentificationAIOut(
             id=identification["id"],
@@ -95,7 +80,6 @@ async def get_ai_identifications(
             timestamp=identification["timestamp"],
             label=identification["label__value"],
             label_text=identification["label__text"],
-            possible_labels=possible_labels[identification["label__object__slug"]],
             ai_explanation=identification["label__value"],
             snapshot_url=identification["snapshot__public_url"],
         )
@@ -119,8 +103,6 @@ async def create_user_identification(
         )
 
     object_ = identification.label.object
-    print(object_.name)
-    print(data.label)
 
     label = await Label.get_or_none(object=object_, value=data.label)
     if label is None:
