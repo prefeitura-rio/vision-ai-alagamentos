@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 # import folium # noqa
 
-import streamlit as st
 from streamlit_folium import st_folium  # noqa
 from utils.utils import (
     create_map,
@@ -14,10 +13,12 @@ from utils.utils import (
     treat_data,
 )
 
+import streamlit as st
+
 st.set_page_config(page_title="Vision AI - Rio", layout="wide", initial_sidebar_state="collapsed")
 # st.image("./data/logo/logo.png", width=300)
 
-DEFAULT_OBJECT = "nível da água"
+DEFAULT_OBJECT = "Nível da água"
 st.markdown("## Identificações | Vision AI")
 
 
@@ -54,9 +55,11 @@ cameras_identifications = treat_data(cameras)
 # st.dataframe(cameras_identifications)
 
 if len(cameras_identifications) > 0:
+
     col1, col2 = st.columns(2)
     with col1:
-        objects = cameras_identifications["object"].unique().tolist()
+
+        objects = cameras_identifications["title"].unique().tolist()
         objects.sort()
         # dropdown to filter by object
         object_filter = st.selectbox(
@@ -67,8 +70,8 @@ if len(cameras_identifications) > 0:
 
     with col2:
         labels = (
-            cameras_identifications[cameras_identifications["object"] == object_filter][  # noqa
-                "label"
+            cameras_identifications[cameras_identifications["title"] == object_filter][  # noqa
+                "label_text"
             ]
             .dropna()
             .unique()
@@ -98,8 +101,8 @@ if len(cameras_identifications) > 0:
     with col1:
         selected_cols = [
             "index",
-            "object",
-            "label",
+            "title",
+            "label_text",
             "bairro",
             "timestamp",
             "id",
@@ -111,10 +114,6 @@ if len(cameras_identifications) > 0:
 
         # sort the table first by object then by the column order
         aggrid_table = aggrid_table.sort_values(by=["object", "order"], ascending=[True, True])
-
-        # capitalize the values of the columns object and label
-        aggrid_table["object"] = aggrid_table["object"].str.capitalize()
-        aggrid_table["label"] = aggrid_table["label"].str.capitalize()
 
         aggrid_table = aggrid_table[selected_cols]
         st.markdown("### 📈 Identificações")

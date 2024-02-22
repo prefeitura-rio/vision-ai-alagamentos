@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import pandas as pd
 import requests
+
 import streamlit as st
 
 st.set_page_config(layout="wide", page_title="Pontos de Alagamento")
@@ -34,7 +35,7 @@ def load_alagamento_detectado_ia():
     )
 
     # filter only flooded cameras
-    dataframe = dataframe[dataframe["label"] == True]  # noqa
+    dataframe = dataframe[dataframe["label"] is True]
 
     return dataframe, last_update
 

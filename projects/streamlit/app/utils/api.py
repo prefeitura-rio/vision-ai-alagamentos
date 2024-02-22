@@ -2,7 +2,7 @@
 
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Dict, Tuple
+from typing import Any, Dict, Tuple
 
 import requests
 
@@ -29,6 +29,17 @@ class APIVisionAI:
     def _get(self, path: str, timeout: int = 120) -> Dict:
         self._refresh_token_if_needed()
         response = requests.get(f"{self.BASE_URL}{path}", headers=self.headers, timeout=timeout)
+        response.raise_for_status()
+        return response.json()
+
+    def _post(self, path: str, json: dict[str, Any], timeout: int = 120) -> dict:
+        self._refresh_token_if_needed()
+        response = requests.post(
+            f"{self.BASE_URL}{path}",
+            headers=self.headers,
+            timeout=timeout,
+            json=json,
+        )
         response.raise_for_status()
         return response.json()
 
