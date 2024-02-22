@@ -16,6 +16,7 @@ def get_prediction(
     temperature: float,
     top_k: int,
     top_p: int,
+    safety_settings: dict,
 ):
 
     try:
@@ -28,6 +29,7 @@ def get_prediction(
             temperature=temperature,
             top_k=top_k,
             top_p=top_p,
+            safety_settings=safety_settings,
         )
         ai_response = responses.text
 
