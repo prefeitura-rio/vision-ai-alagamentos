@@ -23,7 +23,7 @@ async def test_get_all_ai_identification(
     assert isinstance(response.json()["size"], int)
     assert response.json()["total"] == 7
     assert response.json()["page"] == 1
-    assert response.json()["size"] == 50
+    assert response.json()["size"] == 100
     assert response.json()["pages"] == 1
     assert isinstance(response.json()["pages"], int)
     assert len(response.json()["items"]) == 7
@@ -31,6 +31,7 @@ async def test_get_all_ai_identification(
         assert "id" in item
         assert "object" in item
         assert "title" in item
+        assert "question" in item
         assert "explanation" in item
         assert "timestamp" in item
         assert "label" in item
@@ -39,6 +40,7 @@ async def test_get_all_ai_identification(
         assert "snapshot_url" in item
         assert isinstance(item["id"], str)
         assert isinstance(item["object"], str)
+        assert isinstance(item["question"], str)
         assert isinstance(item["title"], str)
         assert isinstance(item["explanation"], str)
         assert isinstance(item["timestamp"], str)
@@ -73,6 +75,7 @@ async def test_create_human_identification(
     assert "id" in response.json()
     assert "object" in response.json()
     assert "title" in response.json()
+    assert "question" in response.json()
     assert "explanation" in response.json()
     assert "timestamp" in response.json()
     assert "label" in response.json()
@@ -85,6 +88,7 @@ async def test_create_human_identification(
     assert isinstance(response.json()["id"], str)
     assert isinstance(response.json()["object"], str)
     assert isinstance(response.json()["title"], str)
+    assert isinstance(response.json()["question"], str)
     assert isinstance(response.json()["explanation"], str)
     assert isinstance(response.json()["timestamp"], str)
     assert isinstance(response.json()["label"], str)
@@ -114,7 +118,7 @@ async def test_get_ai_identification(client: AsyncClient, authorization_header: 
     assert isinstance(response.json()["size"], int)
     assert response.json()["total"] == 6
     assert response.json()["page"] == 1
-    assert response.json()["size"] == 50
+    assert response.json()["size"] == 100
     assert response.json()["pages"] == 1
     assert isinstance(response.json()["pages"], int)
     assert len(response.json()["items"]) == 6
@@ -122,6 +126,7 @@ async def test_get_ai_identification(client: AsyncClient, authorization_header: 
         assert "id" in item
         assert "object" in item
         assert "title" in item
+        assert "question" in item
         assert "explanation" in item
         assert "timestamp" in item
         assert "label" in item
@@ -131,6 +136,7 @@ async def test_get_ai_identification(client: AsyncClient, authorization_header: 
         assert isinstance(item["id"], str)
         assert isinstance(item["object"], str)
         assert isinstance(item["title"], str)
+        assert isinstance(item["question"], str)
         assert isinstance(item["explanation"], str)
         assert isinstance(item["timestamp"], str)
         assert isinstance(item["label"], str)

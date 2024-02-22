@@ -2,7 +2,7 @@
 from datetime import datetime, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi_pagination import Page, create_page
 from fastapi_pagination.default import Params
 
@@ -19,13 +19,22 @@ from app.pydantic_models import (
 router = APIRouter(prefix="/identifications", tags=["identifications"])
 
 
-@router.get("/ai", response_model=Page[IdentificationAIOut])
+class BigParams(Params):
+    size: int = Query(100, ge=1, le=3000)
+
+
+class BigPage(Page[IdentificationAIOut]):
+    __params_type__ = BigParams
+
+
+@router.get("/ai", response_model=BigPage)
 async def get_ai_identifications(
     user: Annotated[User, Depends(is_human)],
-    params: Params = Depends(),
+    params: BigParams = Depends(),
     minute_interval: int = 30,
 ) -> Page[IdentificationAIOut]:
     interval = datetime.now() - timedelta(minutes=minute_interval)
+    offset = params.size * (params.page - 1)
 
     indentificateds = (
         await UserIdentification.all()
@@ -33,10 +42,18 @@ async def get_ai_identifications(
         .values_list("identification__id", flat=True)
     )
 
+    count = (
+        await Identification.all()
+        .filter(timestamp__gte=interval, id__not_in=indentificateds)
+        .count()
+    )
+
     identifications = (
         await Identification.all()
         .order_by("snapshot__timestamp", "timestamp")
         .filter(timestamp__gte=interval, id__not_in=indentificateds)
+        .limit(params.size)
+        .offset(offset)
         .values(
             "id",
             "snapshot__public_url",
@@ -46,6 +63,7 @@ async def get_ai_identifications(
             "label__object__id",
             "label__object__slug",
             "label__object__title",
+            "label__object__question",
             "label__object__explanation",
             "timestamp",
             "label_explanation",
@@ -72,6 +90,7 @@ async def get_ai_identifications(
             id=identification["id"],
             object=identification["label__object__slug"],
             title=identification["label__object__title"],
+            question=identification["label__object__question"],
             explanation=identification["label__object__explanation"],
             timestamp=identification["timestamp"],
             label=identification["label__value"],
@@ -83,7 +102,7 @@ async def get_ai_identifications(
         for identification in identifications
     ]
 
-    return create_page(out, total=len(out), params=params)
+    return create_page(out, total=count, params=params)
 
 
 @router.post("", response_model=IdentificationOut)
@@ -118,6 +137,7 @@ async def create_user_identification(
         id=identification.id,
         object=object_.slug,
         title=object_.title,
+        question=object_.question,
         explanation=object_.explanation,
         timestamp=user_identification.timestamp,
         label=label.value,
