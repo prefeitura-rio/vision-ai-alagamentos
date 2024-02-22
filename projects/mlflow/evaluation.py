@@ -75,7 +75,7 @@ parameters = {
 final_predictions = model.predict_batch(model_input=df, parameters=parameters)
 
 parameters.pop("prompt")
-parameters["safety_settings"] = (json.dumps(SAFETY_CONFIG, indent=4),)
+parameters["safety_settings"] = json.dumps(SAFETY_CONFIG, indent=4)
 
 mlflow.set_tracking_uri(uri="https://mlflow.dados.rio")
 
