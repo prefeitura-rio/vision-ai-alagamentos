@@ -36,23 +36,29 @@ identifications = [
 def put_selected_label(label, index):
     send_user_identification(identifications[index]["id"], label)
 
+    jump = 1
     if (identifications[index]["object"] == "image_corrupted") and (label == "true"):
-        jump = 1
-        while (index + jump) < len(identifications) and identifications[index + jump][
-            "snapshot_url"
-        ] == identifications[index]["snapshot_url"]:
+        while (
+            index + jump < len(identifications)
+            and identifications[index + jump]["snapshot_url"]
+            == identifications[index]["snapshot_url"]
+        ):
             send_user_identification(identifications[index + jump]["id"], "null")
             jump += 1
+    elif (identifications[index]["object"] == "rain") and (label == "false"):
+        if (
+            (index + jump) < len(identifications)
+            and identifications[index + jump]["snapshot_url"]
+            == identifications[index]["snapshot_url"]
+            and identifications[index + jump]["object"] == "water_level"
+        ):
+            send_user_identification(identifications[index + jump]["id"], "low")
+            jump += 1
 
-        if (index + jump) >= len(identifications):
-            st.session_state.finish = True
-        else:
-            st.session_state.next_id = identifications[index + jump]["id"]
+    if index + jump >= len(identifications):
+        st.session_state.finish = True
     else:
-        if index + 1 >= len(identifications):
-            st.session_state.finish = True
-        else:
-            st.session_state.next_id = identifications[index + 1]["id"]
+        st.session_state.next_id = identifications[index + jump]["id"]
 
 
 customized_button = st.markdown(
