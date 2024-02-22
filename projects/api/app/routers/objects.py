@@ -56,6 +56,7 @@ async def get_objects(
                     ("name", "name"),
                     ("slug", "slug"),
                     ("title", "title"),
+                    ("question", "question"),
                     ("explanation", "explanation"),
                     ("labels", ("labels", get_labels)),
                 ],
@@ -76,6 +77,7 @@ async def create_object(
         name=object.name,
         slug=object.slug,
         title=object.title,
+        question=object.question,
         explanation=object.explanation,
         labels=[],
     )
@@ -99,6 +101,7 @@ async def delete_object(
         name=object.name,
         slug=object.slug,
         title=object.title,
+        question=object.question,
         explanation=object.explanation,
         labels=[
             LabelOut(

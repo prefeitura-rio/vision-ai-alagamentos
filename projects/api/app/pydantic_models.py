@@ -82,6 +82,7 @@ class IdentificationOut(BaseModel):
     id: UUID
     object: str
     title: str | None
+    question: str | None
     explanation: str | None
     timestamp: datetime
     label: str
@@ -93,8 +94,9 @@ class IdentificationOut(BaseModel):
 class IdentificationAIOut(BaseModel):
     id: UUID
     object: str
-    title: str
-    explanation: str
+    title: str | None
+    question: str | None
+    explanation: str | None
     timestamp: datetime
     label: str
     label_text: str
@@ -138,6 +140,7 @@ class ObjectIn(BaseModel):
     name: str
     slug: str
     title: str
+    question: str
     explanation: str
 
 
@@ -146,6 +149,7 @@ class ObjectOut(BaseModel):
     name: str
     slug: str
     title: str | None
+    question: str | None
     explanation: str | None
     labels: list[LabelOut]
 

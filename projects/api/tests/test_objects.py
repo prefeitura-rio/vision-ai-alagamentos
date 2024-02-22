@@ -19,12 +19,14 @@ async def test_objects_get(client: AsyncClient, authorization_header: dict) -> N
         assert "name" in item
         assert "slug" in item
         assert "title" in item
+        assert "question" in item
         assert "explanation" in item
         assert "labels" in item
         assert isinstance(item["id"], str)
         assert isinstance(item["name"], str)
         assert isinstance(item["slug"], str)
         assert isinstance(item["title"], str)
+        assert isinstance(item["question"], str)
         assert isinstance(item["explanation"], str)
         assert isinstance(item["labels"], list)
         assert len(item["labels"]) == 2
@@ -59,6 +61,7 @@ async def test_objects_create(
             "name": "Test Object",
             "slug": "test-object",
             "title": "Tittle Test",
+            "question": "Test question?",
             "explanation": "Explaning tittle test",
         },
     )
@@ -67,19 +70,23 @@ async def test_objects_create(
     assert "name" in response.json()
     assert "slug" in response.json()
     assert "title" in response.json()
+    assert "question" in response.json()
     assert "explanation" in response.json()
     assert isinstance(response.json()["id"], str)
     assert isinstance(response.json()["name"], str)
     assert isinstance(response.json()["slug"], str)
     assert isinstance(response.json()["title"], str)
+    assert isinstance(response.json()["question"], str)
     assert isinstance(response.json()["explanation"], str)
     assert response.json()["name"] == "Test Object"
     assert response.json()["slug"] == "test-object"
     assert response.json()["title"] == "Tittle Test"
+    assert response.json()["question"] == "Test question?"
     assert response.json()["explanation"] == "Explaning tittle test"
     context["test_object_id"] = response.json()["id"]
     context["test_object_slug"] = response.json()["slug"]
     context["test_object_title"] = response.json()["title"]
+    context["test_object_question"] = response.json()["question"]
     context["test_object_explanation"] = response.json()["explanation"]
 
 
@@ -331,9 +338,11 @@ async def test_objects_delete(
     assert "name" in response.json()
     assert "slug" in response.json()
     assert "title" in response.json()
+    assert "question" in response.json()
     assert "explanation" in response.json()
     assert isinstance(response.json()["id"], str)
     assert isinstance(response.json()["name"], str)
     assert isinstance(response.json()["slug"], str)
     assert isinstance(response.json()["title"], str)
+    assert isinstance(response.json()["question"], str)
     assert isinstance(response.json()["explanation"], str)

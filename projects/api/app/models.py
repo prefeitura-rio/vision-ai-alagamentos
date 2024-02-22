@@ -96,6 +96,7 @@ class Object(Model):
     name = fields.CharField(max_length=255, unique=True)
     slug = fields.CharField(max_length=255, unique=True)
     title = fields.CharField(max_length=255, unique=True, null=True)
+    question = fields.TextField(null=True)
     explanation = fields.TextField(null=True)
     cameras: fields.ManyToManyRelation[Camera]
     prompts = fields.ReverseRelation["PromptObject"]

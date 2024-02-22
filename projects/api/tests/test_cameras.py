@@ -36,6 +36,7 @@ async def test_cameras_get(client: AsyncClient, authorization_header: dict):
         for identification in item["identifications"]:
             assert "object" in identification
             assert "title" in identification
+            assert "question" in identification
             assert "explanation" in identification
             assert "timestamp" in identification
             assert "label" in identification
@@ -48,6 +49,7 @@ async def test_cameras_get(client: AsyncClient, authorization_header: dict):
             assert "timestamp" in identification["snapshot"]
             assert isinstance(identification["object"], str)
             assert isinstance(identification["title"], str)
+            assert isinstance(identification["question"], str)
             assert isinstance(identification["explanation"], str)
             assert isinstance(identification["timestamp"], str)
             assert isinstance(identification["label"], str)
@@ -229,6 +231,7 @@ async def test_create_identification(
     assert "id" in response.json()
     assert "object" in response.json()
     assert "title" in response.json()
+    assert "question" in response.json()
     assert "explanation" in response.json()
     assert "timestamp" in response.json()
     assert "label" in response.json()
@@ -242,6 +245,7 @@ async def test_create_identification(
     assert isinstance(response.json()["id"], str)
     assert isinstance(response.json()["object"], str)
     assert isinstance(response.json()["title"], str)
+    assert isinstance(response.json()["question"], str)
     assert isinstance(response.json()["explanation"], str)
     assert isinstance(response.json()["timestamp"], str)
     assert isinstance(response.json()["label"], str)
@@ -271,6 +275,7 @@ async def test_get_identifications(client: AsyncClient, authorization_header: di
         assert "id" in item
         assert "object" in item
         assert "title" in item
+        assert "question" in item
         assert "explanation" in item
         assert "timestamp" in item
         assert "label" in item
@@ -284,6 +289,7 @@ async def test_get_identifications(client: AsyncClient, authorization_header: di
         assert isinstance(item["id"], str)
         assert isinstance(item["object"], str)
         assert isinstance(item["title"], str)
+        assert isinstance(item["question"], str)
         assert isinstance(item["explanation"], str)
         assert isinstance(item["timestamp"], str)
         assert isinstance(item["label"], str)

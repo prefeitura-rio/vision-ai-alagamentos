@@ -101,18 +101,21 @@ async def initialize_tests():
             "name": "Person",
             "slug": "person",
             "title": "Tem pessoas",
+            "question": "Tem pessoas na imagem?",
             "explanation": "A imagem contém pessoas",
         },
         {
             "name": "Car",
             "slug": "car",
             "title": "Tem carros",
+            "question": "Tem carros na imagem?",
             "explanation": "A imagem contém somente o rosto de uma pessoa",
         },
         {
             "name": "Bicycle",
             "slug": "bicycle",
             "title": "Tem bicicletas",
+            "question": "Tem bicicletas na imagem?",
             "explanation": "A imagem contém bicicletas",
         },
     ]
