@@ -1,9 +1,8 @@
 # -*- coding: utf-8 -*-
 import pandas as pd
 import requests
-from langchain.output_parsers import PydanticOutputParser
 from vertexai.preview.generative_models import GenerativeModel, Part
-from vision_ai.base.shared_models import Output
+from vision_ai.base.shared_models import get_parser
 
 
 class Model:
@@ -36,25 +35,28 @@ class Model:
     def predict_batch(
         self,
         model_input=None,
-        params=None,
+        parameters=None,
     ):
         final_predictions = pd.DataFrame()
-        for snapshot_id in model_input["snapshot_id"].unique().tolist():
+        snapshot_ids = model_input["snapshot_id"].unique().tolist()
+        lenght = len(snapshot_ids)
+        for i, snapshot_id in enumerate(snapshot_ids):
+            print(f"{i}/{lenght}: {snapshot_id}")
             snapshot_df = model_input[model_input["snapshot_id"] == snapshot_id]
             responses = self.llm_vertexai(
                 image_url=snapshot_id,
-                prompt=params["prompt"],
-                google_api_model=params["google_api_model"],
-                max_output_tokens=params["max_output_tokens"],
-                temperature=params["temperature"],
-                top_k=params["top_k"],
-                top_p=params["top_p"],
+                prompt=parameters["prompt"],
+                google_api_model=parameters["google_api_model"],
+                max_output_tokens=parameters["max_output_tokens"],
+                temperature=parameters["temperature"],
+                top_k=parameters["top_k"],
+                top_p=parameters["top_p"],
+                safety_settings=parameters["safety_settings"],
             )
             ai_response = responses.text
-            output_parser = PydanticOutputParser(pydantic_object=Output)
-            predictions = output_parser.parse(ai_response)
-
-            prediction = pd.DataFrame.from_dict(predictions["objects"])
+            output_parser, _, _ = get_parser()
+            ai_response_parsed = output_parser.parse(ai_response).dict()
+            prediction = pd.DataFrame.from_dict(ai_response_parsed["objects"])
             prediction = prediction[["object", "label", "label_explanation"]].rename(
                 columns={"label": "label_ia"}
             )
