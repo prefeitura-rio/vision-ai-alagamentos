@@ -11,9 +11,7 @@ jobs:
     name: Build container
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/development'
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
+    permissions: write-all
     environment:
       name: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
     steps:
