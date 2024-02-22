@@ -21,7 +21,8 @@ RUN apt-get update && \
 # and install dependencies
 WORKDIR /tmp
 COPY poetry.lock pyproject.toml ./
-RUN poetry install --no-dev --no-interaction --no-ansi
+COPY ./libs /tmp/libs
+RUN poetry lock --no-update && poetry install --no-dev --no-interaction --no-ansi
 
 # Copy the project files into the working directory
 WORKDIR /app
@@ -32,4 +33,4 @@ EXPOSE 8501
 HEALTHCHECK CMD curl --fail http://localhost:8501/_stcore/health
 
 
-CMD ["streamlit", "run", "projects/streamlit/app/Home.py", "--server.port=8501", "--server.address=0.0.0.0"]
+CMD ["streamlit", "run", "app/Home.py", "--server.port=8501", "--server.address=0.0.0.0"]

@@ -52,7 +52,7 @@ jobs:
       GCF_TOPIC: vision-ai
 
     environment:
-      name: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
+      name: ${{ github.ref == 'refs/heads/main' && 'Identifier (Production)' || 'Identifier (Staging)' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
