@@ -209,6 +209,14 @@ def treat_data(response):
         ["timestamp", "label"], ascending=False
     )
 
+    # if image_corrupted is true, set to null all the other identifications of the same snapshot except the image_corrupted
+    cameras_identifications_explode = cameras_identifications_explode[
+        ~(
+            (cameras_identifications_explode["label_text"] == "image_corrupted")
+            & (cameras_identifications_explode["label"] == "true")
+        )
+    ]
+
     # remove "image_description" from the objects
     cameras_identifications_explode = cameras_identifications_explode[
         cameras_identifications_explode["object"] != "image_description"
@@ -221,7 +229,7 @@ def treat_data(response):
 
     # # create a column order to sort the labels
     cameras_identifications_explode = create_order_column(cameras_identifications_explode)
-    # sort the table first by object then by the column order
+    # sort the table first by object then by the column orde
     cameras_identifications_explode = cameras_identifications_explode.sort_values(
         ["object", "order"]
     )
