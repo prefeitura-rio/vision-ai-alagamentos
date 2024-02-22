@@ -1,21 +1,18 @@
 # -*- coding: utf-8 -*-
 import base64
 import json
-import time
 import traceback
-from datetime import datetime
-from typing import Dict, List, Optional, Tuple, Union
 
 import functions_framework
-import pytz
 import requests
 import sentry_sdk
 import vertexai
-from google.cloud import bigquery, secretmanager
-from langchain.output_parsers import PydanticOutputParser
-from pydantic import BaseModel
+from google.cloud import secretmanager
 from vertexai.preview import generative_models
-from vertexai.preview.generative_models import GenerativeModel, Part
+from vision_ai.base.api import VisionaiAPI
+from vision_ai.base.utils import get_datetime
+from vision_ai.cloudfunctions.bq import save_data_in_bq
+from vision_ai.cloudfunctions.predict import get_prediction
 
 PROJECT_ID = "rj-escritorio-dev"
 LOCATION = "us-central1"
@@ -32,48 +29,7 @@ SAFETY_CONFIG = {
 }
 
 
-def get_datetime() -> str:
-    timestamp = datetime.now(pytz.timezone("America/Sao_Paulo"))
-    return timestamp.strftime("%Y-%m-%dT%H:%M:%S.%f")
-
-
-class Snapshot(BaseModel):
-    object: str
-    label_explanation: str
-    label: Union[bool, str, None]
-
-
-class Output(BaseModel):
-    objects: List[Snapshot]
-
-
-class APIVisionAI:
-    def __init__(self, username: str, password: str) -> None:
-        self.BASE_URL = "https://vision-ai-api-staging-ahcsotxvgq-uc.a.run.app"
-        self.username = username
-        self.password = password
-        self.headers: dict[str, str] = {}
-        self.token_renewal_time: float | None = None
-
-    def _get_headers(self) -> Tuple[Dict[str, str], float]:
-        access_token_response = requests.post(
-            f"{self.BASE_URL}/auth/token",
-            data={"username": self.username, "password": self.password},
-        ).json()
-        token = access_token_response["access_token"]
-        return {"Authorization": f"Bearer {token}"}, time.time()
-
-    def _refresh_token_if_needed(self) -> None:
-        if self.token_renewal_time is None or time.time() - self.token_renewal_time >= 60 * 50:
-            self.headers, self.token_renewal_time = self._get_headers()
-
-    def refresh_token(self):
-        self._refresh_token_if_needed()
-
-    def _post(self, path: str) -> requests.Response:
-        self._refresh_token_if_needed()
-        return requests.post(f"{self.BASE_URL}{path}", headers=self.headers)
-
+class APIVisionAI(VisionaiAPI):
     def post_identification(
         self, camera_id: str, snapshot_id: str, object_id: str, label_explanation: str, label: str
     ) -> requests.Response:
@@ -87,132 +43,6 @@ def get_secret(secret_id: str) -> str:
     client = secretmanager.SecretManagerServiceClient()
     response = client.access_secret_version(request={"name": name})
     return response.payload.data.decode("UTF-8")
-
-
-def save_data_in_bq(
-    json_data: dict,
-    error_step: Optional[str] = None,
-    ai_response_parsed: Optional[str] = None,
-    ai_response: Optional[str] = None,
-    error_message: Optional[str] = None,
-    error_name: Optional[str] = None,
-) -> None:
-    client = bigquery.Client()
-    table_full_name = f"{PROJECT_ID}.{DATASET_ID}.{TABLE_ID}"
-
-    schema = [
-        bigquery.SchemaField("camera_id", "STRING", mode="NULLABLE"),
-        bigquery.SchemaField("data_particao", "DATE", mode="NULLABLE"),
-        bigquery.SchemaField("start_datetime", "DATETIME", mode="NULLABLE"),
-        bigquery.SchemaField("end_datetime", "DATETIME", mode="NULLABLE"),
-        bigquery.SchemaField("ai_input", "STRING", mode="NULLABLE"),
-        bigquery.SchemaField("ai_response_parsed", "STRING", mode="NULLABLE"),
-        bigquery.SchemaField("ai_response", "STRING", mode="NULLABLE"),
-        bigquery.SchemaField("error_step", "STRING", mode="NULLABLE"),
-        bigquery.SchemaField("error_name", "STRING", mode="NULLABLE"),
-        bigquery.SchemaField("error_message", "STRING", mode="NULLABLE"),
-    ]
-
-    job_config = bigquery.LoadJobConfig(
-        schema=schema,
-        # Optionally, set the write disposition. BigQuery appends loaded rows
-        # to an existing table by default, but with WRITE_TRUNCATE write
-        # disposition it replaces the table with the loaded data.
-        write_disposition="WRITE_APPEND",
-        time_partitioning=bigquery.TimePartitioning(
-            type_=bigquery.TimePartitioningType.DAY,
-            field="data_particao",  # name of column to use for partitioning
-        ),
-    )
-
-    end_datetime = get_datetime()
-    json_data["end_datetime"] = end_datetime
-    json_data["ai_response_parsed"] = ai_response_parsed
-    json_data["ai_response"] = ai_response
-    json_data["error_step"] = error_step
-    json_data["error_name"] = error_name
-    json_data["error_message"] = error_message
-
-    json_data = json.loads(json.dumps([json_data]))
-    try:
-        job = client.load_table_from_json(json_data, table_full_name, job_config=job_config)
-        job.result()
-    except Exception:
-        raise Exception(json_data)
-
-
-def get_prediction(
-    bq_data_json: dict,
-    image_url: str,
-    prompt_text: str,
-    google_api_model: str,
-    max_output_tokens: int,
-    temperature: float,
-    top_k: int,
-    top_p: int,
-) -> Dict:
-    # llm = ChatGoogleGenerativeAI(
-    #     model=google_api_model,
-    #     google_api_key=google_api_key,
-    #     max_output_token=max_output_tokens,
-    #     temperature=temperature,
-    #     top_k=top_k,
-    #     top_p=top_p,
-    #     stream=True,
-    # )
-
-    # content = [
-    #     {"type": "text", "text": prompt_text},
-    #     {"type": "image_url", "image_url": image_url},
-    # ]  # noqa
-
-    # message = HumanMessage(content=content)
-    # response = llm.invoke([message])
-    # ai_response = response.content
-
-    try:
-        image_response = requests.get(image_url)
-        model = GenerativeModel(google_api_model)
-        responses = model.generate_content(
-            contents=[prompt_text, Part.from_data(image_response.content, "image/png")],
-            generation_config={
-                "max_output_tokens": max_output_tokens,
-                "temperature": temperature,
-                "top_k": top_k,
-                "top_p": top_p,
-            },
-            safety_settings=SAFETY_CONFIG,
-        )
-
-        ai_response = responses.text
-
-    except Exception as exception:
-        save_data_in_bq(
-            json_data=bq_data_json,
-            error_step="ai_request",
-            ai_response_parsed=None,
-            ai_response=None,
-            error_message=str(traceback.format_exc(chain=False)),
-            error_name=str(type(exception).__name__),
-        )
-        raise exception
-
-    output_parser = PydanticOutputParser(pydantic_object=Output)
-
-    try:
-        response_parsed = output_parser.parse(ai_response)
-    except Exception as exception:
-        save_data_in_bq(
-            json_data=bq_data_json,
-            error_step="ai_response_parser",
-            ai_response_parsed=None,
-            ai_response=ai_response,
-            error_message=str(traceback.format_exc(chain=False)),
-            error_name=str(type(exception).__name__),
-        )
-        raise exception
-
-    return response_parsed.dict()
 
 
 # Get secrets
@@ -260,6 +90,7 @@ def predict(cloud_event: dict) -> None:
         temperature=data["temperature"],
         top_k=data["top_k"],
         top_p=data["top_p"],
+        safety_settings=SAFETY_CONFIG,
     )
 
     retry_count = 5

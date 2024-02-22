@@ -21,6 +21,7 @@ from sklearn.metrics import (
 )
 from vertexai.preview import generative_models
 from vertexai.preview.generative_models import GenerativeModel, Part
+from vision_ai.base.shared_models import Output
 
 # import os
 # os.environ["MLFLOW_TRACKING_USERNAME"] = secret["mlflow_tracking_username"]
@@ -599,3 +600,78 @@ def _get_prediction(
         raise exception
 
     return response_parsed.dict()
+
+
+class Model(mlflow.pyfunc.PythonModel):
+    def load_context(self):
+        """
+        This method initializes the tokenizer and language model
+        using the specified model snapshot directory.
+        """
+
+    def _prediction(
+        self,
+        image_url: str,
+        prompt_text: str,
+        google_api_model: str,
+        max_output_tokens: int,
+        temperature: float,
+        top_k: int,
+        top_p: int,
+        context=None,
+    ) -> Dict:
+        try:
+            image_response = requests.get(image_url)
+            model = GenerativeModel(google_api_model)
+            responses = model.generate_content(
+                contents=[prompt_text, Part.from_data(image_response.content, "image/png")],
+                generation_config={
+                    "max_output_tokens": max_output_tokens,
+                    "temperature": temperature,
+                    "top_k": top_k,
+                    "top_p": top_p,
+                },
+                safety_settings=SAFETY_CONFIG,
+            )
+
+            ai_response = responses.text
+
+        except Exception as exception:
+            raise exception
+
+        output_parser = PydanticOutputParser(pydantic_object=Output)
+
+        try:
+            response_parsed = output_parser.parse(ai_response)
+        except Exception as exception:
+            raise exception
+
+        return response_parsed.dict()
+
+    def predict(
+        self,
+        context=None,
+        model_input=None,
+        params=None,
+    ):
+        final_predictions = pd.DataFrame()
+        for snapshot_id in model_input["snapshot_id"].unique().tolist():
+            snapshot_df = model_input[model_input["snapshot_id"] == snapshot_id]
+            print(snapshot_id)
+            predictions = self._prediction(
+                image_url=snapshot_id,
+                prompt_text=params["prompt"],
+                google_api_model=params["google_api_model"],
+                max_output_tokens=params["max_output_tokens"],
+                temperature=params["temperature"],
+                top_k=params["top_k"],
+                top_p=params["top_p"],
+            )
+
+            prediction = pd.DataFrame.from_dict(predictions["objects"])
+            prediction = prediction[["object", "label", "label_explanation"]].rename(
+                columns={"label": "label_ia"}
+            )
+            final_prediction = snapshot_df.merge(prediction, on="object", how="left")
+            final_predictions = pd.concat([final_predictions, final_prediction])
+        return final_predictions
