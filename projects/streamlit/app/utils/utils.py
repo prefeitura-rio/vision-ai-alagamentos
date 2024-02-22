@@ -209,11 +209,19 @@ def treat_data(response):
         ["timestamp", "label"], ascending=False
     )
 
-    # if image_corrupted is true, set to null all the other identifications of the same snapshot except the image_corrupted
+    # select image_corrupted is true
+    mask = (cameras_identifications_explode["object"] == "image_corrupted") & (
+        cameras_identifications_explode["label"] == "true"
+    )  # noqa
+    # select all rows with same snapshot_id of the mask except the rows with object = image_corrupted
     cameras_identifications_explode = cameras_identifications_explode[
         ~(
-            (cameras_identifications_explode["label_text"] == "image_corrupted")
-            & (cameras_identifications_explode["label"] == "true")
+            (
+                cameras_identifications_explode["snapshot_id"].isin(
+                    cameras_identifications_explode[mask]["snapshot_id"]
+                )
+                & (cameras_identifications_explode["object"] != "image_corrupted")
+            )
         )
     ]
 
