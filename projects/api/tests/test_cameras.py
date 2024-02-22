@@ -39,6 +39,7 @@ async def test_cameras_get(client: AsyncClient, authorization_header: dict):
             assert "explanation" in identification
             assert "timestamp" in identification
             assert "label" in identification
+            assert "label_text" in identification
             assert "label_explanation" in identification
             assert "snapshot" in identification
             assert "id" in identification["snapshot"]
@@ -50,6 +51,7 @@ async def test_cameras_get(client: AsyncClient, authorization_header: dict):
             assert isinstance(identification["explanation"], str)
             assert isinstance(identification["timestamp"], str)
             assert isinstance(identification["label"], str)
+            assert isinstance(identification["label_text"], str)
             assert isinstance(identification["label_explanation"], str)
             assert isinstance(identification["snapshot"], dict)
             assert isinstance(identification["snapshot"]["id"], str)
@@ -230,6 +232,7 @@ async def test_create_identification(
     assert "explanation" in response.json()
     assert "timestamp" in response.json()
     assert "label" in response.json()
+    assert "label_text" in response.json()
     assert "label_explanation" in response.json()
     assert "snapshot" in response.json()
     assert "id" in response.json()["snapshot"]
@@ -242,6 +245,7 @@ async def test_create_identification(
     assert isinstance(response.json()["explanation"], str)
     assert isinstance(response.json()["timestamp"], str)
     assert isinstance(response.json()["label"], str)
+    assert isinstance(response.json()["label_text"], str)
     assert isinstance(response.json()["label_explanation"], str)
     assert isinstance(response.json()["snapshot"]["id"], str)
     assert isinstance(response.json()["snapshot"]["camera_id"], str)
@@ -249,6 +253,7 @@ async def test_create_identification(
     assert isinstance(response.json()["snapshot"]["timestamp"], str)
     assert response.json()["object"] == context["test_object_slug"]
     assert response.json()["label"] == context["test_label_value"]
+    assert response.json()["label_text"] == context["test_label_text"]
     assert response.json()["snapshot"]["id"] == context["test_snapshot_id"]
     context["test_identification_id"] = response.json()["id"]
 
@@ -269,6 +274,7 @@ async def test_get_identifications(client: AsyncClient, authorization_header: di
         assert "explanation" in item
         assert "timestamp" in item
         assert "label" in item
+        assert "label_text" in item
         assert "label_explanation" in item
         assert "snapshot" in item
         assert "id" in item["snapshot"]
@@ -281,6 +287,7 @@ async def test_get_identifications(client: AsyncClient, authorization_header: di
         assert isinstance(item["explanation"], str)
         assert isinstance(item["timestamp"], str)
         assert isinstance(item["label"], str)
+        assert isinstance(item["label_text"], str)
         assert isinstance(item["label_explanation"], str)
         assert isinstance(item["snapshot"]["id"], str)
         assert isinstance(item["snapshot"]["camera_id"], str)
@@ -289,6 +296,7 @@ async def test_get_identifications(client: AsyncClient, authorization_header: di
     assert response.json()[0]["id"] == context["test_identification_id"]
     assert response.json()[0]["object"] == context["test_object_slug"]
     assert response.json()[0]["label"] == context["test_label_value"]
+    assert response.json()[0]["label_text"] == context["test_label_text"]
     assert response.json()[0]["snapshot"]["id"] == context["test_snapshot_id"]
 
 

@@ -49,19 +49,23 @@ class UserIdentification(Model):
     identification = fields.ForeignKeyField("app.Identification")
 
     class Meta:
-        table = "users_identification"
+        table = "user_identification"
         unique_together = ("username", "identification")
 
 
 class Label(Model):
     id = fields.UUIDField(pk=True)
+    order = fields.IntField(default=0)
     object = fields.ForeignKeyField("app.Object", related_name="labels")
     value = fields.CharField(max_length=255)
+    text = fields.TextField(default="Vazio")
     criteria = fields.TextField()
     identification_guide = fields.TextField()
 
     class Meta:
         unique_together = (("object", "value"),)
+        # unique_together = (("object", "value"), ("object", "order"))
+        ordering = ["object__id", "order"]
 
 
 class PromptObject(Model):

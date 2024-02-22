@@ -85,6 +85,7 @@ class IdentificationOut(BaseModel):
     explanation: str | None
     timestamp: datetime
     label: str
+    label_text: str
     label_explanation: str
     snapshot: SnapshotOut
 
@@ -96,6 +97,7 @@ class IdentificationAIOut(BaseModel):
     explanation: str
     timestamp: datetime
     label: str
+    label_text: str
     possible_labels: list[str]
     ai_explanation: str
     snapshot_url: str
@@ -108,19 +110,26 @@ class IdentificationHumanIN(BaseModel):
 
 class LabelIn(BaseModel):
     value: str
+    text: str
     criteria: str
     identification_guide: str
+
+
+class LabelsIn(BaseModel):
+    labels: list[str]
 
 
 class LabelOut(BaseModel):
     id: UUID
     value: str
+    text: str
     criteria: str
     identification_guide: str
 
 
 class LabelUpdate(BaseModel):
     value: str | None
+    text: str | None
     criteria: str | None
     identification_guide: str | None
 

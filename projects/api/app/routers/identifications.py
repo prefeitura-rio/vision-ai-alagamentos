@@ -35,13 +35,14 @@ async def get_ai_identifications(
 
     identifications = (
         await Identification.all()
-        .order_by("timestamp")
+        .order_by("snapshot__timestamp", "timestamp")
         .filter(timestamp__gte=interval, id__not_in=indentificateds)
         .values(
             "id",
             "snapshot__public_url",
             "snapshot__camera__id",
             "label__value",
+            "label__text",
             "label__object__id",
             "label__object__slug",
             "label__object__title",
@@ -74,6 +75,7 @@ async def get_ai_identifications(
             explanation=identification["label__object__explanation"],
             timestamp=identification["timestamp"],
             label=identification["label__value"],
+            label_text=identification["label__text"],
             possible_labels=possible_labels[identification["label__object__slug"]],
             ai_explanation=identification["label__value"],
             snapshot_url=identification["snapshot__public_url"],
@@ -118,7 +120,8 @@ async def create_user_identification(
         title=object_.title,
         explanation=object_.explanation,
         timestamp=user_identification.timestamp,
-        label=data.label,
+        label=label.value,
+        label_text=label.text,
         label_explanation="",
         snapshot=SnapshotOut(
             id=identification.snapshot.id,

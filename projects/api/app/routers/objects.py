@@ -14,6 +14,7 @@ from app.pydantic_models import (
     CameraOut,
     LabelIn,
     LabelOut,
+    LabelsIn,
     LabelUpdate,
     ObjectIn,
     ObjectOut,
@@ -38,6 +39,7 @@ async def get_objects(
                 value=label.value,
                 criteria=label.criteria,
                 identification_guide=label.identification_guide,
+                text=label.text,
             )
             for label in labels
         ]
@@ -104,6 +106,7 @@ async def delete_object(
                 value=label.value,
                 criteria=label.criteria,
                 identification_guide=label.identification_guide,
+                text=label.text,
             )
             for label in await object.labels.all()
         ],
@@ -135,6 +138,7 @@ async def get_object_labels(
                     ("value", "value"),
                     ("criteria", "criteria"),
                     ("identification_guide", "identification_guide"),
+                    ("text", "text"),
                 ],
             ),
         ),
@@ -154,12 +158,20 @@ async def add_label_to_object(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Object not found",
         )
-    label_raw = await Label.create(object=object, **label.dict())
+
+    last_label = await Label.filter(object=object).order_by("-order").first()
+    if not last_label:
+        order = 0
+    else:
+        order = last_label.order + 1
+
+    label_raw = await Label.create(object=object, order=order, **label.dict())
     return LabelOut(
         id=label_raw.id,
         value=label.value,
         criteria=label.criteria,
         identification_guide=label.identification_guide,
+        text=label.text,
     )
 
 
@@ -179,7 +191,7 @@ async def update_object_label(
         label_id = None
         label_value = label
     if label_id:
-        label_obj = await Label.get_or_none(id=label_id)
+        label_obj = await Label.get_or_none(id=label_id, object_id=object_id)
     elif label_value:
         label_obj = await Label.get_or_none(value=label_value, object_id=object_id)
     else:
@@ -198,12 +210,62 @@ async def update_object_label(
         label_obj.criteria = label_.criteria
     if label_.identification_guide:
         label_obj.identification_guide = label_.identification_guide
+    if label_.text:
+        label_obj.text = label_.text
     await label_obj.save()
     return LabelOut(
         id=label_obj.id,
         value=label_obj.value,
         criteria=label_obj.criteria,
         identification_guide=label_obj.identification_guide,
+        text=label_obj.text,
+    )
+
+
+@router.post("/{object_id}/labels/order", response_model=list[LabelOut])
+async def order_object_label(
+    object_id: UUID,
+    data: LabelsIn,
+    _: Annotated[User, Depends(is_admin)],
+) -> list[LabelOut]:
+    object = await Object.get_or_none(id=object_id)
+    if object is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Object not found",
+        )
+
+    order = {label: index for index, label in enumerate(data.labels)}
+    labels = await Label.filter(object=object).all()
+    if len(labels) != len(data.labels):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Must send all object labels",
+        )
+
+    for index, label in enumerate(labels):
+        if label.value not in order:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Must send all object labels",
+            )
+
+        labels[index].order = order[label.value]
+
+    await Label.bulk_update(labels, fields=["order"])
+
+    return sorted(
+        [
+            LabelOut(
+                id=label.id,
+                value=label.value,
+                text=label.text,
+                criteria=label.criteria,
+                identification_guide=label.identification_guide,
+            )
+            for label in labels
+        ],
+        key=lambda label: order[label.value],
     )
 
 
@@ -241,6 +303,7 @@ async def delete_object_label(
         value=label_obj.value,
         criteria=label_obj.criteria,
         identification_guide=label_obj.identification_guide,
+        text=label_obj.text,
     )
 
 

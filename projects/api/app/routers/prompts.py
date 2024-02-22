@@ -178,6 +178,7 @@ async def get_prompt_objects(
                     value=label.value,
                     criteria=label.criteria,
                     identification_guide=label.identification_guide,
+                    text=label.text,
                 )
                 for label in await object_.labels.all()
             ],
@@ -219,6 +220,7 @@ async def add_prompt_object(
                 value=label.value,
                 criteria=label.criteria,
                 identification_guide=label.identification_guide,
+                text=label.text,
             )
             for label in await object_.labels.all()
         ],
@@ -236,32 +238,21 @@ async def order_prompt_object(
     if prompt is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prompt not found")
 
-    object_slugs = objects_in.objects
-    objects = (
-        await Object.filter(prompts__prompt=prompt)
-        .all()
-        .select_related("prompts")
-        .values("prompts__id", "slug")
-    )
+    object_slugs = {v: k for k, v in enumerate(objects_in.objects)}
+    prompt_objects = await PromptObject.filter(prompt=prompt).all().prefetch_related("object")
 
-    if len(object_slugs) != len(objects):
+    if len(object_slugs) != len(prompt_objects):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Must contain all object slugs in order"
         )
 
-    for object_ in objects:
-        if object_["slug"] not in object_slugs:
+    for index, prompt_object in enumerate(prompt_objects):
+        if prompt_object.object.slug not in object_slugs:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Must contain all object slugs in order",
             )
-
-    object_order = {v: k for k, v in enumerate(object_slugs)}
-    slug_by_prompt = {object_["prompts__id"]: object_["slug"] for object_ in objects}
-    prompt_objects = await PromptObject.filter(prompt=prompt).all()
-
-    for i in range(len(prompt_objects)):
-        prompt_objects[i].order = object_order[slug_by_prompt[prompt_objects[i].id]]
+        prompt_objects[index].order = object_slugs[prompt_object.object.slug]
 
     await PromptObject.bulk_update(prompt_objects, fields=["order"])
 

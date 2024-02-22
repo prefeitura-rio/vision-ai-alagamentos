@@ -44,14 +44,11 @@ async def test_get_all_ai_identification(
         assert isinstance(item["timestamp"], str)
         assert isinstance(item["label"], str)
         assert isinstance(item["possible_labels"], list)
+        assert len(item["possible_labels"]) == 2
         if item["id"] == context["test_identification_id"]:
-            assert len(item["possible_labels"]) == 1
-            assert item["possible_labels"][0] == context["test_label_value"]
+            assert item["possible_labels"] == ["test-label1", "test-label2"]
         else:
-            assert len(item["possible_labels"]) == 2
-            for label in item["possible_labels"]:
-                assert isinstance(label, str)
-                assert label == "found" or label == "not-found"
+            assert item["possible_labels"] == ["found", "not-found"]
         assert isinstance(item["ai_explanation"], str)
         assert isinstance(item["snapshot_url"], str)
 
@@ -139,8 +136,6 @@ async def test_get_ai_identification(client: AsyncClient, authorization_header: 
         assert isinstance(item["label"], str)
         assert isinstance(item["possible_labels"], list)
         assert len(item["possible_labels"]) == 2
-        for label in item["possible_labels"]:
-            assert isinstance(label, str)
-            assert label == "found" or label == "not-found"
+        assert item["possible_labels"] == ["found", "not-found"]
         assert isinstance(item["ai_explanation"], str)
         assert isinstance(item["snapshot_url"], str)

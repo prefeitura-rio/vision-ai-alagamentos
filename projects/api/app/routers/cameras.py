@@ -109,6 +109,7 @@ async def get_cameras(
             "snapshot__timestamp",
             "snapshot__camera__id",
             "label__value",
+            "label__text",
             "label__object__slug",
             "label__object__title",
             "label__object__explanation",
@@ -137,6 +138,7 @@ async def get_cameras(
                 explanation=identification["label__object__explanation"],
                 timestamp=identification["timestamp"],
                 label=identification["label__value"],
+                label_text=identification["label__text"],
                 label_explanation=identification["label_explanation"],
                 snapshot=SnapshotOut(
                     id=identification["snapshot__id"],
@@ -371,6 +373,7 @@ async def get_identification(
             "timestamp",
             "label_explanation",
             "label__value",
+            "label__text",
             "label__object__slug",
             "label__object__title",
             "label__object__explanation",
@@ -385,6 +388,7 @@ async def get_identification(
             explanation=identification["label__object__explanation"],
             timestamp=identification["timestamp"],
             label=identification["label__value"],
+            label_text=identification["label__text"],
             label_explanation=identification["label_explanation"],
             snapshot=SnapshotOut(
                 id=snapshot.id,
@@ -437,6 +441,7 @@ async def create_identification(
         explanation=object_.explanation,
         timestamp=identification.timestamp,
         label=label.value,
+        label_text=label.text,
         label_explanation=identification.label_explanation,
         snapshot=SnapshotOut(
             id=snapshot.id,
