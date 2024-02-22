@@ -3,7 +3,6 @@ from vision_ai.base.shared_models import get_parser
 
 
 def get_prompt(prompt_parameters, prompt_template=None, objects_table_md=None):
-
     if not prompt_template:
         prompt_template = prompt_parameters.get("prompt_text")
 

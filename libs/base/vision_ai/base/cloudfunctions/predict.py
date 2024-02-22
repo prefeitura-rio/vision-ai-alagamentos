@@ -2,9 +2,9 @@
 import traceback
 
 from langchain.output_parsers import PydanticOutputParser
+from vision_ai.base.cloudfunctions.bq import save_data_in_bq
 from vision_ai.base.model import Model
 from vision_ai.base.shared_models import Output
-from vision_ai.base.cloudfunctions.bq import save_data_in_bq
 
 
 def get_prediction(
@@ -18,7 +18,6 @@ def get_prediction(
     top_p: int,
     safety_settings: dict,
 ):
-
     try:
         model = Model()
         responses = model.llm_vertexai(

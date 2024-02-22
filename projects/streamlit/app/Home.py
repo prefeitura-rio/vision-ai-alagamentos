@@ -54,10 +54,8 @@ cameras_identifications = treat_data(cameras)
 # st.dataframe(cameras_identifications)
 
 if len(cameras_identifications) > 0:
-
     col1, col2 = st.columns(2)
     with col1:
-
         objects = cameras_identifications["object"].unique().tolist()
         objects.sort()
         # dropdown to filter by object
