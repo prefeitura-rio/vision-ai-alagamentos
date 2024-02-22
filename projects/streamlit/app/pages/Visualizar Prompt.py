@@ -2,7 +2,6 @@
 import json
 
 import pandas as pd
-import streamlit as st
 from utils.utils import (
     get_objects,
     get_objects_cache,
@@ -10,6 +9,8 @@ from utils.utils import (
     get_prompts,
     get_prompts_cache,
 )
+
+import streamlit as st
 
 st.set_page_config(page_title="Visualizar Prompt", layout="wide", initial_sidebar_state="collapsed")
 # st.image("./data/logo/logo.png", width=300)

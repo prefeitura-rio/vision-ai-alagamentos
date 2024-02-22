@@ -1,37 +1,15 @@
 # -*- coding: utf-8 -*-
 import json  # noqa
-import os  # noqa
 from typing import Union
 
 import folium
 import pandas as pd
-import streamlit as st
 from st_aggrid import GridOptionsBuilder  # noqa
 from st_aggrid import GridUpdateMode  # noqa
-from st_aggrid import AgGrid, ColumnsAutoSizeMode  # noqa
+from st_aggrid import AgGrid, ColumnsAutoSizeMode
 from utils.api import APIVisionAI
 
-TRADUTOR = {
-    "image_corrupted": "imagem corrompida",
-    "image_description": "descrição da imagem",
-    "rain": "chuva",
-    "water_level": "nível da água",
-    "traffic": "tráfego",
-    "road_blockade": "bloqueio de estrada",
-    "false": "falso",
-    "true": "verdadeiro",
-    "null": "nulo",
-    "low": "baixo",
-    "medium": "médio",
-    "high": "alto",
-    "easy": "fácil",
-    "moderate": "moderado",
-    "difficult": "difícil",
-    "impossible": "impossível",
-    "free": "livre",
-    "partially": "parcialmente",
-    "totally": "totalmente",
-}
+import streamlit as st
 
 
 def get_vision_ai_api():
@@ -123,6 +101,21 @@ def get_prompts(
     return data
 
 
+def get_ai_identifications(
+    page_size=100,
+    timeout=120,
+):
+    data = vision_api._get_all_pages(
+        path="/identifications/ai", page_size=page_size, timeout=timeout
+    )
+    return data
+
+
+def send_user_identification(identification_id, label, timeout=120):
+    json = {"identification_id": identification_id, "label": label}
+    vision_api._post(path="/identifications", json=json, timeout=timeout)
+
+
 @st.cache_data(ttl=60 * 2, persist=False)
 def get_cameras_cache(
     only_active=True,
@@ -148,6 +141,11 @@ def get_objects_cache(page_size=100, timeout=120):
 @st.cache_data(ttl=60 * 2, persist=False)
 def get_prompts_cache(page_size=100, timeout=120):
     return get_prompts(page_size=page_size, timeout=timeout)
+
+
+@st.cache_data(ttl=60 * 30, persist=False)
+def get_ai_identifications_cache(page_size=3000, timeout=120):
+    return get_ai_identifications(page_size=page_size, timeout=timeout)
 
 
 def treat_data(response):
@@ -228,14 +226,6 @@ def treat_data(response):
         ["object", "order"]
     )
 
-    # translate the labels of the columns object and label to portuguese using the dictionary above
-    cameras_identifications_explode["object"] = cameras_identifications_explode["object"].map(
-        TRADUTOR
-    )
-    cameras_identifications_explode["label"] = cameras_identifications_explode["label"].map(
-        TRADUTOR
-    )
-
     # # print one random row of the dataframe in list format so I can see all the columns
     # print(cameras_identifications_explode.sample(1).values.tolist())
 
@@ -278,8 +268,8 @@ def get_filted_cameras_objects(cameras_identifications_df, object_filter, label_
     # filter both dfs by object and label
 
     cameras_identifications_filter_df = cameras_identifications_df[
-        (cameras_identifications_df["object"] == object_filter)
-        & (cameras_identifications_df["label"].isin(label_filter))
+        (cameras_identifications_df["title"] == object_filter)
+        & (cameras_identifications_df["label_text"].isin(label_filter))
     ]
 
     cameras_identifications_filter_df = cameras_identifications_filter_df.sort_values(  # noqa
@@ -320,16 +310,16 @@ def get_icon_color(label: Union[bool, None], type=None):
         "low_indifferent",
         "low",
     ]
-    if label in [TRADUTOR.get(label) for label in red]:  # noqa
+    if label in red:  # noqa
         if type == "emoji":
             return "🔴"
         return "red"
 
-    elif label in [TRADUTOR.get(label) for label in orange]:
+    elif label in orange:
         if type == "emoji":
             return "🟠"
         return "orange"
-    elif label in [TRADUTOR.get(label) for label in green]:
+    elif label in green:
         if type == "emoji":
             return "🟢"
         return "green"
@@ -360,13 +350,13 @@ def create_map(chart_data, location=None):
         htmlcode = f"""<div>
         <img src="{row["snapshot_url"]}" width="300" height="185">
 
-        <br /><span>ID: {row["id"]}<br>Label: {row["label"]}</span>
+        <br /><span>ID: {row["id"]}<br>Label: {row["label_text"]}</span>
         </div>
         """
         folium.Marker(
             location=[row["latitude"], row["longitude"]],
             # Adicionar id_camera ao tooltip
-            tooltip=f"ID: {row['id']}<br>Label: {row['label']}",
+            tooltip=f"ID: {row['id']}<br>Label: {row['label_text']}",
             # Alterar a cor do ícone de acordo com o status
             popup=htmlcode,
             icon=folium.features.DivIcon(
@@ -417,11 +407,10 @@ def display_camera_details(row, cameras_identifications_df):
 
     rename_columns = {
         "timestamp": "Data Identificação",
-        "object": "Identificador",
-        "label": "Classificação",
+        "title": "Identificador",
+        "label_text": "Classificação",
         "label_explanation": "Descrição",
     }
-    camera_identifications = camera_identifications[list(rename_columns.keys())]  # noqa
 
     camera_identifications = camera_identifications.rename(columns=rename_columns)  # noqa
 
@@ -432,7 +421,7 @@ def display_camera_details(row, cameras_identifications_df):
     i = 0
     markdown = ""
     for _, row in camera_identifications.iterrows():
-        critic_level = get_icon_color(row["Classificação"])
+        critic_level = get_icon_color(row["label"])
         # if critic_level = green, make classificacao have the color green and all capital letters
         if critic_level == "green":
             classificacao = f'<span style="color: green; text-transform: uppercase;">{row["Classificação"].upper()}</span>'
@@ -485,8 +474,8 @@ def display_agrid_table(table):
     gb = GridOptionsBuilder.from_dataframe(table, index=True)  # noqa
 
     gb.configure_column("index", header_name="", pinned="left")
-    gb.configure_column("object", header_name="Identificador", wrapText=True)
-    gb.configure_column("label", header_name="Classificação", wrapText=True)
+    gb.configure_column("title", header_name="Identificador", wrapText=True)
+    gb.configure_column("label_text", header_name="Classificação", wrapText=True)
     gb.configure_column("bairro", header_name="Bairro", wrapText=True)
     gb.configure_column("id", header_name="ID Camera", pinned="right")  # noqa
     gb.configure_column("timestamp", header_name="Data Identificação", wrapText=True)  # noqa
