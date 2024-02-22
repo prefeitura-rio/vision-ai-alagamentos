@@ -1,0 +1,60 @@
+name: Agent
+
+on:
+  push:
+    paths:
+      - ".github/workflows/agent*"
+      - "projects/agent/**/*"
+
+jobs:
+  build-container:
+    name: Build container
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/development'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    environment:
+      name: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v1
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image (Production)
+        if: github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v2
+        with:
+          context: projects/agent/
+          file: projects/agent/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:latest
+          labels: |
+            org.opencontainers.image.source=${{ github.event.repository.html_url }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
+
+      - name: Build and push image (Staging)
+        if: github.ref == 'refs/heads/development'
+        uses: docker/build-push-action@v2
+        with:
+          context: projects/agent/
+          file: projects/agent/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:latest-dev
+          labels: |
+            org.opencontainers.image.source=${{ github.event.repository.html_url }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
