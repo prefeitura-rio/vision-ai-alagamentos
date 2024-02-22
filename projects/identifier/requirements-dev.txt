@@ -1,0 +1,4 @@
+-e libs/base
+functions-framework==3.*
+google-cloud-secret-manager==2.17.0
+sentry-sdk==1.40.0
