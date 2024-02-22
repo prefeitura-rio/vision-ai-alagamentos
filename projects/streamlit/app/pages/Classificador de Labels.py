@@ -76,7 +76,7 @@ customized_button = st.markdown(
 )
 
 
-def buttom(
+def button(
     label,
     label_translated,
     index,
@@ -112,7 +112,7 @@ else:
     snapshot_url = identification["snapshot_url"]
     possible_labels = object_labels[object_labels["name"] == object_]
 
-    col1, col2 = st.columns([1, 1.5])
+    col2, col1 = st.columns([3, 1])
     with col2:
         st.image(snapshot_url)
     with col1:
@@ -121,4 +121,4 @@ else:
 
     for text, label in zip(possible_labels["text"], possible_labels["value"]):
         with col1:
-            buttom(label=label, label_translated=text, index=index)
+            button(label=label, label_translated=text, index=index)
