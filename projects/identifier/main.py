@@ -57,7 +57,7 @@ vision_ai_api = APIVisionAI(
 @functions_framework.cloud_event
 def predict(cloud_event: dict) -> None:
     """
-    Triggered from a message on a Cloud Pub/Sub topic
+    Triggered from a message on a Cloud Pub/Sub topic.
     """
     start_datetime = get_datetime()
     # Decodes and loads the data from the Cloud Event.

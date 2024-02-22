@@ -32,6 +32,9 @@ class VisionaiAPI:
         if time.time() - self.token_renewal_time >= 60 * 50:
             self.headers, self.token_renewal_time = self._get_headers()
 
+    def refresh_token(self):
+        self._refresh_token_if_needed()
+
     def _get(self, path: str, timeout: int = 120) -> Dict:
         self._refresh_token_if_needed()
         try:
