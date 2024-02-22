@@ -17,10 +17,21 @@ streamlit-aggrid = "0.3.4.post3"
 tabulate = "^0.9.0"
 
 
+[tool.poetry.group.dev.dependencies]
+taskipy = "^1.12.2"
+black = "^24.2.0"
+isort = "^5.13.2"
+flake8 = "^7.0.0"
+pre-commit = "^3.6.2"
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
+[tool.black]
+line-length = 100
+target-version = ["py310"]
+include = "\\.pyi?$"
 
 [tool.flake8]
 max-line-length = 100
@@ -32,3 +43,6 @@ atomic = true
 profile = "black"
 line_length = 100
 skip_gitignore = true
+
+[tool.taskipy.tasks]
+lint = "black . && isort . && flake8 ."
