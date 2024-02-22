@@ -171,3 +171,17 @@ if len(cameras_identifications) > 0:
     #     time.sleep(2)
 else:
     st.error("No cameras with identifications")
+
+with st.expander("Mais Detalhes"):
+
+    # show number of unique cameras
+    st.markdown(
+        f"#### 📷 Câmeras com identificações: {len(cameras_identifications['id'].unique())}"
+    )
+
+    # show aggregated count of labels
+    st.markdown("#### 📊 Contagem de labels")
+    labels_count = (
+        cameras_identifications.groupby(["title", "label_text"]).size().reset_index(name="count")
+    )
+    st.dataframe(labels_count)
