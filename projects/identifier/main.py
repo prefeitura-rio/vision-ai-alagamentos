@@ -80,7 +80,7 @@ def predict(cloud_event: dict) -> None:
         "error_message": None,
     }
 
-    # Generates a prediction using the Google Generative AI
+    # Generates a prediction using the Google Generative AI model
     ai_response_parsed = get_prediction(
         bq_data_json=bq_data,
         image_url=data["image_url"],
