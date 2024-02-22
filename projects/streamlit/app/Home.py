@@ -54,10 +54,8 @@ if st.button("Update Data"):
 cameras_identifications = treat_data(cameras)
 
 if not all(x is None for x in cameras_identifications):
-
     col1, col2 = st.columns(2)
     with col1:
-
         objects = cameras_identifications["title"].unique().tolist()
         objects.sort()
         # dropdown to filter by object
@@ -170,7 +168,6 @@ if not all(x is None for x in cameras_identifications):
     #     time.sleep(2)
 
     with st.expander("Mais Detalhes"):
-
         # show number of unique cameras
         st.markdown(
             f"#### 📷 Câmeras com identificações: {len(cameras_identifications['id'].unique())}"
@@ -187,10 +184,10 @@ if not all(x is None for x in cameras_identifications):
 else:
     st.error(
         """
-        Ops, parece que não há dados disponíveis, tente atualizar a página. 
-        
+        Ops, parece que não há dados disponíveis, tente atualizar a página.
+
         Se o problema persistir, entre em contato com o administrador.
 
-        
+
         """
     )
