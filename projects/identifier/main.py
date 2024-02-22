@@ -84,7 +84,7 @@ def predict(cloud_event: dict) -> None:
     ai_response_parsed = get_prediction(
         bq_data_json=bq_data,
         image_url=data["image_url"],
-        prompt_text=data["prompt_text"],
+        prompt=data["prompt_text"],
         google_api_model=data["model"],
         max_output_tokens=data["max_output_tokens"],
         temperature=data["temperature"],
