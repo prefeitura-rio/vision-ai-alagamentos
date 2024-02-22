@@ -14,6 +14,9 @@ google-cloud-bigquery = "^3.17.2"
 pandas = "^2.2.0"
 google-cloud-aiplatform = "^1.42.1"
 langchain = "^0.1.8"
+scikit-learn = "^1.4.1.post1"
+tabulate = "^0.9.0"
+gspread = "^6.0.2"
 
 
 [build-system]

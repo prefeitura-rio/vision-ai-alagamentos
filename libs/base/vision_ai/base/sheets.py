@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 import base64
 import hashlib
+import io
 import json
 import os
 import time
@@ -11,7 +13,33 @@ from typing import List, Union
 
 import gspread
 import pandas as pd
+import requests
 from google.oauth2 import service_account
+
+
+def get_objects_table_from_sheets(
+    url: str = "https://docs.google.com/spreadsheets/d/122uOaPr8YdW5PTzrxSPF-FD0tgco596HqgB7WK7cHFw/edit#gid=1672006844",
+):
+    request_url = url.replace("edit#gid=", "export?format=csv&gid=")
+    response = requests.get(request_url)
+    dataframe = pd.read_csv(io.StringIO(response.content.decode("utf-8")), dtype=str)
+    dataframe["label"] = dataframe["label"].fillna("null")
+    dataframe = dataframe[dataframe["use"] == "1"]
+    dataframe = dataframe.drop(columns=["use"])
+
+    objects_table_md = dataframe.to_markdown(index=False)
+
+    objects_labels = (
+        dataframe[["object", "label"]]
+        .groupby(by=["object"], sort=False)["label"]
+        .apply(lambda x: ", ".join(x))
+        .reset_index()
+    )
+    objects_labels["label"] = objects_labels["label"].str.replace("true, false", "bool")
+
+    objects_labels_md = objects_labels.to_markdown(index=False)
+    objects_labels_md = objects_labels_md
+    return objects_table_md, objects_labels_md
 
 
 def inject_credential(
@@ -22,9 +50,6 @@ def inject_credential(
     os.environ["GCP_SERVICE_ACCOUNT"] = base64.b64encode(
         str(cred).replace("'", '"').encode("utf-8")
     ).decode("utf-8")
-
-
-inject_credential(credential_path="/home/jovyan/.basedosdados/credentials/prod.json")
 
 
 def get_hash_id(string):

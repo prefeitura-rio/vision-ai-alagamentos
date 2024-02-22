@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
+import json
+import textwrap
 from typing import List, Union
 
+from langchain.output_parsers import PydanticOutputParser
 from pydantic import BaseModel, Field
 
 
@@ -32,3 +35,20 @@ class OutputFactory:
     @classmethod
     def generate_sample(cls) -> Output:
         return Output(objects=[ObjectFactory.generate_sample()])
+
+
+def get_parser():
+    # Create the output parser using the Pydantic model
+    output_parser = PydanticOutputParser(pydantic_object=Output)
+
+    # Valid JSON string
+    output_example_str = str(OutputFactory().generate_sample().dict()).replace("'", '"')
+
+    output_example_str = textwrap.dedent(output_example_str)
+    output_example = output_parser.parse(output_example_str)
+    output_example_parsed = json.dumps(output_example.dict(), indent=4)
+
+    output_schema = json.loads(output_parser.pydantic_object.schema_json())
+    output_schema_parsed = json.dumps(output_schema, indent=4)
+
+    return output_parser, output_schema_parsed, output_example_parsed
