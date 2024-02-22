@@ -60,7 +60,7 @@ def predict(cloud_event: dict) -> None:
     Triggered from a message on a Cloud Pub/Sub topic.
     """
     start_datetime = get_datetime()
-    # Decodes and loads the data from the Cloud Event
+    # Decodes and loads the data from the Cloud Event.
     data_bytes = base64.b64decode(cloud_event.data["message"]["data"])
     data = json.loads(data_bytes.decode("utf-8"))
 
