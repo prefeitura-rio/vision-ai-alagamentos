@@ -11,8 +11,8 @@ from google.cloud import secretmanager
 from vertexai.preview import generative_models
 from vision_ai.base.api import VisionaiAPI
 from vision_ai.base.utils import get_datetime
-from vision_ai.cloudfunctions.bq import save_data_in_bq
-from vision_ai.cloudfunctions.predict import get_prediction
+from vision_ai.base.cloudfunctions.bq import save_data_in_bq
+from vision_ai.base.cloudfunctions.predict import get_prediction
 
 PROJECT_ID = "rj-escritorio-dev"
 LOCATION = "us-central1"
