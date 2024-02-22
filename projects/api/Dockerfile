@@ -7,7 +7,7 @@ RUN poetry config virtualenvs.create false
 
 COPY poetry.lock pyproject.toml ./
 COPY ./libs /code/libs
-RUN poetry install --no-dev --no-interaction --no-ansi
+RUN poetry lock --no-update && poetry install --no-dev --no-interaction --no-ansi
 
 COPY ./app /code/app
 COPY ./migrations /code/migrations

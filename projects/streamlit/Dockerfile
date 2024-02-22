@@ -22,7 +22,7 @@ RUN apt-get update && \
 WORKDIR /tmp
 COPY poetry.lock pyproject.toml ./
 COPY ./libs /tmp/libs
-RUN poetry install --no-dev --no-interaction --no-ansi
+RUN poetry lock --no-update && poetry install --no-dev --no-interaction --no-ansi
 
 # Copy the project files into the working directory
 WORKDIR /app
