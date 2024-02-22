@@ -112,7 +112,7 @@ else:
     snapshot_url = identification["snapshot_url"]
     possible_labels = object_labels[object_labels["name"] == object_]
 
-    col2, col1 = st.columns([1, 1.5])
+    col2, col1 = st.columns([3, 1])
     with col2:
         st.image(snapshot_url)
     with col1:
