@@ -335,3 +335,33 @@ async def add_camera_to_object(
         latitude=camera.latitude,
         longitude=camera.longitude,
     )
+
+
+@router.delete("/{object_id}/cameras/{camera_id}", response_model=CameraOut)
+async def remove_camera_from_object(
+    object_id: UUID,
+    camera_id: str,
+    _: Annotated[User, Depends(is_admin)],
+) -> CameraOut:
+    """Remove a camera from an object."""
+    object = await Object.get_or_none(id=object_id)
+    if object is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Object not found",
+        )
+    camera = await Camera.get_or_none(id=camera_id)
+    if not camera:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Camera not found",
+        )
+    await object.cameras.remove(camera)
+    return CameraOut(
+        id=camera.id,
+        name=camera.name,
+        rtsp_url=camera.rtsp_url,
+        update_interval=camera.update_interval,
+        latitude=camera.latitude,
+        longitude=camera.longitude,
+    )
