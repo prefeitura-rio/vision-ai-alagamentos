@@ -138,7 +138,7 @@ jobs:
         if: github.ref == 'refs/heads/main'
         uses: google-github-actions/deploy-cloudrun@v1
         with:
-          service: ${{ env.GCR_SERVICE }}-production
+          service: ${{ env.GCR_SERVICE }}-api-production
           region: ${{ env.GCR_REGION }}
           image: docker.io/${{ env.DOCKERHUB_USERNAME }}/${{ env.DOCKERHUB_REPOSITORY }}:${{ github.sha }}
           flags: '--add-cloudsql-instances=datario:us-central1:postgres-side --port=80 --allow-unauthenticated --concurrency=100 --verbosity=debug'
@@ -151,7 +151,7 @@ jobs:
         if: github.ref == 'refs/heads/development'
         uses: google-github-actions/deploy-cloudrun@v1
         with:
-          service: ${{ env.GCR_SERVICE }}-staging
+          service: ${{ env.GCR_SERVICE }}-api-staging
           region: ${{ env.GCR_REGION }}
           image: docker.io/${{ env.DOCKERHUB_USERNAME }}/${{ env.DOCKERHUB_REPOSITORY }}:${{ github.sha }}
           flags: '--add-cloudsql-instances=datario:us-central1:postgres-side --port=80 --allow-unauthenticated --concurrency=100 --verbosity=debug'
