@@ -71,12 +71,6 @@ class OutputFactory:
         return Output(objects=[ObjectFactory.generate_sample()])
 
 
-class OutputFactory:
-    @classmethod
-    def generate_sample(cls) -> Output:
-        return Output(objects=[ObjectFactory.generate_sample()])
-
-
 def get_parser():
 
     # Create the output parser using the Pydantic model
@@ -566,8 +560,10 @@ def _get_prediction(
 
     try:
 
-        from langchain_google_vertexai import VertexAI
+        from langchain.chains import LLMChain
+        from langchain.prompts import ChatPromptTemplate
         from langchain_core.messages import HumanMessage
+        from langchain_google_vertexai import VertexAI
 
         model = VertexAI(
             model_name=google_api_model,
@@ -589,7 +585,8 @@ def _get_prediction(
         ]
         message = HumanMessage(content=content)
 
-        ai_response = model.invoke([message])
+        chain = LLMChain(llm=model, prompt=ChatPromptTemplate.from_messages([message]))
+        ai_response = chain.invoke({})["text"]
 
     except Exception as exception:
         raise exception
