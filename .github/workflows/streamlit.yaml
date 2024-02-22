@@ -49,7 +49,7 @@ jobs:
       GCR_REGION: ${{ secrets.GCR_REGION }}
 
     environment:
-      name: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
+      name: ${{ github.ref == 'refs/heads/main' && 'Streamlit (Production)' || 'Streamlit (Staging)' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -96,11 +96,6 @@ jobs:
           region: ${{ env.GCR_REGION }}
           image: docker.io/${{ env.DOCKERHUB_USERNAME }}/${{ env.DOCKERHUB_REPOSITORY }}:${{ github.sha }}
           flags: '--port=8501 --allow-unauthenticated --concurrency=100 --verbosity=debug'
-          # TODO: Add secrets
-          # secrets: |
-          #   ENVIRONMENT=VISION_AI_API_PROD_ENVIRONMENT:latest
-          #   INFISICAL_ADDRESS=VISION_AI_API_PROD_INFISICAL_ADDRESS:latest
-          #   INFISICAL_TOKEN=VISION_AI_API_PROD_INFISICAL_TOKEN:latest
 
       - name: Deploy to Google Cloud Run (Staging)
         if: github.ref == 'refs/heads/development'
@@ -110,8 +105,3 @@ jobs:
           region: ${{ env.GCR_REGION }}
           image: docker.io/${{ env.DOCKERHUB_USERNAME }}/${{ env.DOCKERHUB_REPOSITORY }}:${{ github.sha }}
           flags: '--port=8501 --allow-unauthenticated --concurrency=100 --verbosity=debug'
-          # TODO: Add secrets
-          # secrets: |
-          #   ENVIRONMENT=VISION_AI_API_STAGING_ENVIRONMENT:latest
-          #   INFISICAL_ADDRESS=VISION_AI_API_STAGING_INFISICAL_ADDRESS:latest
-          #   INFISICAL_TOKEN=VISION_AI_API_STAGING_INFISICAL_TOKEN:latest

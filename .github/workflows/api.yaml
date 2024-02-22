@@ -95,7 +95,7 @@ jobs:
       GCR_REGION: ${{ secrets.GCR_REGION }}
 
     environment:
-      name: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
+      name: ${{ github.ref == 'refs/heads/main' && 'API (Production)' || 'API (Staging)' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3

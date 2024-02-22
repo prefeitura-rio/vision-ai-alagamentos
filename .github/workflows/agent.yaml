@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions: write-all
     environment:
-      name: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
+      name: ${{ github.ref == 'refs/heads/main' && 'Agent (latest)' || 'Agent (latest-dev)' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
