@@ -9,6 +9,11 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.11"
 pydantic = "^1"
+pytz = "^2024.1"
+google-cloud-bigquery = "^3.17.2"
+pandas = "^2.2.0"
+google-cloud-aiplatform = "^1.42.1"
+langchain = "^0.1.8"
 
 
 [build-system]
