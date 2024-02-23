@@ -95,7 +95,7 @@ jobs:
           service: ${{ env.GCR_SERVICE }}-streamlit-production
           region: ${{ env.GCR_REGION }}
           image: docker.io/${{ env.DOCKERHUB_USERNAME }}/${{ env.DOCKERHUB_REPOSITORY }}:${{ github.sha }}
-          flags: '--port=8501 --allow-unauthenticated --concurrency=100 --verbosity=debug'
+          flags: '--port=8501 --allow-unauthenticated --concurrency=100 --verbosity=debug --session-affinity'
 
       - name: Deploy to Google Cloud Run (Staging)
         if: github.ref == 'refs/heads/development'
@@ -104,4 +104,4 @@ jobs:
           service: ${{ env.GCR_SERVICE }}-streamlit-staging
           region: ${{ env.GCR_REGION }}
           image: docker.io/${{ env.DOCKERHUB_USERNAME }}/${{ env.DOCKERHUB_REPOSITORY }}:${{ github.sha }}
-          flags: '--port=8501 --allow-unauthenticated --concurrency=100 --verbosity=debug'
+          flags: '--port=8501 --allow-unauthenticated --concurrency=100 --verbosity=debug --session-affinity'
