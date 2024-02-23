@@ -97,12 +97,14 @@ if st.session_state.next_id is not None:
 
 if index >= len(identifications) or st.session_state.finish:
     st.write("Você já revisou todas as imagens.")
-    if st.button("Reset"):
-        st.markdown("TODO: Reset the state variables and start over.")
+    if st.button("Carregar novas identificações"):
+        st.session_state.next_id = None
+        st.session_state.finish = False
+        get_ai_identifications_cache.clear()
 else:
     identification = identifications[index]
     object_ = identification["object"]
-    snapshot_url = identification["snapshot_url"]
+    snapshot_url = identification["snapshot"]["image_url"]
     possible_labels = object_labels[object_labels["name"] == object_]
 
     col2, col1 = st.columns([3, 1])

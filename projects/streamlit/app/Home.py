@@ -6,7 +6,6 @@ from utils.utils import (
     create_map,
     display_agrid_table,
     display_camera_details,
-    get_cameras,
     get_cameras_cache,
     get_filted_cameras_objects,
     get_icon_color,
@@ -21,35 +20,13 @@ st.set_page_config(page_title="Vision AI - Rio", layout="wide", initial_sidebar_
 DEFAULT_OBJECT = "Nível da água"
 st.markdown("## Identificações | Vision AI")
 
-
-# Function to fetch and update data
-def fetch_and_update_data(bypass_cash=False):
-    page_size = 3000
-    only_active = False
-    use_mock_data = False
-    update_mock_data = False
-
-    if bypass_cash:
-        return get_cameras(
-            page_size=page_size,
-            only_active=only_active,
-            use_mock_data=use_mock_data,
-            update_mock_data=update_mock_data,
-        )
-    return get_cameras_cache(
-        page_size=page_size,
-        only_active=only_active,
-        use_mock_data=use_mock_data,
-        update_mock_data=update_mock_data,
-    )
-
-
-cameras = fetch_and_update_data()
 # Add a button for updating data
 if st.button("Update Data"):
-    cameras = fetch_and_update_data(bypass_cash=True)
-    st.success("Data updated successfully!")
+    get_cameras_cache.clear()
 
+cameras = get_cameras_cache(
+    page_size=3000, only_active=False, use_mock_data=False, update_mock_data=False
+)
 
 cameras_identifications, cameras_identifications_descriptions = treat_data(cameras)
 
