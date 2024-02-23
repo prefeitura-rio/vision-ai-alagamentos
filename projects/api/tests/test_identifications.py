@@ -64,7 +64,7 @@ async def test_marker_identifications(
         headers=authorization_header,
         json={
             "identifications_id": [str(id) for id in context["identifications_id"]],
-            "snapshots_id": [context["test_snapshot_id"]],
+            "snapshots_id": [str(context["test_snapshot_id"])],
         },
     )
 
