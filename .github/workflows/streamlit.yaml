@@ -26,7 +26,7 @@ jobs:
           poetry config virtualenvs.create false
           poetry install --with dev
 
-      - name: Run linters
+      - name: Run linter
         run: |
           cd projects/streamlit/
           task lint

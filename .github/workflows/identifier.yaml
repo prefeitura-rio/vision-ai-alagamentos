@@ -25,7 +25,7 @@ jobs:
           pip install -U pip
           pip install -r requirements-dev.txt
 
-      - name: Run linters
+      - name: Run linter
         run: |
           cd projects/identifier/
           black . && isort . && flake8 .
