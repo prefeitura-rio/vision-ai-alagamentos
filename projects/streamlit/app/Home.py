@@ -51,7 +51,8 @@ if st.button("Update Data"):
     st.success("Data updated successfully!")
 
 
-cameras_identifications = treat_data(cameras)
+cameras_identifications, cameras_identifications_descriptions = treat_data(cameras)
+
 
 if not all(x is None for x in cameras_identifications):
     col1, col2 = st.columns(2)
@@ -129,7 +130,7 @@ if not all(x is None for x in cameras_identifications):
             )
 
             display_camera_details(
-                row=row, cameras_identifications_df=cameras_identifications
+                row=row, cameras_identifications_df=cameras_identifications_descriptions
             )  # noqa
         # if there is are ann object and label selected but no row is selected then select the first camera of the aggrid table
         elif object_filter and not selected_row and label_filter != []:
@@ -146,7 +147,7 @@ if not all(x is None for x in cameras_identifications):
             )
 
             display_camera_details(
-                row=row, cameras_identifications_df=cameras_identifications
+                row=row, cameras_identifications_df=cameras_identifications_descriptions
             )  # noqa
         else:
             st.markdown(

@@ -50,6 +50,9 @@ def get_vision_ai_api():
 
 
 vision_api = get_vision_ai_api()
+
+# import os
+
 # vision_api = APIVisionAI(
 #     username=os.environ.get("VISION_API_USERNAME"),
 #     password=os.environ.get("VISION_API_PASSWORD"),
@@ -63,7 +66,7 @@ def get_cameras(
     page_size=3000,
     timeout=120,
 ):
-    mock_data_path = "./data/temp/mock_api_data.json"
+    mock_data_path = "./projects/streamlit/data/temp/mock_api_data.json"
 
     if use_mock_data:
         with open(mock_data_path) as f:
@@ -116,7 +119,7 @@ def send_user_identification(identification_id, label, timeout=120):
     vision_api._post(path="/identifications", json=json, timeout=timeout)
 
 
-@st.cache_data(ttl=60 * 2, persist=False)
+@st.cache_data(ttl=60 * 5, persist=False)
 def get_cameras_cache(
     only_active=True,
     use_mock_data=False,
@@ -133,12 +136,12 @@ def get_cameras_cache(
     )
 
 
-@st.cache_data(ttl=60 * 2, persist=False)
+@st.cache_data(ttl=60 * 5, persist=False)
 def get_objects_cache(page_size=100, timeout=120):
     return get_objects(page_size=page_size, timeout=timeout)
 
 
-@st.cache_data(ttl=60 * 2, persist=False)
+@st.cache_data(ttl=60 * 5, persist=False)
 def get_prompts_cache(page_size=100, timeout=120):
     return get_prompts(page_size=page_size, timeout=timeout)
 
@@ -149,7 +152,7 @@ def get_ai_identifications_cache(page_size=3000, timeout=120):
 
 
 def treat_data(response):
-    cameras_aux = pd.read_csv("./data/database/cameras_aux.csv", dtype=str)
+    cameras_aux = pd.read_csv("./projects/streamlit/data/database/cameras_aux.csv", dtype=str)
 
     cameras_aux = cameras_aux.rename(columns={"id_camera": "camera_id"})
     cameras = pd.DataFrame(response)
@@ -225,11 +228,13 @@ def treat_data(response):
         )
     ]
 
+    cameras_identifications_descriptions = cameras_identifications_explode[
+        cameras_identifications_explode["object"] == "image_description"
+    ]
     # remove "image_description" from the objects
     cameras_identifications_explode = cameras_identifications_explode[
         cameras_identifications_explode["object"] != "image_description"
     ]
-
     # remove "null" from the labels
     cameras_identifications_explode = cameras_identifications_explode[
         cameras_identifications_explode["label"] != "null"
@@ -247,8 +252,9 @@ def treat_data(response):
 
     # # print all columns of cameras_identifications_explode
     # print(cameras_identifications_explode.columns)
-
-    return cameras_identifications_explode
+    return cameras_identifications_explode, pd.concat(
+        [cameras_identifications_explode, cameras_identifications_descriptions]
+    )
 
 
 def explode_df(dataframe, column_to_explode, prefix=None):
@@ -451,6 +457,7 @@ def display_camera_details(row, cameras_identifications_df):
             classificacao = row["Classificação"].upper()
         # capitalize the identificador
         identificador = row["Identificador"].capitalize()
+        classificacao = classificacao if classificacao != "NULO" else ""
         # if i is even and not the last row
         if i % 2 == 0 and i != len(camera_identifications) - 1:
             markdown += f"""
