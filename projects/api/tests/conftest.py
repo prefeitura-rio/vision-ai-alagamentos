@@ -5,10 +5,6 @@ from os import getenv
 from uuid import UUID
 
 import pytest
-from httpx import AsyncClient
-from loguru import logger
-from tortoise import Tortoise
-
 from app.db import TORTOISE_ORM
 from app.main import app
 from app.models import (
@@ -21,6 +17,9 @@ from app.models import (
     PromptObject,
     Snapshot,
 )
+from httpx import AsyncClient
+from loguru import logger
+from tortoise import Tortoise
 
 
 @pytest.fixture(scope="session")

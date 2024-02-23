@@ -2,10 +2,6 @@
 from datetime import datetime, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi_pagination import Page, create_page
-from fastapi_pagination.default import Params
-
 from app.dependencies import get_user, is_admin, is_human
 from app.models import (
     Identification,
@@ -22,6 +18,9 @@ from app.pydantic_models import (
     SnapshotOut,
     User,
 )
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi_pagination import Page, create_page
+from fastapi_pagination.default import Params
 
 router = APIRouter(prefix="/identifications", tags=["identifications"])
 

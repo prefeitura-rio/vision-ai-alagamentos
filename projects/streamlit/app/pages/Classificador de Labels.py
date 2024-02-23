@@ -1,14 +1,13 @@
 # -*- coding: utf-8 -*-
 
 import pandas as pd
+import streamlit as st
 from utils.utils import (
     get_ai_identifications_cache,
     get_objects_cache,
     get_objetcs_labels_df,
     send_user_identification,
 )
-
-import streamlit as st
 
 st.set_page_config(
     page_title="Classificador de Labels",

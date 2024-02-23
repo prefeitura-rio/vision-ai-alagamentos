@@ -1,13 +1,12 @@
 # -*- coding: utf-8 -*-
 from typing import Annotated
 
+from app import config
+from app.pydantic_models import OIDCUser, Token
 from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from httpx import AsyncClient
 from jose import jwt
-
-from app import config
-from app.pydantic_models import OIDCUser, Token
 
 oidc_scheme = OAuth2PasswordBearer(tokenUrl="auth/token")
 

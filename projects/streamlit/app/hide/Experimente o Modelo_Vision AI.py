@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
-from utils.model import run_model
-
 import streamlit as st
+from utils.model import run_model
 
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
 
