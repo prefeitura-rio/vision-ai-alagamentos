@@ -8,6 +8,7 @@ WITH parsed_ai_responses AS (
       error_name,
       error_message,
       JSON_EXTRACT_SCALAR(ai_input, '$.image_url') AS image_url,
+      JSON_EXTRACT_SCALAR(ai_input, '$.snapshot_id') AS snapshot_id,
       JSON_EXTRACT_SCALAR(ai_input, '$.model') AS model,
       JSON_EXTRACT_SCALAR(ai_input, '$.max_output_tokens') AS max_output_tokens,
       JSON_EXTRACT_SCALAR(ai_input, '$.temperature') AS temperature,
@@ -20,7 +21,7 @@ WITH parsed_ai_responses AS (
     FROM
       `rj-escritorio-dev.vision_ai.cameras_predicoes`
     WHERE data_particao = CURRENT_DATE("America/Sao_Paulo")
-      AND start_datetime >= CAST(DATETIME_SUB(DATETIME(CURRENT_TIMESTAMP(), "America/Sao_Paulo"), INTERVAL 1 MINUTE) AS DATETIME)
+      AND start_datetime >= CAST(DATETIME_SUB(DATETIME(CURRENT_TIMESTAMP(), "America/Sao_Paulo"), INTERVAL 10 MINUTE) AS DATETIME)
 ),
 
 unnested_responses AS (
