@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import json  # noqa
+from pathlib import Path
 from typing import Union
 
 import folium
@@ -10,6 +11,8 @@ from st_aggrid import AgGrid, ColumnsAutoSizeMode
 from utils.api import APIVisionAI
 
 import streamlit as st
+
+STREAMLIT_PATH = Path(__file__).parent.parent.parent.absolute()
 
 
 def get_vision_ai_api():
@@ -49,7 +52,9 @@ def get_vision_ai_api():
     return vision_api
 
 
+# gets the path from this file
 vision_api = get_vision_ai_api()
+
 
 # import os
 
@@ -66,7 +71,7 @@ def get_cameras(
     page_size=3000,
     timeout=120,
 ):
-    mock_data_path = "./projects/streamlit/data/temp/mock_api_data.json"
+    mock_data_path = STREAMLIT_PATH / "data/temp/mock_api_data.json"
 
     if use_mock_data:
         with open(mock_data_path) as f:
@@ -152,7 +157,7 @@ def get_ai_identifications_cache(page_size=3000, timeout=120):
 
 
 def treat_data(response):
-    cameras_aux = pd.read_csv("./projects/streamlit/data/database/cameras_aux.csv", dtype=str)
+    cameras_aux = pd.read_csv(STREAMLIT_PATH / "data/database/cameras_aux.csv", dtype=str)
 
     cameras_aux = cameras_aux.rename(columns={"id_camera": "camera_id"})
     cameras = pd.DataFrame(response)
