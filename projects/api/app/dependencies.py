@@ -2,12 +2,11 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import Depends, HTTPException, Security, status
-
 from app.models import Agent
 from app.oidc import get_current_user
 from app.pydantic_models import OIDCUser, User
 from app.utils import slugify
+from fastapi import Depends, HTTPException, Security, status
 
 
 async def get_user(user_info: Annotated[OIDCUser, Security(get_current_user, scopes=["profile"])]):

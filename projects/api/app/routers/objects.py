@@ -3,11 +3,6 @@ from functools import partial
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi_pagination import Page
-from fastapi_pagination.ext.tortoise import paginate as tortoise_paginate
-from tortoise.fields import ReverseRelation
-
 from app.dependencies import is_admin, is_agent
 from app.models import Camera, Label, Object
 from app.pydantic_models import (
@@ -21,6 +16,10 @@ from app.pydantic_models import (
     User,
 )
 from app.utils import apply_to_list, transform_tortoise_to_pydantic
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi_pagination import Page
+from fastapi_pagination.ext.tortoise import paginate as tortoise_paginate
+from tortoise.fields import ReverseRelation
 
 router = APIRouter(prefix="/objects", tags=["Objects"])
 

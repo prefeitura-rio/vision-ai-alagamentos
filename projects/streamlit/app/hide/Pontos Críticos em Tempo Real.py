@@ -2,9 +2,8 @@
 import folium
 import pandas as pd
 import requests
-from streamlit_folium import st_folium
-
 import streamlit as st
+from streamlit_folium import st_folium
 
 st.set_page_config(layout="wide", page_title="Pontos Críticos em Tempo Real")
 st.image("./data/logo/logo.png", width=300)

@@ -47,8 +47,8 @@ jobs:
       GCF_MEMORY_MB: 512
       GCF_REGION: us-central1
       GCF_TIMEOUT: 60
-      GCF_MIN_INSTANCES: 300
-      GCF_MAX_INSTANCES: 500
+      GCF_MIN_INSTANCES: 50
+      GCF_MAX_INSTANCES: 200
       GCF_TOPIC: vision-ai
 
     environment:

@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import pandas as pd
 import requests
-
 import streamlit as st
 
 st.set_page_config(layout="wide", page_title="Pontos de Alagamento")

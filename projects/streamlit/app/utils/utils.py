@@ -5,12 +5,11 @@ from typing import Union
 
 import folium
 import pandas as pd
+import streamlit as st
 from st_aggrid import GridOptionsBuilder  # noqa
 from st_aggrid import GridUpdateMode  # noqa
 from st_aggrid import AgGrid, ColumnsAutoSizeMode
 from utils.api import APIVisionAI
-
-import streamlit as st
 
 STREAMLIT_PATH = Path(__file__).parent.parent.parent.absolute()
 
