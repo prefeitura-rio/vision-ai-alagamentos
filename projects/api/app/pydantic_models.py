@@ -91,22 +91,19 @@ class IdentificationOut(BaseModel):
     snapshot: SnapshotOut
 
 
-class IdentificationAIOut(BaseModel):
-    id: UUID
-    object: str
-    title: str | None
-    question: str | None
-    explanation: str | None
-    timestamp: datetime
-    label: str
-    label_text: str
-    ai_explanation: str
-    snapshot_url: str
-
-
 class IdentificationHumanIN(BaseModel):
     identification_id: UUID
     label: str
+
+
+class IdentificationMarkerIn(BaseModel):
+    identifications_id: list[UUID] | None
+    snapshots_id: list[UUID] | None
+
+
+class IdentificationMarkerOut(BaseModel):
+    count: int
+    ids: list[UUID]
 
 
 class LabelIn(BaseModel):

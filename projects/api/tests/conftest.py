@@ -2,6 +2,7 @@
 import asyncio
 from datetime import datetime
 from os import getenv
+from uuid import UUID
 
 import pytest
 from httpx import AsyncClient
@@ -46,7 +47,7 @@ async def context():
 
 
 @pytest.fixture(scope="session", autouse=True)
-async def initialize_tests():
+async def initialize_tests(context: dict):
     await Tortoise.init(config=TORTOISE_ORM)
     await Tortoise.generate_schemas()
     logger.info("Tortoise-ORM schemas generated")
@@ -318,8 +319,12 @@ async def initialize_tests():
             "timestamp": datetime.now(),
         },
     ]
+
+    identifications_id: list[UUID] = []
     for identification in identification_data:
-        await Identification.create(**identification)
+        new = await Identification.create(**identification)
+        identifications_id.append(new.id)
+    context["identifications_id"] = identifications_id
     logger.info("Test data initialized")
 
     await Tortoise.close_connections()

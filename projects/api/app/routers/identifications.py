@@ -6,11 +6,18 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi_pagination import Page, create_page
 from fastapi_pagination.default import Params
 
-from app.dependencies import is_human
-from app.models import Identification, Label, UserIdentification
+from app.dependencies import get_user, is_admin, is_human
+from app.models import (
+    Identification,
+    IdentificationMaker,
+    Label,
+    Snapshot,
+    UserIdentification,
+)
 from app.pydantic_models import (
-    IdentificationAIOut,
     IdentificationHumanIN,
+    IdentificationMarkerIn,
+    IdentificationMarkerOut,
     IdentificationOut,
     SnapshotOut,
     User,
@@ -23,7 +30,7 @@ class BigParams(Params):
     size: int = Query(100, ge=1, le=3000)
 
 
-class BigPage(Page[IdentificationAIOut]):
+class BigPage(Page[IdentificationOut]):
     __params_type__ = BigParams
 
 
@@ -31,32 +38,35 @@ class BigPage(Page[IdentificationAIOut]):
 async def get_ai_identifications(
     user: Annotated[User, Depends(is_human)],
     params: BigParams = Depends(),
-    minute_interval: int = 30,
-) -> Page[IdentificationAIOut]:
-    interval = datetime.now() - timedelta(minutes=minute_interval)
+) -> Page[IdentificationOut]:
     offset = params.size * (params.page - 1)
 
     indentificateds = (
         await UserIdentification.all()
-        .filter(username=user.name, timestamp__gte=interval)
+        .filter(username=user.name)
         .values_list("identification__id", flat=True)
     )
 
-    count = (
-        await Identification.all()
-        .filter(timestamp__gte=interval, id__not_in=indentificateds)
-        .count()
+    ids = (
+        await IdentificationMaker.all()
+        .filter(identification__id__not_in=indentificateds)
+        .values_list("identification__id", flat=True)
     )
+
+    count = len(ids)
 
     identifications = (
         await Identification.all()
+        .filter(id__in=ids)
         .order_by("snapshot__timestamp", "timestamp")
-        .filter(timestamp__gte=interval, id__not_in=indentificateds)
         .limit(params.size)
         .offset(offset)
         .values(
             "id",
+            "timestamp",
+            "label_explanation",
             "snapshot__id",
+            "snapshot__timestamp",
             "snapshot__public_url",
             "snapshot__camera__id",
             "label__value",
@@ -66,43 +76,11 @@ async def get_ai_identifications(
             "label__object__title",
             "label__object__question",
             "label__object__explanation",
-            "timestamp",
-            "label_explanation",
         )
     )
 
-    additional_identifications = []
-    if len(identifications) > 0 and identifications[0]["label__object__slug"] != "image_corrupted":
-        additional_identifications = (
-            await Identification.all()
-            .order_by("snapshot__timestamp", "timestamp")
-            .filter(snapshot__id=identifications[0]["snapshot__id"], id__not_in=indentificateds)
-            .values(
-                "id",
-                "snapshot__id",
-                "snapshot__public_url",
-                "snapshot__camera__id",
-                "label__value",
-                "label__text",
-                "label__object__id",
-                "label__object__slug",
-                "label__object__title",
-                "label__object__question",
-                "label__object__explanation",
-                "timestamp",
-                "label_explanation",
-            )
-        )
-        index = 0
-        for i, identification in enumerate(additional_identifications):
-            if identification["label__object__slug"] == identifications[0]["label__object__slug"]:
-                index = i
-                break
-        additional_identifications = additional_identifications[:index]
-        print(additional_identifications)
-
     out = [
-        IdentificationAIOut(
+        IdentificationOut(
             id=identification["id"],
             object=identification["label__object__slug"],
             title=identification["label__object__title"],
@@ -111,10 +89,74 @@ async def get_ai_identifications(
             timestamp=identification["timestamp"],
             label=identification["label__value"],
             label_text=identification["label__text"],
-            ai_explanation=identification["label__value"],
-            snapshot_url=identification["snapshot__public_url"],
+            label_explanation=identification["label_explanation"],
+            snapshot=SnapshotOut(
+                id=identification["snapshot__id"],
+                camera_id=identification["snapshot__camera__id"],
+                image_url=identification["snapshot__public_url"],
+                timestamp=identification["snapshot__timestamp"],
+            ),
         )
-        for identification in additional_identifications + identifications
+        for identification in identifications
+    ]
+
+    return create_page(out, total=count, params=params)
+
+
+@router.get("", response_model=BigPage)
+async def get_identifications(
+    _: Annotated[User, Depends(get_user)],
+    params: BigParams = Depends(),
+    minute_interval: int = 30,
+) -> Page[IdentificationOut]:
+    interval = datetime.now() - timedelta(minutes=minute_interval)
+    offset = params.size * (params.page - 1)
+
+    count = await Identification.all().filter(snapshot__timestamp__gte=interval).count()
+
+    identifications = (
+        await Identification.all()
+        .order_by("snapshot__timestamp", "timestamp")
+        .filter(snapshot__timestamp__gte=interval)
+        .limit(params.size)
+        .offset(offset)
+        .values(
+            "id",
+            "timestamp",
+            "label_explanation",
+            "snapshot__id",
+            "snapshot__timestamp",
+            "snapshot__public_url",
+            "snapshot__camera__id",
+            "label__value",
+            "label__text",
+            "label__object__id",
+            "label__object__slug",
+            "label__object__title",
+            "label__object__question",
+            "label__object__explanation",
+        )
+    )
+
+    out = [
+        IdentificationOut(
+            id=identification["id"],
+            object=identification["label__object__slug"],
+            title=identification["label__object__title"],
+            question=identification["label__object__question"],
+            explanation=identification["label__object__explanation"],
+            timestamp=identification["timestamp"],
+            label=identification["label__value"],
+            label_text=identification["label__text"],
+            label_explanation=identification["label_explanation"],
+            snapshot=SnapshotOut(
+                id=identification["snapshot__id"],
+                camera_id=identification["snapshot__camera__id"],
+                image_url=identification["snapshot__public_url"],
+                timestamp=identification["snapshot__timestamp"],
+            ),
+        )
+        for identification in identifications
     ]
 
     return create_page(out, total=count, params=params)
@@ -139,12 +181,19 @@ async def create_user_identification(
     if label is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Label not found.")
 
-    user_identification = await UserIdentification.create(
-        timestamp=datetime.now(),
-        username=user.name,
-        label=label,
-        identification=identification,
+    user_identification = await UserIdentification.get_or_none(
+        username=user.name, identification=identification
     )
+    if user_identification is None:
+        user_identification = await UserIdentification.create(
+            timestamp=datetime.now(),
+            username=user.name,
+            label=label,
+            identification=identification,
+        )
+    else:
+        user_identification.label = label
+        await user_identification.save()
 
     return IdentificationOut(
         id=identification.id,
@@ -162,4 +211,49 @@ async def create_user_identification(
             camera_id=identification.snapshot.camera.id,
             timestamp=identification.snapshot.timestamp,
         ),
+    )
+
+
+@router.post("/marker", response_model=IdentificationMarkerOut)
+async def create_marker(
+    _: Annotated[User, Depends(is_admin)],
+    data: IdentificationMarkerIn,
+) -> IdentificationMarkerOut:
+    snapshot_ids = []
+    if data.identifications_id is not None and len(data.identifications_id) > 0:
+        identifications = (
+            await Identification.filter(id__in=data.identifications_id)
+            .all()
+            .prefetch_related("snapshot")
+        )
+        if len(identifications) != len(data.identifications_id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Some identifications id not found."
+            )
+        snapshot_ids += list(
+            set([identification.snapshot.id for identification in identifications])
+        )
+
+    if data.snapshots_id is not None and len(data.snapshots_id) > 0:
+        ids = await Snapshot.filter(id__in=data.snapshots_id).all().values_list("id", flat=True)
+        if len(ids) != len(data.snapshots_id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Some snapshots id not found."
+            )
+        snapshot_ids = list(set(snapshot_ids + ids))
+
+    if len(snapshot_ids) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Must send indetifications or snapshots ids",
+        )
+
+    identifications = await Identification.filter(snapshot__id__in=snapshot_ids).all()
+
+    await IdentificationMaker.bulk_create(
+        [IdentificationMaker(identification=identification) for identification in identifications]
+    )
+
+    return IdentificationMarkerOut(
+        count=len(identifications), ids=[identification.id for identification in identifications]
     )

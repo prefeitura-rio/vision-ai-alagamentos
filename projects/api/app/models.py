@@ -41,6 +41,14 @@ class Identification(Model):
     label_explanation = fields.TextField()
 
 
+class IdentificationMaker(Model):
+    id = fields.UUIDField(pk=True)
+    identification = fields.ForeignKeyField("app.Identification")
+
+    class Meta:
+        table = "identification_marker"
+
+
 class UserIdentification(Model):
     id = fields.UUIDField(pk=True)
     timestamp = fields.DatetimeField()
