@@ -32,7 +32,7 @@ jobs:
           task lint
 
   tests:
-    name: Tests
+    name: Test
     runs-on: ubuntu-latest
     container: python:3.11-slim
     env:
