@@ -56,6 +56,7 @@ async def get_ai_identifications(
         .offset(offset)
         .values(
             "id",
+            "snapshot__id",
             "snapshot__public_url",
             "snapshot__camera__id",
             "label__value",
@@ -70,6 +71,36 @@ async def get_ai_identifications(
         )
     )
 
+    additional_identifications = []
+    if len(identifications) > 0 and identifications[0]["label__object__slug"] != "image_corrupted":
+        additional_identifications = (
+            await Identification.all()
+            .order_by("snapshot__timestamp", "timestamp")
+            .filter(snapshot__id=identifications[0]["snapshot__id"], id__not_in=indentificateds)
+            .values(
+                "id",
+                "snapshot__id",
+                "snapshot__public_url",
+                "snapshot__camera__id",
+                "label__value",
+                "label__text",
+                "label__object__id",
+                "label__object__slug",
+                "label__object__title",
+                "label__object__question",
+                "label__object__explanation",
+                "timestamp",
+                "label_explanation",
+            )
+        )
+        index = 0
+        for i, identification in enumerate(additional_identifications):
+            if identification["label__object__slug"] == identifications[0]["label__object__slug"]:
+                index = i
+                break
+        additional_identifications = additional_identifications[:index]
+        print(additional_identifications)
+
     out = [
         IdentificationAIOut(
             id=identification["id"],
@@ -83,7 +114,7 @@ async def get_ai_identifications(
             ai_explanation=identification["label__value"],
             snapshot_url=identification["snapshot__public_url"],
         )
-        for identification in identifications
+        for identification in additional_identifications + identifications
     ]
 
     return create_page(out, total=count, params=params)
