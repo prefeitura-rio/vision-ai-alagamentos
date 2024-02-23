@@ -33,23 +33,23 @@ identifications = [
 
 
 # https://docs.google.com/document/d/1PRCjbIJw4_g3-p4gLjYoN0qTaenephyZyOsiOfVGWzM/edit
-def put_selected_label(label, index):
+def put_selected_label(label: str, index: int):
     send_user_identification(identifications[index]["id"], label)
 
     jump = 1
     if (identifications[index]["object"] == "image_corrupted") and (label == "true"):
         while (
             index + jump < len(identifications)
-            and identifications[index + jump]["snapshot_url"]
-            == identifications[index]["snapshot_url"]
+            and identifications[index + jump]["snapshot"]["image_url"]
+            == identifications[index]["snapshot"]["image_url"]
         ):
             send_user_identification(identifications[index + jump]["id"], "null")
             jump += 1
     elif (identifications[index]["object"] == "rain") and (label == "false"):
         if (
             (index + jump) < len(identifications)
-            and identifications[index + jump]["snapshot_url"]
-            == identifications[index]["snapshot_url"]
+            and identifications[index + jump]["snapshot"]["image_url"]
+            == identifications[index]["snapshot"]["image_url"]
             and identifications[index + jump]["object"] == "water_level"
         ):
             send_user_identification(identifications[index + jump]["id"], "low")
@@ -76,18 +76,11 @@ customized_button = st.markdown(
 )
 
 
-def button(
-    label,
-    label_translated,
-    index,
-):
+def buttom(label: str, text: str, index: int):
     if st.button(
-        label_translated,
+        text,
         on_click=put_selected_label,
-        args=(
-            label,
-            index,
-        ),
+        args=(label, index),
     ):  # noqa
         pass
 
@@ -121,4 +114,4 @@ else:
 
     for text, label in zip(possible_labels["text"], possible_labels["value"]):
         with col1:
-            button(label=label, label_translated=text, index=index)
+            buttom(label=label, text=text, index=index)
