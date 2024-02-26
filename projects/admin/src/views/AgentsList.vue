@@ -6,10 +6,9 @@ import { RouterLink } from 'vue-router'
 const agents = ref([])
 
 onMounted(async () => {
-    const response = await apiRequest.get("/agents")
-    agents.value = response
+  const response = await apiRequest.get('/agents')
+  agents.value = response
 })
-
 </script>
 
 <template>

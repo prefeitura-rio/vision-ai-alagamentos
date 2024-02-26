@@ -1,5 +1,5 @@
 <script setup>
-import { Form, Field } from 'vee-validate';
+import { Form, Field } from 'vee-validate'
 import * as Yup from 'yup'
 
 import { useAuthStore } from '../stores/auth'

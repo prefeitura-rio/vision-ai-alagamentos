@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import { useRoute } from 'vue-router';
+import { useRoute } from 'vue-router'
 
 import { apiRequest } from '../_helpers/api-request'
 import { RouterLink } from 'vue-router'
@@ -19,18 +19,14 @@ const route = useRoute()
 const agentId = computed(() => route.params.id)
 const addCameraId = ref('')
 
-apiRequest.get(`/agents/${agentId.value}`).then(response =>
-  agentData.value = response
-)
-
+apiRequest.get(`/agents/${agentId.value}`).then((response) => (agentData.value = response))
 
 const getPage = (page: number) => {
   currentPage.value = page
-  apiRequest.get(`/agents/${agentId.value}/cameras?page=${currentPage.value}`).then(response => {
+  apiRequest.get(`/agents/${agentId.value}/cameras?page=${currentPage.value}`).then((response) => {
     displayedCameras.value = response.items
     totalPages.value = response.pages
-  }
-  )
+  })
 }
 
 const prevPage = () => {
@@ -74,7 +70,12 @@ onMounted(() => {
     <h2>Cameras</h2>
     <div class="mb-3">
       <div class="input-group">
-        <input type="text" class="form-control" v-model="addCameraId" placeholder="Enter camera ID">
+        <input
+          type="text"
+          class="form-control"
+          v-model="addCameraId"
+          placeholder="Enter camera ID"
+        />
         <button class="btn btn-primary" @click="addCamera">Add Camera</button>
       </div>
     </div>
@@ -97,9 +98,13 @@ onMounted(() => {
       </tbody>
     </table>
     <div>
-      <button :disabled="currentPage === 1" @click="prevPage" class="btn btn-secondary">Previous</button>
+      <button :disabled="currentPage === 1" @click="prevPage" class="btn btn-secondary">
+        Previous
+      </button>
       <span>Page {{ currentPage }} of {{ totalPages }}</span>
-      <button :disabled="currentPage === totalPages" @click="nextPage" class="btn btn-secondary">Next</button>
+      <button :disabled="currentPage === totalPages" @click="nextPage" class="btn btn-secondary">
+        Next
+      </button>
     </div>
   </div>
 </template>
