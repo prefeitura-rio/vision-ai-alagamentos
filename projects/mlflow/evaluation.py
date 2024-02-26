@@ -85,6 +85,7 @@ parameters = {
 
 # START PREDICTIONS
 final_predictions = model.predict_batch(model_input=df, parameters=parameters)
+final_predictions["label_ia"] = final_predictions["label_ia"].fillna("null")
 
 parameters.pop("prompt")
 parameters["safety_settings"] = json.dumps(SAFETY_CONFIG, indent=4)
