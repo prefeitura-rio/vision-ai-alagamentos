@@ -5,6 +5,7 @@ on:
     paths:
       - ".github/workflows/identifier*"
       - "projects/identifier/**/*"
+      - "libs/base/**/*"
 
 jobs:
   lint:

@@ -5,6 +5,7 @@ on:
     paths:
       - ".github/workflows/streamlit*"
       - "projects/streamlit/**/*"
+      - "libs/base/**/*"
 
 jobs:
   lint:
