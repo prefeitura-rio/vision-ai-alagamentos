@@ -21,7 +21,7 @@ black = "^24.2.0"
 isort = "^5.13.2"
 flake8 = "^7.0.0"
 pillow = "^10.2.0"
-opencv-python = "^4.9.0.80"
+opencv-python-headless = "^4.9.0.80"
 
 
 [build-system]
