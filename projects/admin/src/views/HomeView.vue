@@ -1,9 +1,14 @@
 <script setup lang="ts">
-import TheWelcome from '../components/TheWelcome.vue'
+import { storeToRefs } from 'pinia'
+
+import { useAuthStore } from '../stores/auth'
+
+const authStore = useAuthStore()
+const { user: authUser } = storeToRefs(authStore)
 </script>
 
 <template>
-  <main>
-    <TheWelcome />
-  </main>
+  <div>
+    <h4>Hello there!</h4>
+  </div>
 </template>
