@@ -10,6 +10,7 @@ from st_aggrid import GridOptionsBuilder  # noqa
 from st_aggrid import GridUpdateMode  # noqa
 from st_aggrid import AgGrid, ColumnsAutoSizeMode
 from utils.api import APIVisionAI
+from vision_ai.base.pandas import explode_df
 
 STREAMLIT_PATH = Path(__file__).parent.parent.parent.absolute()
 
@@ -51,7 +52,6 @@ def get_vision_ai_api():
     return vision_api
 
 
-# gets the path from this file
 vision_api = get_vision_ai_api()
 
 
@@ -259,35 +259,6 @@ def treat_data(response):
     return cameras_identifications_explode, pd.concat(
         [cameras_identifications_explode, cameras_identifications_descriptions]
     )
-
-
-def explode_df(dataframe, column_to_explode, prefix=None):
-    df = dataframe.copy()
-    exploded_df = df.explode(column_to_explode)
-    new_df = pd.json_normalize(exploded_df[column_to_explode])
-
-    if prefix:
-        new_df = new_df.add_prefix(f"{prefix}_")
-
-    df.drop(columns=column_to_explode, inplace=True)
-    new_df.index = exploded_df.index
-    result_df = df.join(new_df)
-
-    return result_df
-
-
-def get_objetcs_labels_df(objects, keep_null=False):
-    objects_df = objects.rename(columns={"id": "object_id"})
-    objects_df = objects_df[["name", "object_id", "labels"]]
-    labels = explode_df(objects_df, "labels")
-    if not keep_null:
-        labels = labels[~labels["value"].isin(["null"])]
-    labels = labels.rename(columns={"label_id": "label"})
-    labels = labels.reset_index(drop=True)
-
-    mask = (labels["value"] == "null") & (labels["name"] != "image_description")  # noqa
-    labels = labels[~mask]
-    return labels
 
 
 def get_filted_cameras_objects(cameras_identifications_df, object_filter, label_filter):  # noqa
