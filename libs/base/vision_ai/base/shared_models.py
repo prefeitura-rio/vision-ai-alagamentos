@@ -52,3 +52,12 @@ def get_parser():
     output_schema_parsed = json.dumps(output_schema, indent=4)
 
     return output_parser, output_schema_parsed, output_example_parsed
+
+
+class GenerationResponseProblem:
+    def __init__(self, raw_response):
+        self.raw_response = raw_response
+
+    @property
+    def text(self) -> str:
+        return self.raw_response
