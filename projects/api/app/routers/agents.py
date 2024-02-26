@@ -4,13 +4,14 @@ from functools import partial
 from typing import Annotated
 from uuid import UUID
 
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi_pagination import Page
+from fastapi_pagination.ext.tortoise import paginate as tortoise_paginate
+
 from app.dependencies import get_user, is_admin, is_agent
 from app.models import Agent, Camera
 from app.pydantic_models import AgentOut, CameraOut, HeartbeatIn, HeartbeatOut, User
 from app.utils import apply_to_list, transform_tortoise_to_pydantic
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi_pagination import Page
-from fastapi_pagination.ext.tortoise import paginate as tortoise_paginate
 
 router = APIRouter(prefix="/agents", tags=["Agents"])
 
@@ -41,20 +42,6 @@ async def get_agents(_: Annotated[User, Depends(is_admin)]) -> Page[AgentOut]:
 async def get_agent_me(user: Annotated[User, Depends(is_agent)]) -> AgentOut:
     """Returns the agent informations."""
     agent = await Agent.get(id=user.agent_id)
-
-    return AgentOut(
-        id=agent.id,
-        name=agent.name,
-        slug=agent.slug,
-        auth_sub=agent.auth_sub,
-        last_heartbeat=agent.last_heartbeat,
-    )
-
-
-@router.get("/{agent_id}", response_model=AgentOut)
-async def get_agent(agent_id: UUID, _: Annotated[User, Depends(is_admin)]) -> AgentOut:
-    """Returns the agent informations."""
-    agent = await Agent.get(id=agent_id)
 
     return AgentOut(
         id=agent.id,
@@ -97,6 +84,20 @@ async def get_cameras(
                 ],
             ),
         ),
+    )
+
+
+@router.get("/{agent_id}", response_model=AgentOut)
+async def get_agent(agent_id: UUID, _: Annotated[User, Depends(is_admin)]) -> AgentOut:
+    """Returns the agent informations."""
+    agent = await Agent.get(id=agent_id)
+
+    return AgentOut(
+        id=agent.id,
+        name=agent.name,
+        slug=agent.slug,
+        auth_sub=agent.auth_sub,
+        last_heartbeat=agent.last_heartbeat,
     )
 
 
