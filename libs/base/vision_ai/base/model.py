@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import json
-from io import BytesIO
 
+import cv2
 import numpy as np
 import pandas as pd
 import requests
@@ -115,9 +115,12 @@ class Model:
     def analyze_image_problems(self, image_response):
         GREEN_STRIPES_THRESHOLD = 0.0001
         GREY_IMAGE_THRESHOLD = 0.3
+        # Read the image from the response
+        image = np.frombuffer(image_response.content, np.uint8)
+        image = cv2.imdecode(image, cv2.IMREAD_COLOR)
 
-        # Load image with PIL from bytes
-        image_data = np.array(Image.open(BytesIO(image_response.content)))
+        image_pil = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+        image_data = np.array(image_pil)
 
         means = np.mean(image_data, axis=(0, 1))
         std_devs = np.std(image_data, axis=(0, 1))
