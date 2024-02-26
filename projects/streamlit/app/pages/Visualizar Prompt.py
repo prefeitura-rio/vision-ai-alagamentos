@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import streamlit as st
 from utils.utils import get_objects, get_objects_cache, get_prompts, get_prompts_cache
-from vision_ai.base.pandas import get_prompt
+from vision_ai.base.prompt import get_prompt_api
 
 # Set page config
 st.set_page_config(page_title="Visualizar Prompt", layout="wide", initial_sidebar_state="collapsed")
@@ -33,5 +33,7 @@ if st.button("Update Data"):
     st.success("Data updated successfully!")
 
 
-prompt, objects_table = get_prompt(prompt_data=prompt_data, objects_data=objects_data)
+prompt, objects_table = get_prompt_api(
+    prompt_name="base", prompt_data=prompt_data, objects_data=objects_data
+)
 st.markdown(prompt)

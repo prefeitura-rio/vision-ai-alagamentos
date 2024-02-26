@@ -1,8 +1,5 @@
 # -*- coding: utf-8 -*-
-import json
-
 import pandas as pd
-from vision_ai.base.shared_models import get_parser
 
 
 def explode_df(dataframe: pd.DataFrame, column_to_explode: str, prefix: str = None):
@@ -46,28 +43,3 @@ def get_prompt_objects_df(labels_df: pd.DataFrame, prompt_objects: list):
         objects_df = pd.concat([objects_df, obj_labels_df])
 
     return objects_df
-
-
-def get_prompt(prompt_data: list, objects_data: list):
-    prompt_parameters = prompt_data[0]
-    prompt_text = prompt_parameters.get("prompt_text")
-    prompt_objects = prompt_parameters.get("objects")
-
-    labels_df = get_objetcs_labels_df(objects=pd.DataFrame(objects_data), keep_null=True)
-    objects_table = get_prompt_objects_df(
-        labels_df=labels_df,
-        prompt_objects=prompt_objects,
-    )
-    objects_table_md = objects_table.to_markdown(index=False)
-
-    _, output_schema_parsed, output_example_parsed = get_parser()
-    output_schema = json.dumps(json.loads(output_schema_parsed), indent=4)
-    output_example = json.dumps(json.loads(output_example_parsed), indent=4)
-
-    prompt_text = (
-        prompt_text.replace("{objects_table_md}", objects_table_md)
-        .replace("{output_schema}", output_schema)
-        .replace("{output_example}", output_example)
-    )
-
-    return prompt_text, objects_table
