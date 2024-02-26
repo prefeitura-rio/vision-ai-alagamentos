@@ -1,13 +1,10 @@
 # -*- coding: utf-8 -*-
 
 import pandas as pd
+from utils.utils import get_ai_identifications_cache, get_objects_cache, send_user_identification
+from vision_ai.base.pandas import get_objetcs_labels_df
+
 import streamlit as st
-from utils.utils import (
-    get_ai_identifications_cache,
-    get_objects_cache,
-    get_objetcs_labels_df,
-    send_user_identification,
-)
 
 st.set_page_config(
     page_title="Classificador de Labels",
