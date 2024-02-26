@@ -12,7 +12,7 @@ class Object(BaseModel):
     label_explanation: str = Field(
         description="Highly detailed visual description of the image given the object context"
     )
-    label: Union[bool, str] = Field(
+    label: Union[bool, str, None] = Field(
         description="Label indicating the condition or characteristic of the object"
     )
 

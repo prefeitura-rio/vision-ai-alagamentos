@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 import json
+import os
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import mlflow
@@ -8,15 +10,23 @@ import seaborn as sns
 import vertexai
 from sklearn.metrics import confusion_matrix
 from vertexai.preview import generative_models
+from vision_ai.base.api import VisionaiAPI
 from vision_ai.base.metrics import calculate_metrics
 from vision_ai.base.model import Model
 from vision_ai.base.pandas import explode_df
 from vision_ai.base.prompt import get_prompt
 from vision_ai.base.sheets import get_objects_table_from_sheets
 
-# import os
+ABSOLUTE_PATH = Path(__file__).parent.absolute()
+
 # os.environ["MLFLOW_TRACKING_USERNAME"] = secret["mlflow_tracking_username"]
 # os.environ["MLFLOW_TRACKING_PASSWORD"] = secret["mlflow_tracking_password"]
+
+vision_api = VisionaiAPI(
+    username=os.environ.get("VISION_API_USERNAME"),
+    password=os.environ.get("VISION_API_PASSWORD"),
+)
+
 
 PROJECT_ID = "rj-escritorio-dev"
 LOCATION = "us-central1"
@@ -32,16 +42,18 @@ SAFETY_CONFIG = {
     generative_models.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: generative_models.HarmBlockThreshold.BLOCK_NONE,
 }
 
-with open("./projects/mlflow/snapshots_mock.json") as f:
+
+# snapshots = vision_api._get(path="/identifications/aggregate")
+
+with open(ABSOLUTE_PATH / "mock_snapshots_api_data.json", "r") as f:
     snapshots = json.load(f)
 
 with open("./projects/mlflow/prompt.md") as f:
     prompt_text_local = f.read()
 
-
 df = pd.DataFrame(snapshots)
-df = explode_df(df, "human_identifications")
-df = df.drop(columns=["ia_identifications"])
+df = explode_df(df, "human_identification")
+df = df.drop(columns=["ia_identification"])
 df = df.sort_values(by=["snapshot_id", "object", "count"], ascending=False)
 df = df.drop_duplicates(subset=["snapshot_id", "object"], keep="first")
 

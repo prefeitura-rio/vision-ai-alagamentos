@@ -32,34 +32,44 @@ class Model:
 
         return responses
 
-    def predict_batch(
-        self,
-        model_input=None,
-        parameters=None,
-    ):
+    def predict_batch(self, model_input=None, parameters=None, retry=5):
         final_predictions = pd.DataFrame()
-        snapshot_ids = model_input["snapshot_id"].unique().tolist()
-        lenght = len(snapshot_ids)
-        for i, snapshot_id in enumerate(snapshot_ids):
-            print(f"{i}/{lenght}: {snapshot_id}")
-            snapshot_df = model_input[model_input["snapshot_id"] == snapshot_id]
-            responses = self.llm_vertexai(
-                image_url=snapshot_id,
-                prompt=parameters["prompt"],
-                google_api_model=parameters["google_api_model"],
-                max_output_tokens=parameters["max_output_tokens"],
-                temperature=parameters["temperature"],
-                top_k=parameters["top_k"],
-                top_p=parameters["top_p"],
-                safety_settings=parameters["safety_settings"],
-            )
-            ai_response = responses.text
-            output_parser, _, _ = get_parser()
-            ai_response_parsed = output_parser.parse(ai_response).dict()
-            prediction = pd.DataFrame.from_dict(ai_response_parsed["objects"])
-            prediction = prediction[["object", "label", "label_explanation"]].rename(
-                columns={"label": "label_ia"}
-            )
-            final_prediction = snapshot_df.merge(prediction, on="object", how="left")
-            final_predictions = pd.concat([final_predictions, final_prediction])
+        snapshot_urls = model_input["snapshot_url"].unique().tolist()
+        lenght = len(snapshot_urls)
+        # Make parallel
+        for i, snapshot_url in enumerate(snapshot_urls):
+            print(f"{i}/{lenght}: {snapshot_url}")
+            snapshot_df = model_input[model_input["snapshot_url"] == snapshot_url]
+            retry_count = retry
+            while retry_count > 0:
+                try:
+                    responses = self.llm_vertexai(
+                        image_url=snapshot_url,
+                        prompt=parameters["prompt"],
+                        google_api_model=parameters["google_api_model"],
+                        max_output_tokens=parameters["max_output_tokens"],
+                        temperature=parameters["temperature"],
+                        top_k=parameters["top_k"],
+                        top_p=parameters["top_p"],
+                        safety_settings=parameters["safety_settings"],
+                    )
+                    ai_response = responses.text
+                    output_parser, _, _ = get_parser()
+                    ai_response_parsed = output_parser.parse(ai_response).dict()
+                    prediction = pd.DataFrame.from_dict(ai_response_parsed["objects"])
+                    prediction = prediction[["object", "label", "label_explanation"]].rename(
+                        columns={"label": "label_ia"}
+                    )
+                    final_prediction = snapshot_df.merge(prediction, on="object", how="left")
+                    final_predictions = pd.concat([final_predictions, final_prediction])
+
+                    retry_count = 0
+                except Exception as exception:
+
+                    if retry_count == 0:
+                        raise exception
+                    else:
+                        retry_count -= 1
+                        print(f"Retrying {retry_count}...\nError:{exception}")
+
         return final_predictions
