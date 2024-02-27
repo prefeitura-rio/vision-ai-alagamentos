@@ -10,5 +10,8 @@ const { user: authUser } = storeToRefs(authStore)
 <template>
   <div>
     <h4>Hello there!</h4>
+    <router-link v-if="!authUser" to="/login" class="btn btn-primary error-link"
+      >Log me in!</router-link
+    >
   </div>
 </template>

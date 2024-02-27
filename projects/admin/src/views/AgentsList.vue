@@ -13,6 +13,7 @@ onMounted(async () => {
 
 <template>
   <div>
+    <h2>Agents</h2>
     <ul>
       <li v-for="agent in agents.items" :key="agent.id">
         <RouterLink :to="`/agents/${agent.id}`">{{ agent.name }} ({{ agent.id }})</RouterLink>

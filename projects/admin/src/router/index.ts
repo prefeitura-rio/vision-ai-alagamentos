@@ -1,30 +1,41 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
-import HomeView from '../views/HomeView.vue'
-import LoginView from '../views/LoginView.vue'
-import AgentsList from '../views/AgentsList.vue'
-import AgentDetails from '../views/AgentDetails.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   linkActiveClass: 'active',
   routes: [
-    { path: '/', component: HomeView },
-    { path: '/login', component: LoginView },
-    { path: '/agents', component: AgentsList },
-    { path: '/agents/:id', component: AgentDetails }
+    { path: '/', component: () => import('../views/HomeView.vue') },
+    { path: '/login', component: () => import('../views/LoginView.vue') },
+    { path: '/agents', component: () => import('../views/AgentsList.vue') },
+    { path: '/agents/:id', component: () => import('../views/AgentDetails.vue') },
+    { path: '/cameras', component: () => import('../views/CamerasList.vue') },
+    { path: '/cameras/new', component: () => import('../views/CameraNew.vue') },
+    { path: '/cameras/:id', component: () => import('../views/CameraDetails.vue') },
+    { path: '/cameras/:id/snapshots', component: () => import('../views/CameraSnapshots.vue') },
+    { path: '/404', component: () => import('../views/NotFoundView.vue') },
+    {
+      path: '/:pathMatch(.*)*',
+      name: 'not-found',
+      component: () => import('../views/NotFoundView.vue')
+    }
   ]
 })
 
+router.resolve({
+  name: 'not-found',
+  params: { pathMatch: ['not', 'found'] }
+}).href // '/not/found'
+
 router.beforeEach(async (to) => {
   // redirect to login page if not logged in and trying to access a restricted page
-  const publicPages = ['/login']
+  const publicPages = ['/', '/404', '/login']
   const authRequired = !publicPages.includes(to.path)
   const auth = useAuthStore()
 
   if (authRequired && !auth.user) {
     auth.returnUrl = to.fullPath
-    return '/login'
+    return '/404'
   }
 })
 
