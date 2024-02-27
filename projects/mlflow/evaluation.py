@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 import json
+import os
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import mlflow
@@ -8,15 +10,25 @@ import seaborn as sns
 import vertexai
 from sklearn.metrics import confusion_matrix
 from vertexai.preview import generative_models
+from vision_ai.base.api import VisionaiAPI
 from vision_ai.base.metrics import calculate_metrics
 from vision_ai.base.model import Model
 from vision_ai.base.pandas import explode_df
-from vision_ai.base.prompt import get_prompt
-from vision_ai.base.sheets import get_objects_table_from_sheets
+from vision_ai.base.prompt import get_prompt_api
 
-# import os
+# from vision_ai.base.prompt import get_prompt_local
+# from vision_ai.base.sheets import get_objects_table_from_sheets
+
+ABSOLUTE_PATH = Path(__file__).parent.absolute()
+
 # os.environ["MLFLOW_TRACKING_USERNAME"] = secret["mlflow_tracking_username"]
 # os.environ["MLFLOW_TRACKING_PASSWORD"] = secret["mlflow_tracking_password"]
+
+vision_api = VisionaiAPI(
+    username=os.environ.get("VISION_API_USERNAME"),
+    password=os.environ.get("VISION_API_PASSWORD"),
+)
+
 
 PROJECT_ID = "rj-escritorio-dev"
 LOCATION = "us-central1"
@@ -32,24 +44,32 @@ SAFETY_CONFIG = {
     generative_models.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: generative_models.HarmBlockThreshold.BLOCK_NONE,
 }
 
-with open("./projects/mlflow/snapshots_mock.json") as f:
-    snapshots = json.load(f)
+# LOCAL PROMPT + OBJECTS TABLE FROM SHEETS
+# with open("./projects/mlflow/prompt.md") as f:
+#     prompt_text_local = f.read()
+# objects_table_md, objects_labels_md = get_objects_table_from_sheets()
+# prompt, prompt_template = get_prompt_local(
+#     prompt_parameters=None, prompt_template=prompt_text_local, objects_table_md=objects_table_md
+# )
 
-with open("./projects/mlflow/prompt.md") as f:
-    prompt_text_local = f.read()
+# GET PROMPT FROM API
+prompt_data = vision_api._get_all_pages(path="/prompts")
+objects_data = vision_api._get_all_pages(path="/objects")
+prompt, objects_table = get_prompt_api(
+    prompt_name="base", prompt_data=prompt_data, objects_data=objects_data
+)
+
+# GET SNAPSHOTS. API OR MOCK
+# snapshots = vision_api._get(path="/identifications/aggregate")
+with open(ABSOLUTE_PATH / "mock_snapshots_api_data.json", "r") as f:
+    snapshots = json.load(f)
 
 
 df = pd.DataFrame(snapshots)
-df = explode_df(df, "human_identifications")
-df = df.drop(columns=["ia_identifications"])
+df = explode_df(df, "human_identification")
+df = df.drop(columns=["ia_identification"])
 df = df.sort_values(by=["snapshot_id", "object", "count"], ascending=False)
 df = df.drop_duplicates(subset=["snapshot_id", "object"], keep="first")
-
-
-objects_table_md, objects_labels_md = get_objects_table_from_sheets()
-prompt, prompt_template = get_prompt(
-    prompt_parameters=None, prompt_template=prompt_text_local, objects_table_md=objects_table_md
-)
 
 
 google_api_model = "gemini-pro-vision"
@@ -73,10 +93,13 @@ parameters = {
 
 # START PREDICTIONS
 final_predictions = model.predict_batch(model_input=df, parameters=parameters)
+final_predictions["label_ia"] = final_predictions["label_ia"].fillna("null")
+final_predictions["label_ia"] = final_predictions["label_ia"].apply(lambda x: str(x).lower())
 
 parameters.pop("prompt")
 parameters["safety_settings"] = json.dumps(SAFETY_CONFIG, indent=4)
 
+# MLFLOW DUMP
 mlflow.set_tracking_uri(uri="https://mlflow.dados.rio")
 
 # Create a new MLflow Experiment
@@ -127,56 +150,3 @@ with mlflow.start_run():
         }
         mlflow.log_metrics(metrics)
         mlflow.log_artifact(f"/tmp/cm_{obj}.png")
-
-
-# def _get_prediction(
-#     image_url: str,
-#     prompt_text: str,
-#     google_api_model: str,
-#     max_output_tokens: int,
-#     temperature: float,
-#     top_k: int,
-#     top_p: int,
-# ) -> Dict:
-
-#     try:
-
-#         from langchain.chains import LLMChain
-#         from langchain.prompts import ChatPromptTemplate
-#         from langchain_core.messages import HumanMessage
-#         from langchain_google_vertexai import VertexAI
-
-#         model = VertexAI(
-#             model_name=google_api_model,
-#             temperature=temperature,
-#             top_k=top_k,
-#             top_p=top_p,
-#             max_output_tokens=max_output_tokens,
-#             safety_settings=SAFETY_CONFIG,
-#             project=PROJECT_ID,
-#             location=LOCATION,
-#         )
-
-#         content = [
-#             {"type": "image_url", "image_url": {"url": image_url}},
-#             {
-#                 "type": "text",
-#                 "text": prompt_text,
-#             },
-#         ]
-#         message = HumanMessage(content=content)
-
-#         chain = LLMChain(llm=model, prompt=ChatPromptTemplate.from_messages([message]))
-#         ai_response = chain.invoke({})["text"]
-
-#     except Exception as exception:
-#         raise exception
-
-#     output_parser, _, _ = get_parser()
-
-#     try:
-#         response_parsed = output_parser.parse(ai_response)
-#     except Exception as exception:
-#         raise exception
-
-#     return response_parsed.dict()

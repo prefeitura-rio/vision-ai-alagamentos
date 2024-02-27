@@ -13,6 +13,7 @@ from app.pydantic_models import (
     LabelUpdate,
     ObjectIn,
     ObjectOut,
+    ObjectUpdate,
     User,
 )
 from app.utils import apply_to_list, transform_tortoise_to_pydantic
@@ -79,6 +80,87 @@ async def create_object(
         question=object.question,
         explanation=object.explanation,
         labels=[],
+    )
+
+
+@router.get("/{object_id}", response_model=ObjectOut)
+async def get_object(
+    object_id: UUID,
+    _: Annotated[User, Depends(is_agent)],
+) -> ObjectOut:
+    """Get an object."""
+    object = await Object.get_or_none(id=object_id)
+    if object is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Object not found",
+        )
+
+    async def get_labels(labels_relation: ReverseRelation) -> list[LabelOut]:
+        labels: list[Label] = await labels_relation.all()
+        return [
+            LabelOut(
+                id=label.id,
+                value=label.value,
+                criteria=label.criteria,
+                identification_guide=label.identification_guide,
+                text=label.text,
+            )
+            for label in labels
+        ]
+
+    return ObjectOut(
+        id=object.id,
+        name=object.name,
+        slug=object.slug,
+        title=object.title,
+        question=object.question,
+        explanation=object.explanation,
+        labels=await get_labels(object.labels),
+    )
+
+
+@router.put("/{object_id}", response_model=ObjectOut)
+async def update_object(
+    object_id: UUID,
+    object_: ObjectUpdate,
+    _: Annotated[User, Depends(is_admin)],
+) -> ObjectOut:
+    """Update an object."""
+    object = await Object.get_or_none(id=object_id)
+    if object is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Object not found",
+        )
+    if object_.name:
+        object.name = object_.name
+    if object_.slug:
+        object.slug = object_.slug
+    if object_.title:
+        object.title = object_.title
+    if object_.question:
+        object.question = object_.question
+    if object_.explanation:
+        object.explanation = object_.explanation
+    await object.save()
+    return ObjectOut(
+        id=object.id,
+        name=object.name,
+        slug=object.slug,
+        title=object.title,
+        question=object.question,
+        explanation=object.explanation,
+        labels=[
+            LabelOut(
+                id=label.id,
+                value=label.value,
+                criteria=label.criteria,
+                identification_guide=label.identification_guide,
+                text=label.text,
+            )
+            for label in await object.labels.all()
+        ],
     )
 
 
@@ -306,6 +388,39 @@ async def delete_object_label(
         criteria=label_obj.criteria,
         identification_guide=label_obj.identification_guide,
         text=label_obj.text,
+    )
+
+
+@router.get("/{object_id}/cameras", response_model=Page[CameraOut])
+async def get_object_cameras(
+    object_id: UUID,
+    _: Annotated[User, Depends(is_admin)],
+) -> Page[CameraOut]:
+    """Get a list of all cameras for an object."""
+    object = await Object.get_or_none(id=object_id)
+    if object is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Object not found",
+        )
+
+    return await tortoise_paginate(
+        object.cameras,
+        transformer=partial(
+            apply_to_list,
+            fn=partial(
+                transform_tortoise_to_pydantic,
+                pydantic_model=CameraOut,
+                vars_map=[
+                    ("id", "id"),
+                    ("name", "name"),
+                    ("rtsp_url", "rtsp_url"),
+                    ("update_interval", "update_interval"),
+                    ("latitude", "latitude"),
+                    ("longitude", "longitude"),
+                ],
+            ),
+        ),
     )
 
 

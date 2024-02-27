@@ -150,6 +150,14 @@ class ObjectOut(BaseModel):
     labels: list[LabelOut]
 
 
+class ObjectUpdate(BaseModel):
+    name: str | None
+    slug: str | None
+    title: str | None
+    question: str | None
+    explanation: str | None
+
+
 class PromptIn(BaseModel):
     name: str
     model: str
@@ -183,6 +191,25 @@ class PromptsOut(BaseModel):
 class PredictOut(BaseModel):
     error: bool
     message: str | None
+
+
+class IaIdentificationAggregation(BaseModel):
+    object: str
+    label: str
+
+
+class HumanIdentificationAggregation(BaseModel):
+    object: str
+    label: str
+    count: int
+
+
+class Aggregation(BaseModel):
+    snapshot_id: UUID
+    snapshot_timestamp: datetime
+    snapshot_url: str
+    ia_identification: list[IaIdentificationAggregation]
+    human_identification: list[HumanIdentificationAggregation]
 
 
 class Token(BaseModel):

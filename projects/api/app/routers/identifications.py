@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from datetime import datetime, timedelta
 from typing import Annotated
+from uuid import UUID
 
 from app.dependencies import get_user, is_admin, is_human
 from app.models import (
@@ -11,6 +12,9 @@ from app.models import (
     UserIdentification,
 )
 from app.pydantic_models import (
+    Aggregation,
+    HumanIdentificationAggregation,
+    IaIdentificationAggregation,
     IdentificationHumanIN,
     IdentificationMarkerIn,
     IdentificationMarkerOut,
@@ -21,6 +25,8 @@ from app.pydantic_models import (
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi_pagination import Page, create_page
 from fastapi_pagination.default import Params
+from tortoise import connections
+from tortoise.expressions import Q
 
 router = APIRouter(prefix="/identifications", tags=["identifications"])
 
@@ -256,3 +262,69 @@ async def create_marker(
     return IdentificationMarkerOut(
         count=len(identifications), ids=[identification.id for identification in identifications]
     )
+
+
+@router.get("/aggregate")
+async def get_aggregation(
+    _: Annotated[User, Depends(is_admin)],
+):
+    query = """
+    SELECT
+      COUNT(label."value") AS total,
+      label."value" AS label_value,
+      "object"."name" AS object_name,
+      snapshot.id AS snapshot_id,
+      snapshot."timestamp" AS snapshot_timestamp,
+      snapshot.public_url AS snapshot_url
+    FROM
+      user_identification
+      LEFT JOIN identification ON identification.id = user_identification.identification_id
+      LEFT JOIN snapshot ON snapshot.id = identification.snapshot_id
+      LEFT JOIN label ON label.id = user_identification.label_id
+      LEFT JOIN "object" ON label.object_id = "object".id
+    GROUP BY
+      label."value",
+      "object"."name",
+      snapshot.id,
+      snapshot."timestamp",
+      snapshot.public_url
+    ORDER BY
+      snapshot."timestamp" DESC
+    """
+    conn = connections.get("default")
+    aggregation = await conn.execute_query_dict(query)
+    snapshots_id = [identification["snapshot_id"] for identification in aggregation]
+    ia_identifications = (
+        await Identification.all()
+        .filter(Q(snapshot__id__in=snapshots_id), ~Q(label__object__name="image_description"))
+        .prefetch_related("snapshot", "label", "label__object")
+    )
+
+    out: dict[UUID, Aggregation] = {}
+    for identification in aggregation:
+        id: UUID = identification["snapshot_id"]
+        human_identification = HumanIdentificationAggregation(
+            object=identification["object_name"],
+            label=identification["label_value"],
+            count=identification["total"],
+        )
+
+        if id in out:
+            out[id].human_identification.append(human_identification)
+        else:
+            out[id] = Aggregation(
+                snapshot_id=id,
+                snapshot_timestamp=identification["snapshot_timestamp"],
+                snapshot_url=identification["snapshot_url"],
+                ia_identification=[],
+                human_identification=[human_identification],
+            )
+    for identification in ia_identifications:
+        out[identification.snapshot.id].ia_identification.append(
+            IaIdentificationAggregation(
+                object=identification.label.object.name,
+                label=identification.label.value,
+            )
+        )
+
+    return list(out.values())

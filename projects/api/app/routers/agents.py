@@ -86,6 +86,20 @@ async def get_cameras(
     )
 
 
+@router.get("/{agent_id}", response_model=AgentOut)
+async def get_agent(agent_id: UUID, _: Annotated[User, Depends(is_admin)]) -> AgentOut:
+    """Returns the agent informations."""
+    agent = await Agent.get(id=agent_id)
+
+    return AgentOut(
+        id=agent.id,
+        name=agent.name,
+        slug=agent.slug,
+        auth_sub=agent.auth_sub,
+        last_heartbeat=agent.last_heartbeat,
+    )
+
+
 @router.get("/{agent_id}/cameras", response_model=Page[CameraOut])
 async def get_agent_cameras(
     agent_id: UUID,

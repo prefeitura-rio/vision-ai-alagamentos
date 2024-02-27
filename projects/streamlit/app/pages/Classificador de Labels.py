@@ -5,9 +5,9 @@ import streamlit as st
 from utils.utils import (
     get_ai_identifications_cache,
     get_objects_cache,
-    get_objetcs_labels_df,
     send_user_identification,
 )
+from vision_ai.base.pandas import get_objetcs_labels_df
 
 st.set_page_config(
     page_title="Classificador de Labels",
