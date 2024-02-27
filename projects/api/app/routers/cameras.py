@@ -3,6 +3,14 @@ from datetime import datetime, timedelta
 from typing import Annotated
 from uuid import UUID, uuid4
 
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
+from fastapi_pagination import Page, Params
+from fastapi_pagination.api import create_page
+from google.cloud import storage
+from tortoise.expressions import Q
+
 from app import config
 from app.dependencies import is_admin, is_agent, is_ai
 from app.models import Agent, Camera, Identification, Label, Object, Snapshot
@@ -12,6 +20,7 @@ from app.pydantic_models import (
     CameraOut,
     CameraUpdate,
     IdentificationOut,
+    ObjectOut,
     PredictOut,
     SnapshotIn,
     SnapshotOut,
@@ -23,13 +32,6 @@ from app.utils import (
     get_prompts_best_fit,
     publish_message,
 )
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi.encoders import jsonable_encoder
-from fastapi.responses import JSONResponse
-from fastapi_pagination import Page, Params
-from fastapi_pagination.api import create_page
-from google.cloud import storage
-from tortoise.expressions import Q
 
 
 class BigParams(Params):
@@ -220,6 +222,39 @@ async def delete_camera(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Camera not found.")
 
     await Camera.filter(id=camera_id).delete()
+
+
+@router.get("/{camera_id}/objects", response_model=Page[ObjectOut])
+async def get_camera_objects(
+    camera_id: str,
+    _: Annotated[User, Depends(is_agent)],
+    params: Params = Depends(),
+) -> Page[ObjectOut]:
+    """Get a camera object from the server."""
+    camera = await Camera.get_or_none(id=camera_id)
+    if not camera:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Camera not found.")
+
+    objects = (
+        await Object.filter(cameras__id=camera_id)
+        .all()
+        .limit(params.size)
+        .offset(params.size * (params.page - 1))
+    )
+    objects_out = [
+        ObjectOut(
+            id=object.id,
+            slug=object.slug,
+            title=object.title,
+            question=object.question,
+            explanation=object.explanation,
+        )
+        for object in objects
+    ]
+
+    return create_page(
+        objects_out, total=await Object.filter(cameras__id=camera_id).all().count(), params=params
+    )
 
 
 @router.get("/{camera_id}/snapshots", response_model=Page[SnapshotOut])

@@ -3,6 +3,11 @@ from functools import partial
 from typing import Annotated
 from uuid import UUID
 
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi_pagination import Page
+from fastapi_pagination.ext.tortoise import paginate as tortoise_paginate
+from tortoise.fields import ReverseRelation
+
 from app.dependencies import is_admin, is_agent
 from app.models import Camera, Label, Object
 from app.pydantic_models import (
@@ -16,10 +21,6 @@ from app.pydantic_models import (
     User,
 )
 from app.utils import apply_to_list, transform_tortoise_to_pydantic
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi_pagination import Page
-from fastapi_pagination.ext.tortoise import paginate as tortoise_paginate
-from tortoise.fields import ReverseRelation
 
 router = APIRouter(prefix="/objects", tags=["Objects"])
 
@@ -306,6 +307,39 @@ async def delete_object_label(
         criteria=label_obj.criteria,
         identification_guide=label_obj.identification_guide,
         text=label_obj.text,
+    )
+
+
+@router.get("/{object_id}/cameras", response_model=Page[CameraOut])
+async def get_object_cameras(
+    object_id: UUID,
+    _: Annotated[User, Depends(is_admin)],
+) -> Page[CameraOut]:
+    """Get a list of all cameras for an object."""
+    object = await Object.get_or_none(id=object_id)
+    if object is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Object not found",
+        )
+
+    return await tortoise_paginate(
+        object.cameras,
+        transformer=partial(
+            apply_to_list,
+            fn=partial(
+                transform_tortoise_to_pydantic,
+                pydantic_model=CameraOut,
+                vars_map=[
+                    ("id", "id"),
+                    ("name", "name"),
+                    ("rtsp_url", "rtsp_url"),
+                    ("update_interval", "update_interval"),
+                    ("latitude", "latitude"),
+                    ("longitude", "longitude"),
+                ],
+            ),
+        ),
     )
 
 
