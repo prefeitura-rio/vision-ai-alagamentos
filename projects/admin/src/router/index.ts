@@ -13,6 +13,9 @@ const router = createRouter({
     { path: '/cameras/new', component: () => import('../views/CameraNew.vue') },
     { path: '/cameras/:id', component: () => import('../views/CameraDetails.vue') },
     { path: '/cameras/:id/snapshots', component: () => import('../views/CameraSnapshots.vue') },
+    { path: '/objects', component: () => import('../views/ObjectsList.vue') },
+    { path: '/objects/new', component: () => import('../views/ObjectNew.vue') },
+    { path: '/objects/:id', component: () => import('../views/ObjectDetails.vue') },
     { path: '/404', component: () => import('../views/NotFoundView.vue') },
     {
       path: '/:pathMatch(.*)*',

@@ -31,11 +31,11 @@ const authStore = useAuthStore()
             <li class="nav-item">
               <RouterLink to="/cameras" class="nav-item nav-link">Cameras</RouterLink>
             </li>
-            <li class="nav-item">
+            <!-- <li class="nav-item">
               <RouterLink to="/identifications" class="nav-item nav-link"
                 >Identifications</RouterLink
               >
-            </li>
+            </li> -->
             <li class="nav-item">
               <RouterLink to="/objects" class="nav-item nav-link">Objects</RouterLink>
             </li>
