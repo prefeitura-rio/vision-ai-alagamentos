@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { apiRequest } from '../_helpers/api-request'
 import { RouterLink } from 'vue-router'
