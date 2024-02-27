@@ -10,7 +10,6 @@ jobs:
   deploy:
     name: Build and Deploy
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/development'
-    needs: [lint]
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -66,6 +65,8 @@ jobs:
           region: ${{ env.GCR_REGION }}
           image: docker.io/${{ env.DOCKERHUB_USERNAME }}/${{ env.DOCKERHUB_REPOSITORY }}:${{ github.sha }}
           flags: '--port=80 --allow-unauthenticated --concurrency=100 --verbosity=debug --session-affinity'
+          secrets: |
+            VITE_VISION_AI_API_URL=VISION_AI_API_PRODUCTION_URL:latest
 
       - name: Deploy to Google Cloud Run (Staging)
         if: github.ref == 'refs/heads/development'
@@ -75,3 +76,5 @@ jobs:
           region: ${{ env.GCR_REGION }}
           image: docker.io/${{ env.DOCKERHUB_USERNAME }}/${{ env.DOCKERHUB_REPOSITORY }}:${{ github.sha }}
           flags: '--port=80 --allow-unauthenticated --concurrency=100 --verbosity=debug --session-affinity'
+          secrets: |
+            VITE_VISION_AI_API_URL=VISION_AI_API_STAGING_URL:latest
