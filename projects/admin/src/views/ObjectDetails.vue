@@ -3,27 +3,45 @@
     <h2>Object Details</h2>
     <div class="mb-3">
       <label for="id" class="form-label">ID</label>
-      <input type="text" id="id" v-model="object.id" class="form-control" disabled>
+      <input type="text" id="id" v-model="object.id" class="form-control" disabled />
     </div>
     <div class="mb-3">
       <label for="name" class="form-label">Name</label>
-      <input type="text" id="name" v-model="object.name" class="form-control" @input="enableSave">
+      <input type="text" id="name" v-model="object.name" class="form-control" @input="enableSave" />
     </div>
     <div class="mb-3">
       <label for="slug" class="form-label">Slug</label>
-      <input type="text" id="slug" v-model="object.slug" class="form-control" @input="enableSave">
+      <input type="text" id="slug" v-model="object.slug" class="form-control" @input="enableSave" />
     </div>
     <div class="mb-3">
       <label for="title" class="form-label">Title</label>
-      <input type="text" id="title" v-model="object.title" class="form-control" @input="enableSave">
+      <input
+        type="text"
+        id="title"
+        v-model="object.title"
+        class="form-control"
+        @input="enableSave"
+      />
     </div>
     <div class="mb-3">
       <label for="question" class="form-label">Question</label>
-      <input type="text" id="question" v-model="object.question" class="form-control" @input="enableSave">
+      <input
+        type="text"
+        id="question"
+        v-model="object.question"
+        class="form-control"
+        @input="enableSave"
+      />
     </div>
     <div class="mb-3">
       <label for="explanation" class="form-label">Explanation</label>
-      <textarea id="explanation" v-model="object.explanation" class="form-control" rows="4" @input="enableSave"></textarea>
+      <textarea
+        id="explanation"
+        v-model="object.explanation"
+        class="form-control"
+        rows="4"
+        @input="enableSave"
+      ></textarea>
     </div>
     <button v-if="isModified" @click="saveChanges" class="btn btn-primary">Save</button>
     <button @click="deleteObject" class="btn btn-danger">Delete</button>
@@ -58,7 +76,7 @@
       <h3>Associated Cameras</h3>
       <div class="mb-3">
         <label for="cameraId" class="form-label">Camera ID</label>
-        <input type="text" id="cameraId" v-model="newCameraId" class="form-control">
+        <input type="text" id="cameraId" v-model="newCameraId" class="form-control" />
       </div>
       <button @click="associateCamera" class="btn btn-primary">Associate Camera</button>
       <div class="my-4"></div>
@@ -67,7 +85,8 @@
           <tr>
             <th>ID</th>
             <th>Name</th>
-            <th></th> <!-- Empty header for delete button column -->
+            <th></th>
+            <!-- Empty header for delete button column -->
           </tr>
         </thead>
         <tbody>
@@ -83,9 +102,13 @@
 
       <!-- Pagination controls for associated cameras -->
       <div>
-        <button :disabled="currentPage === 1" @click="prevPage" class="btn btn-secondary">Previous</button>
+        <button :disabled="currentPage === 1" @click="prevPage" class="btn btn-secondary">
+          Previous
+        </button>
         <span>Page {{ currentPage }} of {{ totalPages }}</span>
-        <button :disabled="currentPage === totalPages" @click="nextPage" class="btn btn-secondary">Next</button>
+        <button :disabled="currentPage === totalPages" @click="nextPage" class="btn btn-secondary">
+          Next
+        </button>
       </div>
     </div>
   </div>
@@ -146,7 +169,9 @@ const deleteObject = async () => {
 
 const getAssociatedCameras = async () => {
   try {
-    const response = await apiRequest.get(`/objects/${objectId}/cameras?page=${currentPage.value}&size=${pageSize}`)
+    const response = await apiRequest.get(
+      `/objects/${objectId}/cameras?page=${currentPage.value}&size=${pageSize}`
+    )
     cameras.value = response.items
     totalPages.value = response.pages
   } catch (error) {

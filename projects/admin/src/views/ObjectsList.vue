@@ -12,7 +12,9 @@
       </thead>
       <tbody>
         <tr v-for="object in objects" :key="object.id">
-          <td><router-link :to="`/objects/${object.id}`">{{ object.id }}</router-link></td>
+          <td>
+            <router-link :to="`/objects/${object.id}`">{{ object.id }}</router-link>
+          </td>
           <td>{{ object.name }}</td>
           <td>
             <button @click="deleteObject(object.id)" class="btn btn-danger">Delete</button>
