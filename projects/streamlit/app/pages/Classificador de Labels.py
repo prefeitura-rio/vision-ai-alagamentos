@@ -104,7 +104,7 @@ else:
     identification = identifications[index]
     object_ = identification["object"]
     snapshot_url = identification["snapshot"]["image_url"]
-    possible_labels = object_labels[object_labels["name"] == object_]
+    possible_labels = object_labels[object_labels["object"] == object_]
 
     col2, col1 = st.columns([3, 1])
     with col2:
@@ -113,6 +113,6 @@ else:
         st.markdown(f"### {identification['question']}")
         st.markdown(f"**Explicação:** {identification['explanation']}")
 
-    for text, label in zip(possible_labels["text"], possible_labels["value"]):
+    for text, label in zip(possible_labels["text"], possible_labels["label"]):
         with col1:
             buttom(label=label, text=text, index=index)

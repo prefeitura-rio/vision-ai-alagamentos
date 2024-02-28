@@ -29,7 +29,7 @@ def get_objetcs_labels_df(objects: pd.DataFrame, keep_null: bool = True):
     mask = (labels["value"] == "null") & (labels["name"] != "image_description")  # noqa
     labels = labels[~mask]
 
-    selected_labels_cols = ["name", "criteria", "identification_guide", "value"]
+    selected_labels_cols = ["name", "criteria", "identification_guide", "value", "text"]
     labels = labels[selected_labels_cols]
     labels = labels.rename(columns={"name": "object", "value": "label"})
     return labels
