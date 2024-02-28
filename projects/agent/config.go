@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/prefeitura-rio/vision-ai/libs"
 )
 
 var (
@@ -18,13 +20,6 @@ var (
 	errInvalidInfisicalToken = fmt.Errorf("invalid infisical token")
 	errEmptyVariables        = fmt.Errorf("empty variables")
 )
-
-type OIDCClientCredentials struct {
-	TokenURL string
-	Username string
-	Password string
-	ClientID string
-}
 
 type infisicalConfig struct {
 	url         string
@@ -36,7 +31,7 @@ type infisicalConfig struct {
 type config struct {
 	apiBaseURL        string
 	agentID           string
-	credentials       OIDCClientCredentials
+	credentials       libs.OIDCClientCredentials
 	heartbeat         time.Duration
 	parallelSnapshots int
 }
@@ -99,16 +94,12 @@ func getInfisicalSecrets(config infisicalConfig) (map[string]string, error) {
 	}
 
 	serviceTokenURL := config.url + "/api/v2/service-token/"
-	token := AccessToken{
-		accessToken: config.token,
-		tokenType:   "Bearer",
-		interval:    time.Second,
-	}
+	token := libs.NewAccessTokenRaw(config.token, "Bearer", time.Second)
 	serviceToken := ServiceToken{}
 	secretsRaw := SecretsRaw{}
 	secrets := map[string]string{}
 
-	err := httpGet(serviceTokenURL, &token, &serviceToken)
+	err := libs.HTTPGet(serviceTokenURL, token, &serviceToken)
 	if err != nil {
 		return secrets, fmt.Errorf("error getting service token: %w", err)
 	}
@@ -130,7 +121,7 @@ func getInfisicalSecrets(config infisicalConfig) (map[string]string, error) {
 		serviceToken.WorkspaceID,
 	)
 
-	err = httpGet(secretURL, &token, &secretsRaw)
+	err = libs.HTTPGet(secretURL, token, &secretsRaw)
 	if err != nil {
 		return secrets, fmt.Errorf("error getting secrets: %w", err)
 	}
@@ -239,14 +230,14 @@ func getConfig() (config, error) {
 		return config{}, fmt.Errorf("HEARTBEAT_SECONDS %w", errGreaterThanZero)
 	}
 
-	credentials := OIDCClientCredentials{
+	credentials := libs.OIDCClientCredentials{
 		TokenURL: secrets["OIDC_TOKEN_URL"],
 		Username: secrets["OIDC_USERNAME"],
 		Password: secrets["OIDC_PASSWORD"],
 		ClientID: secrets["OIDC_CLIENT_ID"],
 	}
 
-	accessToken := NewAccessToken(credentials, false)
+	accessToken := libs.NewAccessToken(credentials, false)
 
 	err = accessToken.Renew()
 	if err != nil {
@@ -258,7 +249,7 @@ func getConfig() (config, error) {
 		ID string `json:"id"`
 	}{}
 
-	err = httpGet(apiBaseURL+"/agents/me", accessToken, &api)
+	err = libs.HTTPGet(apiBaseURL+"/agents/me", accessToken, &api)
 	if err != nil {
 		return config{}, fmt.Errorf("error getting agent ID: %w", err)
 	}

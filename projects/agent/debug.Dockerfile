@@ -67,6 +67,7 @@ RUN cd /ffmpeg/sources && \
    make install && \
    hash -r
 
+COPY libs ../../
 COPY go.mod go.sum ./
 RUN go mod download && go mod verify
 

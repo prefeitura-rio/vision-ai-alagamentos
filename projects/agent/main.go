@@ -14,6 +14,8 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/prefeitura-rio/vision-ai/libs"
 )
 
 func makeSnapshot(cameraAPI CameraAPI) (*metrics, error) {
@@ -60,7 +62,7 @@ func makeSnapshot(cameraAPI CameraAPI) (*metrics, error) {
 
 	metrics.add("create_snapshot_body")
 
-	bodyResponse, err := httpPost(
+	bodyResponse, err := libs.HTTPPost(
 		cameraAPI.snapshotURL,
 		camera.accessToken,
 		"application/json",
@@ -90,7 +92,7 @@ func makeSnapshot(cameraAPI CameraAPI) (*metrics, error) {
 		"Content-MD5":  hash,
 	}
 
-	_, err = httpPut(
+	_, err = libs.HTTPPut(
 		snapshot.ImageURL,
 		headers,
 		bytes.NewReader(img),
@@ -103,7 +105,7 @@ func makeSnapshot(cameraAPI CameraAPI) (*metrics, error) {
 
 	preditcURL := cameraAPI.snapshotURL + "/" + snapshot.ID + "/predict"
 
-	_, err = httpPost(preditcURL, camera.accessToken, "application/json", nil)
+	_, err = libs.HTTPPost(preditcURL, camera.accessToken, "application/json", nil)
 	if err != nil {
 		return metrics, fmt.Errorf("error creating predictions: %w", err)
 	}
@@ -115,7 +117,7 @@ func makeSnapshot(cameraAPI CameraAPI) (*metrics, error) {
 	return metrics, nil
 }
 
-func getCameras(agentURL string, cameraURL string, accessToken *AccessToken) ([]CameraAPI, error) {
+func getCameras(agentURL string, cameraURL string, accessToken *libs.AccessToken) ([]CameraAPI, error) {
 	type apiData struct {
 		Items []CameraAPI `json:"items"`
 		Total int         `json:"total"`
@@ -128,7 +130,7 @@ func getCameras(agentURL string, cameraURL string, accessToken *AccessToken) ([]
 	cameras := []CameraAPI{}
 	url := agentURL + "/cameras"
 
-	err := httpGet(url, accessToken, &data)
+	err := libs.HTTPGet(url, accessToken, &data)
 	if err != nil {
 		return nil, fmt.Errorf("error getting cameras: %w", err)
 	}
@@ -138,7 +140,7 @@ func getCameras(agentURL string, cameraURL string, accessToken *AccessToken) ([]
 	for data.Page < data.Pages {
 		url := fmt.Sprintf("%s?page=%d", url, data.Page+1)
 
-		err = httpGet(url, accessToken, &data)
+		err = libs.HTTPGet(url, accessToken, &data)
 		if err != nil {
 			return nil, fmt.Errorf("error getting cameras: %w", err)
 		}
@@ -154,7 +156,7 @@ func getCameras(agentURL string, cameraURL string, accessToken *AccessToken) ([]
 	return cameras, nil
 }
 
-func sendHeartbeat(heartbeatURL string, accessToken *AccessToken, healthy bool) error {
+func sendHeartbeat(heartbeatURL string, accessToken *libs.AccessToken, healthy bool) error {
 	rawdata := map[string]bool{"healthy": healthy}
 
 	data, err := json.Marshal(rawdata)
@@ -162,9 +164,9 @@ func sendHeartbeat(heartbeatURL string, accessToken *AccessToken, healthy bool) 
 		return fmt.Errorf("error creating JSON body: %w", err)
 	}
 
-	_, err = httpPost(heartbeatURL, accessToken, "application/json", bytes.NewReader(data))
+	_, err = libs.HTTPPost(heartbeatURL, accessToken, "application/json", bytes.NewReader(data))
 
-	return err
+	return fmt.Errorf("error send heartbeat: %w", err)
 }
 
 func main() {
@@ -191,7 +193,7 @@ func main() {
 		agent:  fmt.Sprintf("%s/agents/%s", config.apiBaseURL, config.agentID),
 	}
 
-	accessToken := NewAccessToken(config.credentials, true)
+	accessToken := libs.NewAccessToken(config.credentials, true)
 	for !accessToken.Valid() {
 		time.Sleep(time.Second)
 	}
