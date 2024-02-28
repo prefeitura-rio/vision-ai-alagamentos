@@ -16,6 +16,9 @@ const router = createRouter({
     { path: '/objects', component: () => import('../views/ObjectsList.vue') },
     { path: '/objects/new', component: () => import('../views/ObjectNew.vue') },
     { path: '/objects/:id', component: () => import('../views/ObjectDetails.vue') },
+    { path: '/prompts', component: () => import('../views/PromptsList.vue') },
+    { path: '/prompts/new', component: () => import('../views/PromptNew.vue') },
+    { path: '/prompts/:id', component: () => import('../views/PromptDetails.vue') },
     { path: '/404', component: () => import('../views/NotFoundView.vue') },
     {
       path: '/:pathMatch(.*)*',
