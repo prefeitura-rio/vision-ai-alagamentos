@@ -5,12 +5,13 @@ from typing import Union
 
 import folium
 import pandas as pd
-import streamlit as st
 from st_aggrid import GridOptionsBuilder  # noqa
 from st_aggrid import GridUpdateMode  # noqa
 from st_aggrid import AgGrid, ColumnsAutoSizeMode
 from vision_ai.base.api import VisionaiAPI
 from vision_ai.base.pandas import explode_df
+
+import streamlit as st
 
 STREAMLIT_PATH = Path(__file__).parent.parent.parent.absolute()
 CACHE_MINUTES = 5
@@ -119,7 +120,7 @@ def get_ai_identifications(
 
 def send_user_identification(identification_id, label, timeout=120):
     json = {"identification_id": identification_id, "label": label}
-    vision_api._post(path="/identifications", json=json, timeout=timeout)
+    vision_api._post(path="/identifications", json_data=json)
 
 
 @st.cache_data(ttl=60 * CACHE_MINUTES, persist=False)
