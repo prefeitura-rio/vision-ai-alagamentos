@@ -1,0 +1,80 @@
+name: Admin
+
+on:
+  push:
+    paths:
+      - ".github/workflows/admin*"
+      - "projects/admin/**/*"
+
+jobs:
+  deploy:
+    name: Build and Deploy
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/development'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      DOCKERHUB_REPOSITORY: vision-ai-admin
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      DOCKERHUB_USERNAME: prefeiturario
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+      GCR_SERVICE: ${{ secrets.GCR_SERVICE }}
+      GCR_REGION: ${{ secrets.GCR_REGION }}
+
+    environment:
+      name: ${{ github.ref == 'refs/heads/main' && 'Admin (Production)' || 'Admin (Staging)' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Docker Auth
+        id: docker-auth
+        uses: docker/login-action@v2
+        with:
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ env.DOCKERHUB_TOKEN }}
+
+      - name: Write .env.production file containing the API URL
+        run: |
+          echo "VITE_VISION_AI_API_URL=https://${{ github.ref == 'refs/heads/main' && '' || 'staging-' }}api.vision-ai.dados.rio" > ./projects/admin/.env.production
+
+      - name: Build and push image
+        uses: docker/build-push-action@v2
+        with:
+          context: ./projects/admin
+          file: ./projects/admin/Dockerfile
+          push: true
+          tags: |
+            ${{ env.DOCKERHUB_USERNAME }}/${{ env.DOCKERHUB_REPOSITORY }}:${{ github.sha }}
+            ${{ env.DOCKERHUB_USERNAME }}/${{ env.DOCKERHUB_REPOSITORY }}:latest
+          labels: |
+            org.opencontainers.image.source=${{ github.event.repository.html_url }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
+
+      - name: Google Auth
+        id: auth
+        uses: 'google-github-actions/auth@v2'
+        with:
+          credentials_json: '${{ env.GCP_SA_KEY }}'
+
+      - name: Deploy to Google Cloud Run (Production)
+        if: github.ref == 'refs/heads/main'
+        uses: google-github-actions/deploy-cloudrun@v1
+        with:
+          service: ${{ env.GCR_SERVICE }}-admin-production
+          region: ${{ env.GCR_REGION }}
+          image: docker.io/${{ env.DOCKERHUB_USERNAME }}/${{ env.DOCKERHUB_REPOSITORY }}:${{ github.sha }}
+          flags: '--port=80 --allow-unauthenticated --concurrency=100 --verbosity=debug --session-affinity'
+
+      - name: Deploy to Google Cloud Run (Staging)
+        if: github.ref == 'refs/heads/development'
+        uses: google-github-actions/deploy-cloudrun@v1
+        with:
+          service: ${{ env.GCR_SERVICE }}-admin-staging
+          region: ${{ env.GCR_REGION }}
+          image: docker.io/${{ env.DOCKERHUB_USERNAME }}/${{ env.DOCKERHUB_REPOSITORY }}:${{ github.sha }}
+          flags: '--port=80 --allow-unauthenticated --concurrency=100 --verbosity=debug --session-affinity'

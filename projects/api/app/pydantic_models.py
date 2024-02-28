@@ -150,6 +150,14 @@ class ObjectOut(BaseModel):
     labels: list[LabelOut]
 
 
+class ObjectUpdate(BaseModel):
+    name: str | None
+    slug: str | None
+    title: str | None
+    question: str | None
+    explanation: str | None
+
+
 class PromptIn(BaseModel):
     name: str
     model: str
