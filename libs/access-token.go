@@ -14,7 +14,6 @@ type OIDCClientCredentials struct {
 	TokenURL string
 	Username string
 	Password string
-	ClientID string
 }
 
 type AccessToken struct {
@@ -65,11 +64,8 @@ func (at *AccessToken) Valid() bool {
 
 func (at *AccessToken) Renew() error {
 	data := url.Values{
-		"grant_type": {"client_credentials"},
-		"client_id":  {at.credentials.ClientID},
-		"username":   {at.credentials.Username},
-		"password":   {at.credentials.Password},
-		"scope":      {"profile"},
+		"username": {at.credentials.Username},
+		"password": {at.credentials.Password},
 	}
 
 	body, err := HTTPPost(

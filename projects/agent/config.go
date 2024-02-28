@@ -200,7 +200,6 @@ func getConfig() (config, error) {
 		"OIDC_TOKEN_URL",
 		"OIDC_USERNAME",
 		"OIDC_PASSWORD",
-		"OIDC_CLIENT_ID",
 		"HEARTBEAT_SECONDS",
 		"PARALLEL_SNAPSHOTS",
 	}
@@ -234,7 +233,6 @@ func getConfig() (config, error) {
 		TokenURL: secrets["OIDC_TOKEN_URL"],
 		Username: secrets["OIDC_USERNAME"],
 		Password: secrets["OIDC_PASSWORD"],
-		ClientID: secrets["OIDC_CLIENT_ID"],
 	}
 
 	accessToken := libs.NewAccessToken(credentials, false)
