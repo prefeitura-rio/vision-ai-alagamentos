@@ -36,10 +36,12 @@ jobs:
           username: ${{ env.DOCKERHUB_USERNAME }}
           password: ${{ env.DOCKERHUB_TOKEN }}
 
+      - name: Write .env.production file containing the API URL
+        run: |
+          echo "VITE_VISION_AI_API_URL=https://${{ github.ref == 'refs/heads/main' && '' || 'staging-' }}api.vision-ai.dados.rio" > ./projects/admin/.env.production
+
       - name: Build and push image
         uses: docker/build-push-action@v2
-        env:
-          VITE_VISION_AI_API_URL: https://${{ github.ref == 'refs/heads/main' && '' || 'staging-' }}api.vision-ai.dados.rio
         with:
           context: ./projects/admin
           file: ./projects/admin/Dockerfile
