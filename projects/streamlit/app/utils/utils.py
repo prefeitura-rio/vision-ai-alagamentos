@@ -5,12 +5,13 @@ from typing import Union
 
 import folium
 import pandas as pd
-import streamlit as st
 from st_aggrid import GridOptionsBuilder  # noqa
 from st_aggrid import GridUpdateMode  # noqa
 from st_aggrid import AgGrid, ColumnsAutoSizeMode
-from utils.api import APIVisionAI
+from vision_ai.base.api import VisionaiAPI
 from vision_ai.base.pandas import explode_df
+
+import streamlit as st
 
 STREAMLIT_PATH = Path(__file__).parent.parent.parent.absolute()
 
@@ -24,7 +25,7 @@ def get_vision_ai_api():
             username = st.session_state["username"]
             password = st.session_state["password"]
             try:
-                _ = APIVisionAI(
+                _ = VisionaiAPI(
                     username=username,
                     password=password,
                 )
@@ -45,7 +46,7 @@ def get_vision_ai_api():
     if not user_is_logged_in():
         st.stop()
 
-    vision_api = APIVisionAI(
+    vision_api = VisionaiAPI(
         username=st.session_state["username"],
         password=st.session_state["password"],
     )
@@ -57,7 +58,7 @@ vision_api = get_vision_ai_api()
 
 # import os
 
-# vision_api = APIVisionAI(
+# vision_api = VisionaiAPI(
 #     username=os.environ.get("VISION_API_USERNAME"),
 #     password=os.environ.get("VISION_API_PASSWORD"),
 # )
