@@ -14,6 +14,7 @@ from vision_ai.base.pandas import explode_df
 import streamlit as st
 
 STREAMLIT_PATH = Path(__file__).parent.parent.parent.absolute()
+CACHE_MINUTES = 5
 
 
 def get_vision_ai_api():
@@ -55,9 +56,7 @@ def get_vision_ai_api():
 
 vision_api = get_vision_ai_api()
 
-
 # import os
-
 # vision_api = VisionaiAPI(
 #     username=os.environ.get("VISION_API_USERNAME"),
 #     password=os.environ.get("VISION_API_PASSWORD"),
@@ -124,7 +123,7 @@ def send_user_identification(identification_id, label, timeout=120):
     vision_api._post(path="/identifications", json=json, timeout=timeout)
 
 
-@st.cache_data(ttl=60 * 5, persist=False)
+@st.cache_data(ttl=60 * CACHE_MINUTES, persist=False)
 def get_cameras_cache(
     only_active=True,
     use_mock_data=False,
@@ -141,12 +140,12 @@ def get_cameras_cache(
     )
 
 
-@st.cache_data(ttl=60 * 5, persist=False)
+@st.cache_data(ttl=60 * CACHE_MINUTES, persist=False)
 def get_objects_cache(page_size=100, timeout=120):
     return get_objects(page_size=page_size, timeout=timeout)
 
 
-@st.cache_data(ttl=60 * 5, persist=False)
+@st.cache_data(ttl=60 * CACHE_MINUTES, persist=False)
 def get_prompts_cache(page_size=100, timeout=120):
     return get_prompts(page_size=page_size, timeout=timeout)
 
