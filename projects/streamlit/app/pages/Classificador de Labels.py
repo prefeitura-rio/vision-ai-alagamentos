@@ -4,10 +4,13 @@ import pandas as pd
 import streamlit as st
 from utils.utils import (
     get_ai_identifications_cache,
+    get_identifications_index,
     get_objects_cache,
     send_user_identification,
 )
 from vision_ai.base.pandas import get_objetcs_labels_df
+
+FAKE_INDEX = 100
 
 st.set_page_config(
     page_title="Classificador de Labels",
@@ -30,13 +33,9 @@ identifications = [
     if identification["object"] != "image_description"
 ]
 
-identifications_snapshots_to_index = {}
-current_index = 1
-for identification in identifications:
-    url = identification["snapshot"]["image_url"]
-    if url not in identifications_snapshots_to_index:
-        identifications_snapshots_to_index[url] = current_index
-        current_index += 1
+identifications_index = get_identifications_index(
+    identifications=identifications, fake_index=FAKE_INDEX
+)
 
 
 # https://docs.google.com/document/d/1PRCjbIJw4_g3-p4gLjYoN0qTaenephyZyOsiOfVGWzM/edit
@@ -118,9 +117,16 @@ else:
     col2, col1 = st.columns([3, 1])
     with col2:
         st.markdown(
-            f"### Imagem: {identifications_snapshots_to_index[snapshot_url]} de {len(identifications_snapshots_to_index)}"
+            f"### Imagem: {identifications_index[snapshot_url]['index']} de {identifications_index[snapshot_url]['total']}"
         )
+
         st.image(snapshot_url)
+
+        # total images but invisible, use the inspect to see
+        st.markdown(
+            f"<span style='color: rgba(0,0,0,0);'>{len(identifications_index)}</span>",
+            unsafe_allow_html=True,
+        )
     with col1:
         st.markdown(f"### {identification['question']}")
         st.markdown(f"**Explicação:** {identification['explanation']}")

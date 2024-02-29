@@ -56,6 +56,7 @@ def get_vision_ai_api():
 vision_api = get_vision_ai_api()
 
 # import os
+
 # vision_api = VisionaiAPI(
 #     username=os.environ.get("VISION_API_USERNAME"),
 #     password=os.environ.get("VISION_API_PASSWORD"),
@@ -554,3 +555,30 @@ def create_order_column(table):
     )
 
     return table
+
+
+def get_identifications_index(identifications: list, fake_index: int):
+    identifications_snapshots_to_index = {}
+    current_index = 1
+    cycle = 1
+    for identification in identifications:
+        url = identification["snapshot"]["image_url"]
+        if url not in identifications_snapshots_to_index:
+            identifications_snapshots_to_index[url] = {
+                "index": current_index,
+                "total": fake_index,
+                "cycle": cycle,
+            }
+            if current_index == fake_index:
+                cycle += 1
+            current_index = (current_index % fake_index) + 1  # Cycle through numbers until N
+
+    last_cycle = identifications_snapshots_to_index[
+        list(identifications_snapshots_to_index.keys())[-1]
+    ]["cycle"]
+    for url in identifications_snapshots_to_index.keys():
+        if identifications_snapshots_to_index[url]["cycle"] == last_cycle:
+            identifications_snapshots_to_index[url]["total"] = (
+                len(identifications_snapshots_to_index) % fake_index
+            )
+    return identifications_snapshots_to_index
