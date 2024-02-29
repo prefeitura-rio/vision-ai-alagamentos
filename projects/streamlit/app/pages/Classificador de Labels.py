@@ -30,6 +30,14 @@ identifications = [
     if identification["object"] != "image_description"
 ]
 
+identifications_snapshots_to_index = {}
+current_index = 1
+for identification in identifications:
+    url = identification["snapshot"]["image_url"]
+    if url not in identifications_snapshots_to_index:
+        identifications_snapshots_to_index[url] = current_index
+        current_index += 1
+
 
 # https://docs.google.com/document/d/1PRCjbIJw4_g3-p4gLjYoN0qTaenephyZyOsiOfVGWzM/edit
 def put_selected_label(label: str, index: int):
@@ -94,6 +102,7 @@ if st.session_state.next_id is not None:
         if identification["id"] == st.session_state.next_id:
             index = i
 
+
 if index >= len(identifications) or st.session_state.finish:
     st.write("Você já revisou todas as imagens.")
     if st.button("Carregar novas identificações"):
@@ -108,6 +117,9 @@ else:
 
     col2, col1 = st.columns([3, 1])
     with col2:
+        st.markdown(
+            f"### Imagem: {identifications_snapshots_to_index[snapshot_url]} de {len(identifications_snapshots_to_index)}"
+        )
         st.image(snapshot_url)
     with col1:
         st.markdown(f"### {identification['question']}")
