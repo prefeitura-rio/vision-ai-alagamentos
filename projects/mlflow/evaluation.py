@@ -8,7 +8,7 @@ import mlflow
 import pandas as pd
 import seaborn as sns
 import vertexai
-from sklearn.metrics import confusion_matrix
+from sklearn.metrics import confusion_matrix, recall_score
 from vertexai.preview import generative_models
 from vision_ai.base.api import VisionaiAPI
 from vision_ai.base.metrics import calculate_metrics
@@ -56,12 +56,15 @@ SAFETY_CONFIG = {
 # GET PROMPT FROM API
 prompt_data = vision_api._get_all_pages(path="/prompts")
 objects_data = vision_api._get_all_pages(path="/objects")
-prompt, objects_table = get_prompt_api(
+prompt_parameters, _ = get_prompt_api(
     prompt_name="base", prompt_data=prompt_data, objects_data=objects_data
 )
 
 # GET SNAPSHOTS. API OR MOCK
 # snapshots = vision_api._get(path="/identifications/aggregate")
+# with open(ABSOLUTE_PATH / "mock_snapshots_api_data.json", "w") as f:
+#     json.dump(snapshots, f)
+
 with open(ABSOLUTE_PATH / "mock_snapshots_api_data.json", "r") as f:
     snapshots = json.load(f)
 
@@ -82,7 +85,7 @@ top_p = 1
 
 model = Model()
 parameters = {
-    "prompt": prompt,
+    "prompt": prompt_parameters["prompt_text"],
     "google_api_model": google_api_model,
     "temperature": temperature,
     "top_k": top_k,
@@ -93,27 +96,50 @@ parameters = {
 
 
 # START PREDICTIONS
-final_predictions = model.predict_batch(model_input=df, parameters=parameters, max_workers=10)
+# final_predictions = model.predict_batch_mlflow(
+#     model_input=df, parameters=parameters, max_workers=10
+# )
+# final_predictions.to_csv(ABSOLUTE_PATH / "mock_final_predictions.csv", index=False)
+final_predictions = pd.read_csv(ABSOLUTE_PATH / "mock_final_predictions.csv")
 
+
+# prepare dataframe for mlflow
 final_predictions["label"] = final_predictions["label"].fillna("null")
 final_predictions["label_ia"] = final_predictions["label_ia"].fillna("null")
 final_predictions["label_ia"] = final_predictions["label_ia"].apply(lambda x: str(x).lower())
 
+
 parameters.pop("prompt")
 parameters["safety_settings"] = json.dumps(SAFETY_CONFIG, indent=4)
+parameters["number_images"] = len(final_predictions["snapshot_id"].unique())
+
+mask = (final_predictions["object"] == "image_corrupted") & (
+    final_predictions["label_ia"] == "prediction_error"
+)
+
+final_predictions_errors = final_predictions[mask]
+final_predictions = final_predictions[~mask]
+
+parameters["number_errors"] = len(final_predictions_errors["snapshot_id"].unique())
+
 # MLFLOW DUMP
 mlflow.set_tracking_uri(uri="https://mlflow.dados.rio")
 
 # Create a new MLflow Experiment
-mlflow.set_experiment("test")
+tag = "model-evaluation"
+today = pd.Timestamp.now().strftime("%Y-%m-%d")
+mlflow.set_experiment(f"{today}-{tag}")
+
 
 # Start an MLflow run
 with mlflow.start_run():
     # Log the hyperparameter
     mlflow.log_params(parameters)
-    mlflow.log_text(prompt, "prompt.md")
+    mlflow.log_text(prompt_parameters["prompt_text"], "prompt.md")
     mlflow.log_input(mlflow.data.from_pandas(df), context="input")
     mlflow.log_input(mlflow.data.from_pandas(final_predictions), context="output")
+    if len(final_predictions_errors) > 0:
+        mlflow.log_input(mlflow.data.from_pandas(final_predictions_errors), context="output_errors")
 
     # Calculate metrics for each object
     results = {}
@@ -150,5 +176,19 @@ with mlflow.start_run():
             f"{obj}_recall": recall,
             f"{obj}_f1_score": f1,
         }
-        mlflow.log_metrics(metrics)
+
+        if obj == "image_corrupted":
+            mlflow.log_metric(f"{obj}_recall", recall)
+            mlflow.log_metric(f"{obj}_precision", precision)
+        elif obj == "rain":
+            mlflow.log_metric(f"{obj}_f1_score", f1)
+        elif obj in ["water_level", "road_blockade"]:
+            mlflow.log_metric(f"{obj}_recall", recall)
+            recall_per_label = recall_score(
+                y_true, y_pred, average=None, labels=unique_labels, zero_division=0
+            )
+            for i, label in enumerate(unique_labels):
+                if label not in ["null", "free", "low"]:
+                    mlflow.log_metric(f"{obj}_{label}_recall", recall_per_label[i])
+        # mlflow.log_metrics(metrics)
         mlflow.log_artifact(f"/tmp/cm_{obj}.png")

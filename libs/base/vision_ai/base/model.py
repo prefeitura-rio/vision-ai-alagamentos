@@ -72,11 +72,11 @@ class Model:
                 )
             )
 
-    def predict_batch(self, model_input=None, parameters=None, retry=5, max_workers=10):
+    def predict_batch_mlflow(self, model_input=None, parameters=None, retry=5, max_workers=10):
         def process_url(snapshot_url, index, total, retry, output_parser):
             start_time = time.time()
             snapshot_df = model_input[model_input["snapshot_url"] == snapshot_url]
-            for _ in range(retry):
+            for i in range(retry):
                 try:
                     response = self.llm_vertexai(image_url=snapshot_url, **parameters).text
                     ai_response_parsed = output_parser.parse(response).dict()
@@ -88,8 +88,26 @@ class Model:
                     )
                     return snapshot_df.merge(prediction, on="object", how="left")
                 except Exception as e:
-                    print(f"Retrying {index}/{total}, Error: {e}")
-            return pd.DataFrame()
+                    print(f"Retrying {index}/{total}, retries left {retry -i -1}, Error: {e}")
+
+            prediction_error = snapshot_df.merge(
+                pd.DataFrame(
+                    [
+                        {
+                            "object": "image_corrupted",
+                            "label_ia": "prediction_error",
+                            "label_explanation": "Error: {e}",
+                        }
+                    ]
+                ),
+                on="object",
+                how="left",
+            )
+            mask = (prediction_error["object"] == "image_corrupted") & (
+                prediction_error["label_ia"] == "prediction_error"
+            )
+            prediction_error = prediction_error[mask]
+            return prediction_error
 
         output_parser, _, _ = get_parser()
         snapshot_urls = model_input["snapshot_url"].unique().tolist()
