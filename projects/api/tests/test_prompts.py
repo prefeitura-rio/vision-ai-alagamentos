@@ -285,7 +285,7 @@ async def test_prompts_best_fit(client: AsyncClient, authorization_header: dict)
 
 
 @pytest.mark.anyio
-@pytest.mark.run(order=998)
+@pytest.mark.run(order=80)
 async def test_prompts_delete_objects(
     client: AsyncClient,
     authorization_header: dict,
@@ -299,7 +299,7 @@ async def test_prompts_delete_objects(
 
 
 @pytest.mark.anyio
-@pytest.mark.run(order=999)
+@pytest.mark.run(order=81)
 async def test_prompts_delete(
     client: AsyncClient,
     authorization_header: dict,

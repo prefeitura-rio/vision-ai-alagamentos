@@ -110,6 +110,65 @@ async def get_ai_identifications(
     return create_page(out, total=count, params=params)
 
 
+@router.get("/ai/all", response_model=BigPage)
+async def get_all_ai_identifications(
+    _: Annotated[User, Depends(is_human)],
+    params: BigParams = Depends(),
+) -> Page[IdentificationOut]:
+    offset = params.size * (params.page - 1)
+
+    ids = await IdentificationMaker.all().values_list("identification__id", flat=True)
+
+    count = len(ids)
+
+    identifications = (
+        await Identification.all()
+        .filter(id__in=ids)
+        .order_by("snapshot__timestamp", "timestamp")
+        .limit(params.size)
+        .offset(offset)
+        .values(
+            "id",
+            "timestamp",
+            "label_explanation",
+            "snapshot__id",
+            "snapshot__timestamp",
+            "snapshot__public_url",
+            "snapshot__camera__id",
+            "label__value",
+            "label__text",
+            "label__object__id",
+            "label__object__slug",
+            "label__object__title",
+            "label__object__question",
+            "label__object__explanation",
+        )
+    )
+
+    out = [
+        IdentificationOut(
+            id=identification["id"],
+            object=identification["label__object__slug"],
+            title=identification["label__object__title"],
+            question=identification["label__object__question"],
+            explanation=identification["label__object__explanation"],
+            timestamp=identification["timestamp"],
+            label=identification["label__value"],
+            label_text=identification["label__text"],
+            label_explanation=identification["label_explanation"],
+            snapshot=SnapshotOut(
+                id=identification["snapshot__id"],
+                camera_id=identification["snapshot__camera__id"],
+                image_url=identification["snapshot__public_url"],
+                timestamp=identification["snapshot__timestamp"],
+            ),
+        )
+        for identification in identifications
+    ]
+
+    return create_page(out, total=count, params=params)
+
+
 @router.get("", response_model=BigPage)
 async def get_identifications(
     _: Annotated[User, Depends(get_user)],
@@ -326,8 +385,11 @@ async def delete_marker(
             detail="Must send indetifications or snapshots ids",
         )
 
-    identifications = await Identification.filter(snapshot__id__in=snapshot_ids).all()
+    print(snapshot_ids)
+    identifications = await Identification.filter(snapshot_id__in=snapshot_ids).all()
     ids = [identification.id for identification in identifications]
+    print(ids)
+    print(identifications)
 
     conn = connections.get("default")
     query = f"""
