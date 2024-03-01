@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 import json
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import cv2
 import numpy as np
@@ -70,47 +72,37 @@ class Model:
                 )
             )
 
-    def predict_batch(self, model_input=None, parameters=None, retry=5):
-        final_predictions = pd.DataFrame()
-        snapshot_urls = model_input["snapshot_url"].unique().tolist()
-        lenght = len(snapshot_urls)
-        # Make parallel
-        for i, snapshot_url in enumerate(snapshot_urls):
-            print(f"{i}/{lenght}: {snapshot_url}")
+    def predict_batch(self, model_input=None, parameters=None, retry=5, max_workers=10):
+        def process_url(snapshot_url, index, total, retry, output_parser):
+            start_time = time.time()
             snapshot_df = model_input[model_input["snapshot_url"] == snapshot_url]
-            retry_count = retry
-            while retry_count > 0:
+            for _ in range(retry):
                 try:
-                    responses = self.llm_vertexai(
-                        image_url=snapshot_url,
-                        prompt=parameters["prompt"],
-                        google_api_model=parameters["google_api_model"],
-                        max_output_tokens=parameters["max_output_tokens"],
-                        temperature=parameters["temperature"],
-                        top_k=parameters["top_k"],
-                        top_p=parameters["top_p"],
-                        safety_settings=parameters["safety_settings"],
+                    response = self.llm_vertexai(image_url=snapshot_url, **parameters).text
+                    ai_response_parsed = output_parser.parse(response).dict()
+                    prediction = pd.DataFrame(ai_response_parsed["objects"])[
+                        ["object", "label", "label_explanation"]
+                    ].rename(columns={"label": "label_ia"})
+                    print(
+                        f"Predicted {index}/{total} in {time.time() - start_time:.2f} seconds: {snapshot_url}"
                     )
-                    ai_response = responses.text
-                    output_parser, _, _ = get_parser()
-                    ai_response_parsed = output_parser.parse(ai_response).dict()
-                    prediction = pd.DataFrame.from_dict(ai_response_parsed["objects"])
-                    prediction = prediction[["object", "label", "label_explanation"]].rename(
-                        columns={"label": "label_ia"}
-                    )
-                    final_prediction = snapshot_df.merge(prediction, on="object", how="left")
-                    final_predictions = pd.concat([final_predictions, final_prediction])
+                    return snapshot_df.merge(prediction, on="object", how="left")
+                except Exception as e:
+                    print(f"Retrying {index}/{total}, Error: {e}")
+            return pd.DataFrame()
 
-                    retry_count = 0
-                except Exception as exception:
+        output_parser, _, _ = get_parser()
+        snapshot_urls = model_input["snapshot_url"].unique().tolist()
+        total_images = len(snapshot_urls)
 
-                    if retry_count == 0:
-                        raise exception
-                    else:
-                        retry_count -= 1
-                        print(f"Retrying {retry_count}...\nError:{exception}")
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = [
+                executor.submit(process_url, url, i + 1, total_images, retry, output_parser)
+                for i, url in enumerate(snapshot_urls)
+            ]
+            results = [future.result() for future in as_completed(futures)]
 
-        return final_predictions
+        return pd.concat(results, ignore_index=True)
 
     def analyze_image_problems(self, image_response):
         GREEN_STRIPES_THRESHOLD = 0.0001

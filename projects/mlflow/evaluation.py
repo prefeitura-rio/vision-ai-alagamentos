@@ -44,6 +44,7 @@ SAFETY_CONFIG = {
     generative_models.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: generative_models.HarmBlockThreshold.BLOCK_NONE,
 }
 
+
 # LOCAL PROMPT + OBJECTS TABLE FROM SHEETS
 # with open("./projects/mlflow/prompt.md") as f:
 #     prompt_text_local = f.read()
@@ -92,13 +93,14 @@ parameters = {
 
 
 # START PREDICTIONS
-final_predictions = model.predict_batch(model_input=df, parameters=parameters)
+final_predictions = model.predict_batch(model_input=df, parameters=parameters, max_workers=10)
+
+final_predictions["label"] = final_predictions["label"].fillna("null")
 final_predictions["label_ia"] = final_predictions["label_ia"].fillna("null")
 final_predictions["label_ia"] = final_predictions["label_ia"].apply(lambda x: str(x).lower())
 
 parameters.pop("prompt")
 parameters["safety_settings"] = json.dumps(SAFETY_CONFIG, indent=4)
-
 # MLFLOW DUMP
 mlflow.set_tracking_uri(uri="https://mlflow.dados.rio")
 
