@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import json
 import time
+import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import cv2
@@ -87,8 +88,14 @@ class Model:
                         f"Predicted {index}/{total} in {time.time() - start_time:.2f} seconds: {snapshot_url}"
                     )
                     return snapshot_df.merge(prediction, on="object", how="left")
-                except Exception as e:
-                    print(f"Retrying {index}/{total}, retries left {retry -i -1}, Error: {e}")
+                except Exception as exception:
+                    error_name = (str(type(exception).__name__),)
+                    error = str(traceback.format_exc(chain=False))
+
+                    error_str = f"{error_name}: {error}"
+                    print(
+                        f"Retrying {index}/{total}, retries left {retry -i -1}, Error: {error_str}"
+                    )
 
             prediction_error = snapshot_df.merge(
                 pd.DataFrame(
@@ -96,7 +103,7 @@ class Model:
                         {
                             "object": "image_corrupted",
                             "label_ia": "prediction_error",
-                            "label_explanation": "Error: {e}",
+                            "label_explanation": f"Error: {error_str}",
                         }
                     ]
                 ),

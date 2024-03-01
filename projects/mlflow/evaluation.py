@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import json
 import os
+import shutil
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -16,10 +17,34 @@ from vision_ai.base.model import Model
 from vision_ai.base.pandas import explode_df
 from vision_ai.base.prompt import get_prompt_api
 
+PROJECT_ID = "rj-escritorio-dev"
+LOCATION = "us-central1"
+vertexai.init(project=PROJECT_ID, location=LOCATION)
 # from vision_ai.base.prompt import get_prompt_local
 # from vision_ai.base.sheets import get_objects_table_from_sheets
 
 ABSOLUTE_PATH = Path(__file__).parent.absolute()
+mock_snapshot_data_path = ABSOLUTE_PATH / "mock_snapshots_api_data.json"
+mock_final_predicition_path = ABSOLUTE_PATH / "mock_final_predictions.csv"
+
+ARTIFACT_PATH = Path("/tmp/ml_flow_artifacts")
+ARTIFACT_PATH.mkdir(exist_ok=True, parents=True)
+
+artifact_input_path = ARTIFACT_PATH / "input.csv"
+artifact_output_path = ARTIFACT_PATH / "output.csv"
+artifact_output_errors_path = ARTIFACT_PATH / "output_erros.csv"
+artifact_input_balance_path = ARTIFACT_PATH / "input_balance.csv"
+
+
+google_api_model = "gemini-pro-vision"
+max_output_tokens = 2048
+temperature = 0.2
+top_k = 32
+top_p = 1
+
+
+# with open(ABSOLUTE_PATH / "secrets.json") as f:
+#     secret = json.load(f)")
 
 # os.environ["MLFLOW_TRACKING_USERNAME"] = secret["mlflow_tracking_username"]
 # os.environ["MLFLOW_TRACKING_PASSWORD"] = secret["mlflow_tracking_password"]
@@ -29,13 +54,6 @@ vision_api = VisionaiAPI(
     password=os.environ.get("VISION_API_PASSWORD"),
 )
 
-
-PROJECT_ID = "rj-escritorio-dev"
-LOCATION = "us-central1"
-VERSION_ID = "latest"
-DATASET_ID = "vision_ai"
-TABLE_ID = "cameras_predicoes"
-vertexai.init(project=PROJECT_ID, location=LOCATION)
 
 SAFETY_CONFIG = {
     generative_models.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: generative_models.HarmBlockThreshold.BLOCK_NONE,
@@ -61,12 +79,11 @@ prompt_parameters, _ = get_prompt_api(
 )
 
 # GET SNAPSHOTS. API OR MOCK
-# snapshots = vision_api._get(path="/identifications/aggregate")
-# with open(ABSOLUTE_PATH / "mock_snapshots_api_data.json", "w") as f:
-#     json.dump(snapshots, f)
-
-with open(ABSOLUTE_PATH / "mock_snapshots_api_data.json", "r") as f:
-    snapshots = json.load(f)
+snapshots = vision_api._get(path="/identifications/aggregate")
+with open(mock_snapshot_data_path, "w") as f:
+    json.dump(snapshots, f)
+# with open(mock_snapshot_data_path, "r") as f:
+#     snapshots = json.load(f)
 
 
 df = pd.DataFrame(snapshots)
@@ -75,12 +92,9 @@ df = df.drop(columns=["ia_identification"])
 df = df.sort_values(by=["snapshot_id", "object", "count"], ascending=False)
 df = df.drop_duplicates(subset=["snapshot_id", "object"], keep="first")
 
-
-google_api_model = "gemini-pro-vision"
-max_output_tokens = 2048
-temperature = 0.2
-top_k = 32
-top_p = 1
+# Calculate metrics for each object
+df_balance = df[["object", "label", "count"]].groupby(["object", "label"], as_index=False).count()
+df_balance["percentage"] = round(df_balance["count"] / df_balance["count"].sum(), 2)
 
 
 model = Model()
@@ -96,18 +110,17 @@ parameters = {
 
 
 # START PREDICTIONS
-# final_predictions = model.predict_batch_mlflow(
-#     model_input=df, parameters=parameters, max_workers=10
-# )
-# final_predictions.to_csv(ABSOLUTE_PATH / "mock_final_predictions.csv", index=False)
-final_predictions = pd.read_csv(ABSOLUTE_PATH / "mock_final_predictions.csv")
+final_predictions = model.predict_batch_mlflow(
+    model_input=df, parameters=parameters, max_workers=10
+)
+final_predictions.to_csv(mock_final_predicition_path, index=False)
+# final_predictions = pd.read_csv(mock_final_predicition_path)
 
 
 # prepare dataframe for mlflow
 final_predictions["label"] = final_predictions["label"].fillna("null")
 final_predictions["label_ia"] = final_predictions["label_ia"].fillna("null")
 final_predictions["label_ia"] = final_predictions["label_ia"].apply(lambda x: str(x).lower())
-
 
 parameters.pop("prompt")
 parameters["safety_settings"] = json.dumps(SAFETY_CONFIG, indent=4)
@@ -121,6 +134,12 @@ final_predictions_errors = final_predictions[mask]
 final_predictions = final_predictions[~mask]
 
 parameters["number_errors"] = len(final_predictions_errors["snapshot_id"].unique())
+
+df.to_csv(artifact_input_path, index=False)
+
+final_predictions.to_csv(artifact_output_path, index=False)
+final_predictions_errors.to_csv(artifact_output_errors_path, index=False)
+df_balance.to_csv(artifact_input_balance_path, index=False)
 
 # MLFLOW DUMP
 mlflow.set_tracking_uri(uri="https://mlflow.dados.rio")
@@ -136,13 +155,15 @@ with mlflow.start_run():
     # Log the hyperparameter
     mlflow.log_params(parameters)
     mlflow.log_text(prompt_parameters["prompt_text"], "prompt.md")
-    mlflow.log_input(mlflow.data.from_pandas(df), context="input")
-    mlflow.log_input(mlflow.data.from_pandas(final_predictions), context="output")
-    if len(final_predictions_errors) > 0:
-        mlflow.log_input(mlflow.data.from_pandas(final_predictions_errors), context="output_errors")
 
-    # Calculate metrics for each object
+    mlflow.log_artifact(artifact_input_path)
+    mlflow.log_artifact(artifact_output_path)
+    if len(final_predictions_errors) > 0:
+        mlflow.log_artifact(artifact_output_errors_path)
+    mlflow.log_artifact(artifact_input_balance_path)
+
     results = {}
+
     for obj in final_predictions["object"].unique():
         df_obj = final_predictions[final_predictions["object"] == obj]
         y_true = df_obj["label"]
@@ -167,7 +188,7 @@ with mlflow.start_run():
         plt.xlabel("Predicted")
         plt.title(f"Confusion Matrix for {obj}")
         # Save image temporarily
-        temp_image_path = f"/tmp/cm_{obj}.png"
+        temp_image_path = ARTIFACT_PATH / f"cm_{obj}.png"
         plt.savefig(temp_image_path)
 
         metrics = {
@@ -191,4 +212,6 @@ with mlflow.start_run():
                 if label not in ["null", "free", "low"]:
                     mlflow.log_metric(f"{obj}_{label}_recall", recall_per_label[i])
         # mlflow.log_metrics(metrics)
-        mlflow.log_artifact(f"/tmp/cm_{obj}.png")
+        mlflow.log_artifact(temp_image_path)
+
+shutil.rmtree(ARTIFACT_PATH)
