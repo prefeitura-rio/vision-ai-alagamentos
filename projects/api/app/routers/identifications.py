@@ -51,13 +51,13 @@ async def get_ai_identifications(
     indentificateds = (
         await UserIdentification.all()
         .filter(username=user.name)
-        .values_list("identification__id", flat=True)
+        .values_list("identification_id", flat=True)
     )
 
     ids = (
         await IdentificationMaker.all()
-        .filter(identification__id__not_in=indentificateds)
-        .values_list("identification__id", flat=True)
+        .filter(identification_id__not_in=indentificateds)
+        .values_list("identification_id", flat=True)
     )
 
     count = len(ids)
@@ -68,40 +68,25 @@ async def get_ai_identifications(
         .order_by("snapshot__timestamp", "timestamp")
         .limit(params.size)
         .offset(offset)
-        .values(
-            "id",
-            "timestamp",
-            "label_explanation",
-            "snapshot__id",
-            "snapshot__timestamp",
-            "snapshot__public_url",
-            "snapshot__camera__id",
-            "label__value",
-            "label__text",
-            "label__object__id",
-            "label__object__slug",
-            "label__object__title",
-            "label__object__question",
-            "label__object__explanation",
-        )
+        .prefetch_related("snapshot", "snapshot__camera", "label", "label__object")
     )
 
     out = [
         IdentificationOut(
-            id=identification["id"],
-            object=identification["label__object__slug"],
-            title=identification["label__object__title"],
-            question=identification["label__object__question"],
-            explanation=identification["label__object__explanation"],
-            timestamp=identification["timestamp"],
-            label=identification["label__value"],
-            label_text=identification["label__text"],
-            label_explanation=identification["label_explanation"],
+            id=identification.id,
+            object=identification.label.object.slug,
+            title=identification.label.object.title,
+            question=identification.label.object.question,
+            explanation=identification.label.object.explanation,
+            timestamp=identification.timestamp,
+            label=identification.label.value,
+            label_text=identification.label.text,
+            label_explanation=identification.label_explanation,
             snapshot=SnapshotOut(
-                id=identification["snapshot__id"],
-                camera_id=identification["snapshot__camera__id"],
-                image_url=identification["snapshot__public_url"],
-                timestamp=identification["snapshot__timestamp"],
+                id=identification.snapshot.id,
+                camera_id=identification.snapshot.camera.id,
+                image_url=identification.snapshot.public_url,
+                timestamp=identification.snapshot.timestamp,
             ),
         )
         for identification in identifications
@@ -117,7 +102,7 @@ async def get_all_ai_identifications(
 ) -> Page[IdentificationOut]:
     offset = params.size * (params.page - 1)
 
-    ids = await IdentificationMaker.all().values_list("identification__id", flat=True)
+    ids = await IdentificationMaker.all().values_list("identification_id", flat=True)
 
     count = len(ids)
 
@@ -127,40 +112,25 @@ async def get_all_ai_identifications(
         .order_by("snapshot__timestamp", "timestamp")
         .limit(params.size)
         .offset(offset)
-        .values(
-            "id",
-            "timestamp",
-            "label_explanation",
-            "snapshot__id",
-            "snapshot__timestamp",
-            "snapshot__public_url",
-            "snapshot__camera__id",
-            "label__value",
-            "label__text",
-            "label__object__id",
-            "label__object__slug",
-            "label__object__title",
-            "label__object__question",
-            "label__object__explanation",
-        )
+        .prefetch_related("snapshot", "snapshot__camera", "label", "label__object")
     )
 
     out = [
         IdentificationOut(
-            id=identification["id"],
-            object=identification["label__object__slug"],
-            title=identification["label__object__title"],
-            question=identification["label__object__question"],
-            explanation=identification["label__object__explanation"],
-            timestamp=identification["timestamp"],
-            label=identification["label__value"],
-            label_text=identification["label__text"],
-            label_explanation=identification["label_explanation"],
+            id=identification.id,
+            object=identification.label.object.slug,
+            title=identification.label.object.title,
+            question=identification.label.object.question,
+            explanation=identification.label.object.explanation,
+            timestamp=identification.timestamp,
+            label=identification.label.value,
+            label_text=identification.label.text,
+            label_explanation=identification.label_explanation,
             snapshot=SnapshotOut(
-                id=identification["snapshot__id"],
-                camera_id=identification["snapshot__camera__id"],
-                image_url=identification["snapshot__public_url"],
-                timestamp=identification["snapshot__timestamp"],
+                id=identification.snapshot.id,
+                camera_id=identification.snapshot.camera.id,
+                image_url=identification.snapshot.public_url,
+                timestamp=identification.snapshot.timestamp,
             ),
         )
         for identification in identifications
@@ -186,40 +156,25 @@ async def get_identifications(
         .filter(snapshot__timestamp__gte=interval)
         .limit(params.size)
         .offset(offset)
-        .values(
-            "id",
-            "timestamp",
-            "label_explanation",
-            "snapshot__id",
-            "snapshot__timestamp",
-            "snapshot__public_url",
-            "snapshot__camera__id",
-            "label__value",
-            "label__text",
-            "label__object__id",
-            "label__object__slug",
-            "label__object__title",
-            "label__object__question",
-            "label__object__explanation",
-        )
+        .prefetch_related("snapshot", "snapshot__camera", "label", "label__object")
     )
 
     out = [
         IdentificationOut(
-            id=identification["id"],
-            object=identification["label__object__slug"],
-            title=identification["label__object__title"],
-            question=identification["label__object__question"],
-            explanation=identification["label__object__explanation"],
-            timestamp=identification["timestamp"],
-            label=identification["label__value"],
-            label_text=identification["label__text"],
-            label_explanation=identification["label_explanation"],
+            id=identification.id,
+            object=identification.label.object.slug,
+            title=identification.label.object.title,
+            question=identification.label.object.question,
+            explanation=identification.label.object.explanation,
+            timestamp=identification.timestamp,
+            label=identification.label.value,
+            label_text=identification.label.text,
+            label_explanation=identification.label_explanation,
             snapshot=SnapshotOut(
-                id=identification["snapshot__id"],
-                camera_id=identification["snapshot__camera__id"],
-                image_url=identification["snapshot__public_url"],
-                timestamp=identification["snapshot__timestamp"],
+                id=identification.snapshot.id,
+                camera_id=identification.snapshot.camera.id,
+                image_url=identification.snapshot.public_url,
+                timestamp=identification.snapshot.timestamp,
             ),
         )
         for identification in identifications
@@ -314,7 +269,7 @@ async def create_marker(
             detail="Must send indetifications or snapshots ids",
         )
 
-    identifications = await Identification.filter(snapshot__id__in=snapshot_ids).all()
+    identifications = await Identification.filter(snapshot_id__in=snapshot_ids).all()
     exist = (
         await IdentificationMaker.filter(
             identification_id__in=[identification.id for identification in identifications]
@@ -435,7 +390,7 @@ async def get_aggregation(
     snapshots_id = [identification["snapshot_id"] for identification in aggregation]
     ia_identifications = (
         await Identification.all()
-        .filter(Q(snapshot__id__in=snapshots_id), ~Q(label__object__name="image_description"))
+        .filter(Q(snapshot_id__in=snapshots_id), ~Q(label__object__name="image_description"))
         .prefetch_related("snapshot", "label", "label__object")
     )
 

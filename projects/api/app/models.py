@@ -75,7 +75,7 @@ class Label(Model):
     class Meta:
         unique_together = (("object", "value"),)
         # unique_together = (("object", "value"), ("object", "order"))
-        ordering = ["object__id", "order"]
+        ordering = ["object_id", "order"]
 
 
 class PromptObject(Model):
