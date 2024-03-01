@@ -56,7 +56,54 @@ async def test_get_identification(
 
 @pytest.mark.anyio
 @pytest.mark.run(order=52)
-async def test_marker_identifications(
+async def test_create_marker_identifications(
+    client: AsyncClient, authorization_header: dict, context: dict
+):
+    response = await client.post(
+        "/identifications/marker",
+        headers=authorization_header,
+        json={
+            "identifications_id": [str(id) for id in context["identifications_id"]],
+        },
+    )
+
+    assert response.status_code == 200
+    assert "count" in response.json()
+    assert "ids" in response.json()
+    assert isinstance(response.json()["count"], int)
+    assert isinstance(response.json()["ids"], list)
+    assert len(response.json()["ids"]) == 6
+    for item in response.json()["ids"]:
+        assert isinstance(item, str)
+
+
+@pytest.mark.anyio
+@pytest.mark.run(order=53)
+async def test_add_tags_marker_identifications(
+    client: AsyncClient, authorization_header: dict, context: dict
+):
+    response = await client.post(
+        "/identifications/marker",
+        headers=authorization_header,
+        json={
+            "identifications_id": [str(id) for id in context["identifications_id"]],
+            "tags": ["tag1", "tag2"],
+        },
+    )
+
+    assert response.status_code == 200
+    assert "count" in response.json()
+    assert "ids" in response.json()
+    assert isinstance(response.json()["count"], int)
+    assert isinstance(response.json()["ids"], list)
+    assert len(response.json()["ids"]) == 6
+    for item in response.json()["ids"]:
+        assert isinstance(item, str)
+
+
+@pytest.mark.anyio
+@pytest.mark.run(order=54)
+async def test_create_marker_with_tag_identifications(
     client: AsyncClient, authorization_header: dict, context: dict
 ):
     response = await client.post(
@@ -65,6 +112,7 @@ async def test_marker_identifications(
         json={
             "identifications_id": [str(id) for id in context["identifications_id"]],
             "snapshots_id": [str(context["test_snapshot_id"])],
+            "tags": ["tag3", "tag4"],
         },
     )
 
@@ -79,7 +127,7 @@ async def test_marker_identifications(
 
 
 @pytest.mark.anyio
-@pytest.mark.run(order=53)
+@pytest.mark.run(order=55)
 async def test_get_all_ai_identification(
     client: AsyncClient,
     authorization_header: dict,
@@ -130,7 +178,7 @@ async def test_get_all_ai_identification(
 
 
 @pytest.mark.anyio
-@pytest.mark.run(order=54)
+@pytest.mark.run(order=56)
 async def test_create_human_identification(
     client: AsyncClient,
     authorization_header: dict,
@@ -177,7 +225,7 @@ async def test_create_human_identification(
 
 
 @pytest.mark.anyio
-@pytest.mark.run(order=55)
+@pytest.mark.run(order=57)
 async def test_get_ai_identification(client: AsyncClient, authorization_header: dict):
     response = await client.get("/identifications/ai", headers=authorization_header)
 
@@ -225,7 +273,7 @@ async def test_get_ai_identification(client: AsyncClient, authorization_header: 
 
 
 @pytest.mark.anyio
-@pytest.mark.run(order=56)
+@pytest.mark.run(order=58)
 async def test_delete_marker_identifications(
     client: AsyncClient, authorization_header: dict, context: dict
 ):
@@ -251,7 +299,7 @@ async def test_delete_marker_identifications(
 
 
 @pytest.mark.anyio
-@pytest.mark.run(order=57)
+@pytest.mark.run(order=59)
 async def test_get_ai_identification_after_delete(client: AsyncClient, authorization_header: dict):
     response = await client.get("/identifications/ai", headers=authorization_header)
 

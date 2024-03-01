@@ -22,6 +22,7 @@ from app.pydantic_models import (
     HumanIdentificationAggregation,
     IaIdentificationAggregation,
     IdentificationHumanIN,
+    IdentificationMarkerDelete,
     IdentificationMarkerIn,
     IdentificationMarkerOut,
     IdentificationOut,
@@ -255,20 +256,46 @@ async def create_marker(
         )
 
     identifications = await Identification.filter(snapshot__id__in=snapshot_ids).all()
+    exist = (
+        await IdentificationMaker.filter(
+            identification_id__in=[identification.id for identification in identifications]
+        )
+        .all()
+        .prefetch_related("identification")
+    )
+    exist_ids = [marker.identification.id for marker in exist]
+    identifications = [
+        identification for identification in identifications if identification.id not in exist_ids
+    ]
 
     await IdentificationMaker.bulk_create(
-        [IdentificationMaker(identification=identification) for identification in identifications]
+        [
+            IdentificationMaker(identification=identification, tags=data.tags)
+            for identification in identifications
+        ]
     )
 
+    if data.tags is not None and len(exist) > 0:
+        for index, marker in enumerate(exist):
+            tags: list[str] = data.tags
+            if marker.tags is not None:
+                tags += data.tags
+            value_str = f"""{{"{'", "'.join(set(tags))}"}}"""
+
+            exist[index].tags = value_str
+
+        await IdentificationMaker.bulk_update(exist, fields=["tags"])
+
     return IdentificationMarkerOut(
-        count=len(identifications), ids=[identification.id for identification in identifications]
+        count=len(identifications) + len(exist_ids),
+        ids=[identification.id for identification in identifications] + exist_ids,
     )
 
 
 @router.delete("/marker", response_model=IdentificationMarkerOut)
 async def delete_marker(
     _: Annotated[User, Depends(is_admin)],
-    data: IdentificationMarkerIn,
+    data: IdentificationMarkerDelete,
 ) -> IdentificationMarkerOut:
     snapshot_ids = []
     if data.identifications_id is not None and len(data.identifications_id) > 0:
@@ -277,12 +304,20 @@ async def delete_marker(
             .all()
             .prefetch_related("snapshot")
         )
+        if len(identifications) != len(data.identifications_id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Some identifications id not found."
+            )
         snapshot_ids += list(
             set([identification.snapshot.id for identification in identifications])
         )
 
     if data.snapshots_id is not None and len(data.snapshots_id) > 0:
         ids = await Snapshot.filter(id__in=data.snapshots_id).all().values_list("id", flat=True)
+        if len(ids) != len(data.snapshots_id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Some snapshots id not found."
+            )
         snapshot_ids = list(set(snapshot_ids + ids))
 
     if len(snapshot_ids) == 0:
@@ -319,6 +354,7 @@ async def get_aggregation(
       snapshot.public_url AS snapshot_url
     FROM
       user_identification
+      INNER JOIN identification_marker ON identification_marker.identification_id = user_identification.identification_id
       LEFT JOIN identification ON identification.id = user_identification.identification_id
       LEFT JOIN snapshot ON snapshot.id = identification.snapshot_id
       LEFT JOIN label ON label.id = user_identification.label_id

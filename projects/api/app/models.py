@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from tortoise import fields
+from tortoise.contrib.postgres.fields import ArrayField
 from tortoise.models import Model
 from tortoise.validators import MinValueValidator
 
@@ -44,6 +45,7 @@ class Identification(Model):
 class IdentificationMaker(Model):
     id = fields.UUIDField(pk=True)
     identification = fields.ForeignKeyField("app.Identification")
+    tags = ArrayField(element_type="text", null=True)
 
     class Meta:
         table = "identification_marker"

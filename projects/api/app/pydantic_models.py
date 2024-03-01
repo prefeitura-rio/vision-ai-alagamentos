@@ -99,6 +99,12 @@ class IdentificationHumanIN(BaseModel):
 class IdentificationMarkerIn(BaseModel):
     identifications_id: list[UUID] | None
     snapshots_id: list[UUID] | None
+    tags: list[str] | None
+
+
+class IdentificationMarkerDelete(BaseModel):
+    identifications_id: list[UUID] | None
+    snapshots_id: list[UUID] | None
 
 
 class IdentificationMarkerOut(BaseModel):
