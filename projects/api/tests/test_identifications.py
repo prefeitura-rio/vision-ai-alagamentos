@@ -222,3 +222,51 @@ async def test_get_ai_identification(client: AsyncClient, authorization_header: 
         assert isinstance(item["snapshot"]["camera_id"], str)
         assert isinstance(item["snapshot"]["image_url"], str)
         assert isinstance(item["snapshot"]["timestamp"], str)
+
+
+@pytest.mark.anyio
+@pytest.mark.run(order=56)
+async def test_delete_marker_identifications(
+    client: AsyncClient, authorization_header: dict, context: dict
+):
+    # client.delete dont support body request: https://github.com/encode/httpx/discussions/1587
+    response = await client.request(
+        "DELETE",
+        "/identifications/marker",
+        headers=authorization_header,
+        json={
+            "identifications_id": [str(id) for id in context["identifications_id"]],
+            "snapshots_id": [str(context["test_snapshot_id"])],
+        },
+    )
+
+    assert response.status_code == 200
+    assert "count" in response.json()
+    assert "ids" in response.json()
+    assert isinstance(response.json()["count"], int)
+    assert isinstance(response.json()["ids"], list)
+    assert len(response.json()["ids"]) == 7
+    for item in response.json()["ids"]:
+        assert isinstance(item, str)
+
+
+@pytest.mark.anyio
+@pytest.mark.run(order=57)
+async def test_get_ai_identification_after_delete(client: AsyncClient, authorization_header: dict):
+    response = await client.get("/identifications/ai", headers=authorization_header)
+
+    assert response.status_code == 200
+    assert "items" in response.json()
+    assert "total" in response.json()
+    assert "page" in response.json()
+    assert "size" in response.json()
+    assert "pages" in response.json()
+    assert isinstance(response.json()["total"], int)
+    assert isinstance(response.json()["page"], int)
+    assert isinstance(response.json()["size"], int)
+    assert response.json()["total"] == 0
+    assert response.json()["page"] == 1
+    assert response.json()["size"] == 100
+    assert response.json()["pages"] == 0
+    assert isinstance(response.json()["pages"], int)
+    assert len(response.json()["items"]) == 0

@@ -3,6 +3,12 @@ from datetime import datetime, timedelta
 from typing import Annotated
 from uuid import UUID
 
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi_pagination import Page, create_page
+from fastapi_pagination.default import Params
+from tortoise import connections
+from tortoise.expressions import Q
+
 from app.dependencies import get_user, is_admin, is_human
 from app.models import (
     Identification,
@@ -22,11 +28,6 @@ from app.pydantic_models import (
     SnapshotOut,
     User,
 )
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi_pagination import Page, create_page
-from fastapi_pagination.default import Params
-from tortoise import connections
-from tortoise.expressions import Q
 
 router = APIRouter(prefix="/identifications", tags=["identifications"])
 
@@ -262,6 +263,46 @@ async def create_marker(
     return IdentificationMarkerOut(
         count=len(identifications), ids=[identification.id for identification in identifications]
     )
+
+
+@router.delete("/marker", response_model=IdentificationMarkerOut)
+async def delete_marker(
+    _: Annotated[User, Depends(is_admin)],
+    data: IdentificationMarkerIn,
+) -> IdentificationMarkerOut:
+    snapshot_ids = []
+    if data.identifications_id is not None and len(data.identifications_id) > 0:
+        identifications = (
+            await Identification.filter(id__in=data.identifications_id)
+            .all()
+            .prefetch_related("snapshot")
+        )
+        snapshot_ids += list(
+            set([identification.snapshot.id for identification in identifications])
+        )
+
+    if data.snapshots_id is not None and len(data.snapshots_id) > 0:
+        ids = await Snapshot.filter(id__in=data.snapshots_id).all().values_list("id", flat=True)
+        snapshot_ids = list(set(snapshot_ids + ids))
+
+    if len(snapshot_ids) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Must send indetifications or snapshots ids",
+        )
+
+    identifications = await Identification.filter(snapshot__id__in=snapshot_ids).all()
+    ids = [identification.id for identification in identifications]
+
+    conn = connections.get("default")
+    query = f"""
+DELETE FROM "identification_marker"
+WHERE
+    "identification_marker"."identification_id" IN ('{"', '".join([str(id) for id in ids])}')
+    """
+    await conn.execute_query(query)
+
+    return IdentificationMarkerOut(count=len(ids), ids=ids)
 
 
 @router.get("/aggregate")
