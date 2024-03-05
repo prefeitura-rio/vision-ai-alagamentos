@@ -2,6 +2,7 @@
 import base64
 import json
 import traceback
+from os import getenv
 
 import functions_framework
 import requests
@@ -14,7 +15,7 @@ from vision_ai.base.cloudfunctions.bq import save_data_in_bq
 from vision_ai.base.cloudfunctions.predict import get_prediction
 from vision_ai.base.utils import get_datetime
 
-PROJECT_ID = "rj-escritorio-dev"
+PROJECT_ID = getenv("GCP_PROJECT_ID")
 LOCATION = "us-central1"
 VERSION_ID = "latest"
 DATASET_ID = "vision_ai"
