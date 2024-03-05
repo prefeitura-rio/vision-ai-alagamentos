@@ -89,5 +89,4 @@ jobs:
             --trigger-topic=${{ env.GCF_TOPIC }} \
             --min-instances=${{ env.GCF_MIN_INSTANCES }} \
             --max-instances=${{ env.GCF_MAX_INSTANCES }} \
-            --set-secrets=GEMINI_API_KEY=gemini-api-key-cloud-functions:latest,VISION_AI_API_SECRETS=vision-ai-api-secrets-cloud-functions:latest
-            --set-env-vars=GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }}
+            --set-secrets=GCP_PROJECT_ID=vision-ai-project-id:latest
