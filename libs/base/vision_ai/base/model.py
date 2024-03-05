@@ -14,6 +14,11 @@ from vision_ai.base.shared_models import GenerationResponseProblem, get_parser
 
 
 class Model:
+    def test(self):
+        model = GenerativeModel("gemini-pro")
+        responses = model.generate_content(contents=["Tell me a joke about dogs"])
+        print(responses)
+
     def llm_vertexai(
         self,
         image_url: str,
@@ -28,11 +33,11 @@ class Model:
 
         image_response = requests.get(image_url)
         image_problem = self.analyze_image_problems(image_response)
-
+        image_format = image_url.split(".")[-1]
         if image_problem == "ok":
             model = GenerativeModel(google_api_model)
             responses = model.generate_content(
-                contents=[prompt, Part.from_data(image_response.content, "image/png")],
+                contents=[prompt, Part.from_data(image_response.content, f"image/{image_format}")],
                 generation_config={
                     "max_output_tokens": max_output_tokens,
                     "temperature": temperature,
@@ -81,6 +86,7 @@ class Model:
                 try:
                     response = self.llm_vertexai(image_url=snapshot_url, **parameters).text
                     ai_response_parsed = output_parser.parse(response).dict()
+
                     prediction = pd.DataFrame(ai_response_parsed["objects"])[
                         ["object", "label", "label_explanation"]
                     ].rename(columns={"label": "label_ia"})

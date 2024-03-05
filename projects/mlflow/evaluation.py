@@ -78,12 +78,13 @@ prompt_parameters, _ = get_prompt_api(
     prompt_name="base", prompt_data=prompt_data, objects_data=objects_data
 )
 
+
 # GET SNAPSHOTS. API OR MOCK
-snapshots = vision_api._get(path="/identifications/aggregate")
-with open(mock_snapshot_data_path, "w") as f:
-    json.dump(snapshots, f)
-# with open(mock_snapshot_data_path, "r") as f:
-#     snapshots = json.load(f)
+# snapshots = vision_api._get(path="/identifications/aggregate")
+# with open(mock_snapshot_data_path, "w") as f:
+#     json.dump(snapshots, f)
+with open(mock_snapshot_data_path, "r") as f:
+    snapshots = json.load(f)
 
 
 df = pd.DataFrame(snapshots)
@@ -91,7 +92,6 @@ df = explode_df(df, "human_identification")
 df = df.drop(columns=["ia_identification"])
 df = df.sort_values(by=["snapshot_id", "object", "count"], ascending=False)
 df = df.drop_duplicates(subset=["snapshot_id", "object"], keep="first")
-
 # Calculate metrics for each object
 df_balance = df[["object", "label", "count"]].groupby(["object", "label"], as_index=False).count()
 df_balance["percentage"] = round(df_balance["count"] / df_balance["count"].sum(), 2)
@@ -108,11 +108,12 @@ parameters = {
     "safety_settings": SAFETY_CONFIG,
 }
 
-
 # START PREDICTIONS
 final_predictions = model.predict_batch_mlflow(
     model_input=df, parameters=parameters, max_workers=10
 )
+
+
 final_predictions.to_csv(mock_final_predicition_path, index=False)
 # final_predictions = pd.read_csv(mock_final_predicition_path)
 
