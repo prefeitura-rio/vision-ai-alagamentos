@@ -5,12 +5,13 @@ from typing import Union
 
 import folium
 import pandas as pd
-import streamlit as st
 from st_aggrid import GridOptionsBuilder  # noqa
 from st_aggrid import GridUpdateMode  # noqa
 from st_aggrid import AgGrid, ColumnsAutoSizeMode
 from vision_ai.base.api import VisionaiAPI
 from vision_ai.base.pandas import explode_df
+
+import streamlit as st
 
 STREAMLIT_PATH = Path(__file__).parent.parent.parent.absolute()
 CACHE_MINUTES = 5
@@ -380,7 +381,7 @@ def display_camera_details(row, cameras_identifications_df):
         st.markdown("Falha ao capturar o snapshot da câmera.")
     else:
         st.markdown(
-            f"""<img src='{image_url}' style='max-width: 100%; max-height: 371px;'> """,
+            f"<a href='{row['snapshot_url']}' target='_blank'><img src='{row['snapshot_url']}' style='max-width: 100%; max-height: 371px;'></a>",
             unsafe_allow_html=True,
         )
 
