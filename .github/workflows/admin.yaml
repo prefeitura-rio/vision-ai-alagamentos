@@ -10,7 +10,6 @@ jobs:
   deploy:
     name: Build and Deploy
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/development'
-    needs: [lint]
     runs-on: ubuntu-latest
     permissions:
       id-token: write
