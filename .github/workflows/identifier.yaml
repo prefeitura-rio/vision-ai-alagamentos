@@ -40,8 +40,8 @@ jobs:
       id-token: write
       contents: read
     env:
-      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
-      GCF_PROJECT_ID: ${{ secrets.GCF_PROJECT_ID }}
+      GCP_PROJECT_ID: ${{ github.ref == 'refs/heads/main' && secrets.PRODUCTION_GCP_PROJECT_ID || secrets.STAGING_GCP_PROJECT_ID }}
+      GCP_SA_KEY: ${{ github.ref == 'refs/heads/main' && secrets.PRODUCTION_GCP_SA_KEY || secrets.STAGING_GCP_SA_KEY }}
       GCF_NAME: vision-ai-function
       GCF_RUNTIME: python311
       GCF_ENTRY_POINT: predict
@@ -75,11 +75,10 @@ jobs:
         with:
           version: '>= 363.0.0'
 
-      - name: Deploy to Google Cloud Functions (Production)
-        if: github.ref == 'refs/heads/main'
+      - name: Deploy to Google Cloud Functions
         run: |
-          gcloud functions deploy ${{ env.GCF_NAME }}-production \
-            --project=${{ env.GCF_PROJECT_ID }} \
+          gcloud functions deploy ${{ env.GCF_NAME }} \
+            --project=${{ env.GCP_PROJECT_ID }} \
             --gen2 \
             --runtime=${{ env.GCF_RUNTIME }} \
             --region=${{ env.GCF_REGION }} \
@@ -87,24 +86,7 @@ jobs:
             --entry-point=${{ env.GCF_ENTRY_POINT }} \
             --memory=${{ env.GCF_MEMORY_MB }}MB \
             --timeout=${{ env.GCF_TIMEOUT }}s \
-            --trigger-topic=${{ env.GCF_TOPIC }}-production \
+            --trigger-topic=${{ env.GCF_TOPIC }} \
             --min-instances=${{ env.GCF_MIN_INSTANCES }} \
             --max-instances=${{ env.GCF_MAX_INSTANCES }} \
-            --set-secrets=GEMINI_API_KEY=gemini-api-key-cloud-functions:latest,VISION_AI_API_SECRETS=vision-ai-api-secrets-cloud-functions:latest
-
-      - name: Deploy to Google Cloud Functions (Staging)
-        if: github.ref == 'refs/heads/development'
-        run: |
-          gcloud functions deploy ${{ env.GCF_NAME }}-staging \
-            --project=${{ env.GCF_PROJECT_ID }} \
-            --gen2 \
-            --runtime=${{ env.GCF_RUNTIME }} \
-            --region=${{ env.GCF_REGION }} \
-            --source=projects/identifier/ \
-            --entry-point=${{ env.GCF_ENTRY_POINT }} \
-            --memory=${{ env.GCF_MEMORY_MB }}MB \
-            --timeout=${{ env.GCF_TIMEOUT }}s \
-            --trigger-topic=${{ env.GCF_TOPIC }}-staging \
-            --min-instances=${{ env.GCF_MIN_INSTANCES }} \
-            --max-instances=${{ env.GCF_MAX_INSTANCES }} \
-            --set-secrets=GEMINI_API_KEY=gemini-api-key-cloud-functions:latest,VISION_AI_API_SECRETS=vision-ai-api-secrets-cloud-functions:latest
+            --set-secrets=GCP_PROJECT_ID=vision-ai-project-id:latest
