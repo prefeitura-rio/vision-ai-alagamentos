@@ -19,13 +19,14 @@ jobs:
       DOCKERHUB_REPOSITORY: vision-ai-admin
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
       DOCKERHUB_USERNAME: prefeiturario
-      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
-      GCR_SERVICE: ${{ secrets.GCR_SERVICE }}
-      GCR_REGION: ${{ secrets.GCR_REGION }}
+      GCP_PROJECT_ID: github.ref == 'refs/heads/main' && ${{ secrets.PRODUCTION_GCP_PROJECT_ID }} || ${{ secrets.STAGING_GCP_PROJECT_ID }}
+      GCP_SA_KEY: github.ref == 'refs/heads/main' && ${{ secrets.PRODUCTION_GCP_SA_KEY }} || ${{ secrets.STAGING_GCP_SA_KEY }}
+      GCR_SERVICE: vision-ai
+      GCR_REGION: us-central1
 
     environment:
       name: ${{ github.ref == 'refs/heads/main' && 'Admin (Production)' || 'Admin (Staging)' }}
+      url: ${{ github.ref == 'refs/heads/main' && 'https://admin.vision-ai.dados.rio/' || 'https://staging-admin.vision-ai.dados.rio/' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -58,20 +59,10 @@ jobs:
         with:
           credentials_json: '${{ env.GCP_SA_KEY }}'
 
-      - name: Deploy to Google Cloud Run (Production)
-        if: github.ref == 'refs/heads/main'
+      - name: Deploy to Google Cloud Run
         uses: google-github-actions/deploy-cloudrun@v1
         with:
-          service: ${{ env.GCR_SERVICE }}-admin-production
-          region: ${{ env.GCR_REGION }}
-          image: docker.io/${{ env.DOCKERHUB_USERNAME }}/${{ env.DOCKERHUB_REPOSITORY }}:${{ github.sha }}
-          flags: '--port=80 --allow-unauthenticated --concurrency=100 --verbosity=debug --session-affinity'
-
-      - name: Deploy to Google Cloud Run (Staging)
-        if: github.ref == 'refs/heads/development'
-        uses: google-github-actions/deploy-cloudrun@v1
-        with:
-          service: ${{ env.GCR_SERVICE }}-admin-staging
+          service: ${{ env.GCR_SERVICE }}-admin
           region: ${{ env.GCR_REGION }}
           image: docker.io/${{ env.DOCKERHUB_USERNAME }}/${{ env.DOCKERHUB_REPOSITORY }}:${{ github.sha }}
           flags: '--port=80 --allow-unauthenticated --concurrency=100 --verbosity=debug --session-affinity'
