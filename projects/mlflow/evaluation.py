@@ -17,7 +17,7 @@ from vision_ai.base.model import Model
 from vision_ai.base.pandas import explode_df
 from vision_ai.base.prompt import get_prompt_api
 
-PROJECT_ID = "rj-escritorio-dev"
+PROJECT_ID = "rj-vision-ai"
 LOCATION = "us-central1"
 vertexai.init(project=PROJECT_ID, location=LOCATION)
 # from vision_ai.base.prompt import get_prompt_local
