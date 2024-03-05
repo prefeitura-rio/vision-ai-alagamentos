@@ -44,8 +44,8 @@ jobs:
       DOCKERHUB_REPOSITORY: vision-ai-streamlit
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
       DOCKERHUB_USERNAME: prefeiturario
-      GCP_PROJECT_ID: github.ref == 'refs/heads/main' && ${{ secrets.PRODUCTION_GCP_PROJECT_ID }} || ${{ secrets.STAGING_GCP_PROJECT_ID }}
-      GCP_SA_KEY: github.ref == 'refs/heads/main' && ${{ secrets.PRODUCTION_GCP_SA_KEY }} || ${{ secrets.STAGING_GCP_SA_KEY }}
+      GCP_PROJECT_ID: ${{ github.ref == 'refs/heads/main' && ${{ secrets.PRODUCTION_GCP_PROJECT_ID }} || ${{ secrets.STAGING_GCP_PROJECT_ID }} }}
+      GCP_SA_KEY: ${{ github.ref == 'refs/heads/main' && ${{ secrets.PRODUCTION_GCP_SA_KEY }} || ${{ secrets.STAGING_GCP_SA_KEY }} }}
       GCR_SERVICE: vision-ai
       GCR_REGION: us-central1
 
