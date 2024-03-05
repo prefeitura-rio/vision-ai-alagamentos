@@ -16,6 +16,7 @@ from app.pydantic_models import (
     HumanIdentificationAggregation,
     IaIdentificationAggregation,
     IdentificationHumanIN,
+    IdentificationMarkerDelete,
     IdentificationMarkerIn,
     IdentificationMarkerOut,
     IdentificationOut,
@@ -49,13 +50,13 @@ async def get_ai_identifications(
     indentificateds = (
         await UserIdentification.all()
         .filter(username=user.name)
-        .values_list("identification__id", flat=True)
+        .values_list("identification_id", flat=True)
     )
 
     ids = (
         await IdentificationMaker.all()
-        .filter(identification__id__not_in=indentificateds)
-        .values_list("identification__id", flat=True)
+        .filter(identification_id__not_in=indentificateds)
+        .values_list("identification_id", flat=True)
     )
 
     count = len(ids)
@@ -66,40 +67,69 @@ async def get_ai_identifications(
         .order_by("snapshot__timestamp", "timestamp")
         .limit(params.size)
         .offset(offset)
-        .values(
-            "id",
-            "timestamp",
-            "label_explanation",
-            "snapshot__id",
-            "snapshot__timestamp",
-            "snapshot__public_url",
-            "snapshot__camera__id",
-            "label__value",
-            "label__text",
-            "label__object__id",
-            "label__object__slug",
-            "label__object__title",
-            "label__object__question",
-            "label__object__explanation",
-        )
+        .prefetch_related("snapshot", "snapshot__camera", "label", "label__object")
     )
 
     out = [
         IdentificationOut(
-            id=identification["id"],
-            object=identification["label__object__slug"],
-            title=identification["label__object__title"],
-            question=identification["label__object__question"],
-            explanation=identification["label__object__explanation"],
-            timestamp=identification["timestamp"],
-            label=identification["label__value"],
-            label_text=identification["label__text"],
-            label_explanation=identification["label_explanation"],
+            id=identification.id,
+            object=identification.label.object.slug,
+            title=identification.label.object.title,
+            question=identification.label.object.question,
+            explanation=identification.label.object.explanation,
+            timestamp=identification.timestamp,
+            label=identification.label.value,
+            label_text=identification.label.text,
+            label_explanation=identification.label_explanation,
             snapshot=SnapshotOut(
-                id=identification["snapshot__id"],
-                camera_id=identification["snapshot__camera__id"],
-                image_url=identification["snapshot__public_url"],
-                timestamp=identification["snapshot__timestamp"],
+                id=identification.snapshot.id,
+                camera_id=identification.snapshot.camera.id,
+                image_url=identification.snapshot.public_url,
+                timestamp=identification.snapshot.timestamp,
+            ),
+        )
+        for identification in identifications
+    ]
+
+    return create_page(out, total=count, params=params)
+
+
+@router.get("/ai/all", response_model=BigPage)
+async def get_all_ai_identifications(
+    _: Annotated[User, Depends(is_human)],
+    params: BigParams = Depends(),
+) -> Page[IdentificationOut]:
+    offset = params.size * (params.page - 1)
+
+    ids = await IdentificationMaker.all().values_list("identification_id", flat=True)
+
+    count = len(ids)
+
+    identifications = (
+        await Identification.all()
+        .filter(id__in=ids)
+        .order_by("snapshot__timestamp", "timestamp")
+        .limit(params.size)
+        .offset(offset)
+        .prefetch_related("snapshot", "snapshot__camera", "label", "label__object")
+    )
+
+    out = [
+        IdentificationOut(
+            id=identification.id,
+            object=identification.label.object.slug,
+            title=identification.label.object.title,
+            question=identification.label.object.question,
+            explanation=identification.label.object.explanation,
+            timestamp=identification.timestamp,
+            label=identification.label.value,
+            label_text=identification.label.text,
+            label_explanation=identification.label_explanation,
+            snapshot=SnapshotOut(
+                id=identification.snapshot.id,
+                camera_id=identification.snapshot.camera.id,
+                image_url=identification.snapshot.public_url,
+                timestamp=identification.snapshot.timestamp,
             ),
         )
         for identification in identifications
@@ -125,40 +155,25 @@ async def get_identifications(
         .filter(snapshot__timestamp__gte=interval)
         .limit(params.size)
         .offset(offset)
-        .values(
-            "id",
-            "timestamp",
-            "label_explanation",
-            "snapshot__id",
-            "snapshot__timestamp",
-            "snapshot__public_url",
-            "snapshot__camera__id",
-            "label__value",
-            "label__text",
-            "label__object__id",
-            "label__object__slug",
-            "label__object__title",
-            "label__object__question",
-            "label__object__explanation",
-        )
+        .prefetch_related("snapshot", "snapshot__camera", "label", "label__object")
     )
 
     out = [
         IdentificationOut(
-            id=identification["id"],
-            object=identification["label__object__slug"],
-            title=identification["label__object__title"],
-            question=identification["label__object__question"],
-            explanation=identification["label__object__explanation"],
-            timestamp=identification["timestamp"],
-            label=identification["label__value"],
-            label_text=identification["label__text"],
-            label_explanation=identification["label_explanation"],
+            id=identification.id,
+            object=identification.label.object.slug,
+            title=identification.label.object.title,
+            question=identification.label.object.question,
+            explanation=identification.label.object.explanation,
+            timestamp=identification.timestamp,
+            label=identification.label.value,
+            label_text=identification.label.text,
+            label_explanation=identification.label_explanation,
             snapshot=SnapshotOut(
-                id=identification["snapshot__id"],
-                camera_id=identification["snapshot__camera__id"],
-                image_url=identification["snapshot__public_url"],
-                timestamp=identification["snapshot__timestamp"],
+                id=identification.snapshot.id,
+                camera_id=identification.snapshot.camera.id,
+                image_url=identification.snapshot.public_url,
+                timestamp=identification.snapshot.timestamp,
             ),
         )
         for identification in identifications
@@ -196,6 +211,16 @@ async def create_user_identification(
             label=label,
             identification=identification,
         )
+        tags = ["human"]
+        marker = await IdentificationMaker.filter(identification=identification).get_or_none()
+        if marker is None:
+            await IdentificationMaker.create(identification=identification, tags=tags)
+        else:
+            if marker.tags is None:
+                marker.tags = tags
+            else:
+                marker.tags = list(set(marker.tags + tags))
+            await marker.save()
     else:
         user_identification.label = label
         await user_identification.save()
@@ -209,7 +234,7 @@ async def create_user_identification(
         timestamp=user_identification.timestamp,
         label=label.value,
         label_text=label.text,
-        label_explanation="",
+        label_explanation="Human Identification",
         snapshot=SnapshotOut(
             id=identification.snapshot.id,
             image_url=identification.snapshot.public_url,
@@ -253,15 +278,92 @@ async def create_marker(
             detail="Must send indetifications or snapshots ids",
         )
 
-    identifications = await Identification.filter(snapshot__id__in=snapshot_ids).all()
+    identifications = await Identification.filter(snapshot_id__in=snapshot_ids).all()
+    exist = (
+        await IdentificationMaker.filter(
+            identification_id__in=[identification.id for identification in identifications]
+        )
+        .all()
+        .prefetch_related("identification")
+    )
+    exist_ids = [marker.identification.id for marker in exist]
+    identifications = [
+        identification for identification in identifications if identification.id not in exist_ids
+    ]
 
     await IdentificationMaker.bulk_create(
-        [IdentificationMaker(identification=identification) for identification in identifications]
+        [
+            IdentificationMaker(identification=identification, tags=data.tags)
+            for identification in identifications
+        ]
     )
 
+    if data.tags is not None and len(exist) > 0:
+        for index, marker in enumerate(exist):
+            tags: list[str] = data.tags
+            if marker.tags is not None:
+                tags += marker.tags
+            value_str = f"""{{"{'", "'.join(set(tags))}"}}"""
+
+            exist[index].tags = value_str
+
+        await IdentificationMaker.bulk_update(exist, fields=["tags"])
+
     return IdentificationMarkerOut(
-        count=len(identifications), ids=[identification.id for identification in identifications]
+        count=len(identifications) + len(exist_ids),
+        ids=[identification.id for identification in identifications] + exist_ids,
     )
+
+
+@router.delete("/marker", response_model=IdentificationMarkerOut)
+async def delete_marker(
+    _: Annotated[User, Depends(is_admin)],
+    data: IdentificationMarkerDelete,
+) -> IdentificationMarkerOut:
+    snapshot_ids = []
+    if data.identifications_id is not None and len(data.identifications_id) > 0:
+        identifications = (
+            await Identification.filter(id__in=data.identifications_id)
+            .all()
+            .prefetch_related("snapshot")
+        )
+        if len(identifications) != len(data.identifications_id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Some identifications id not found."
+            )
+        snapshot_ids += list(
+            set([identification.snapshot.id for identification in identifications])
+        )
+
+    if data.snapshots_id is not None and len(data.snapshots_id) > 0:
+        ids = await Snapshot.filter(id__in=data.snapshots_id).all().values_list("id", flat=True)
+        if len(ids) != len(data.snapshots_id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Some snapshots id not found."
+            )
+        snapshot_ids = list(set(snapshot_ids + ids))
+
+    if len(snapshot_ids) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Must send indetifications or snapshots ids",
+        )
+
+    print(snapshot_ids)
+    identifications = await Identification.filter(snapshot_id__in=snapshot_ids).all()
+    ids = [identification.id for identification in identifications]
+    print(ids)
+    print(identifications)
+
+    conn = connections.get("default")
+    query = f"""
+    DELETE FROM "identification_marker"
+    WHERE
+      "identification_marker"."identification_id" IN ('{"', '".join([str(id) for id in ids])}')
+    """
+    await conn.execute_query(query)
+
+    return IdentificationMarkerOut(count=len(ids), ids=ids)
 
 
 @router.get("/aggregate")
@@ -278,6 +380,7 @@ async def get_aggregation(
       snapshot.public_url AS snapshot_url
     FROM
       user_identification
+      INNER JOIN identification_marker ON identification_marker.identification_id = user_identification.identification_id
       LEFT JOIN identification ON identification.id = user_identification.identification_id
       LEFT JOIN snapshot ON snapshot.id = identification.snapshot_id
       LEFT JOIN label ON label.id = user_identification.label_id
@@ -296,7 +399,7 @@ async def get_aggregation(
     snapshots_id = [identification["snapshot_id"] for identification in aggregation]
     ia_identifications = (
         await Identification.all()
-        .filter(Q(snapshot__id__in=snapshots_id), ~Q(label__object__name="image_description"))
+        .filter(Q(snapshot_id__in=snapshots_id), ~Q(label__object__name="image_description"))
         .prefetch_related("snapshot", "label", "label__object")
     )
 

@@ -1,4 +1,4 @@
-package main
+package libs
 
 import (
 	"encoding/json"
@@ -10,12 +10,26 @@ import (
 	"time"
 )
 
+type OIDCClientCredentials struct {
+	TokenURL string
+	Username string
+	Password string
+}
+
 type AccessToken struct {
 	accessToken string
 	tokenType   string
 	interval    time.Duration
 	credentials OIDCClientCredentials
 	m           sync.RWMutex
+}
+
+func NewAccessTokenRaw(accessToken, tokenType string, interval time.Duration) *AccessToken {
+	return &AccessToken{
+		accessToken: accessToken,
+		tokenType:   tokenType,
+		interval:    interval,
+	}
 }
 
 func NewAccessToken(credentials OIDCClientCredentials, autoRenew bool) *AccessToken {
@@ -50,14 +64,11 @@ func (at *AccessToken) Valid() bool {
 
 func (at *AccessToken) Renew() error {
 	data := url.Values{
-		"grant_type": {"client_credentials"},
-		"client_id":  {at.credentials.ClientID},
-		"username":   {at.credentials.Username},
-		"password":   {at.credentials.Password},
-		"scope":      {"profile"},
+		"username": {at.credentials.Username},
+		"password": {at.credentials.Password},
 	}
 
-	body, err := httpPost(
+	body, err := HTTPPost(
 		at.credentials.TokenURL,
 		nil,
 		"application/x-www-form-urlencoded",

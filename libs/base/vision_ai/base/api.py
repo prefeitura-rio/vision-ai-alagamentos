@@ -7,8 +7,8 @@ import requests
 
 
 class VisionaiAPI:
-    def __init__(self, username: str, password: str) -> None:
-        self.BASE_URL = "https://vision-ai-api-staging-ahcsotxvgq-uc.a.run.app"
+    def __init__(self, base_url: str = None, username: str = None, password: str = None) -> None:
+        self.BASE_URL = base_url or "https://vision-ai-api-staging-ahcsotxvgq-uc.a.run.app"
         self.username = username
         self.password = password
         self.headers, self.token_renewal_time = self._get_headers()

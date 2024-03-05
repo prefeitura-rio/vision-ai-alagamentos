@@ -95,7 +95,7 @@ async def get_objects_table(objects: list[Object]) -> str:
     # Fetch all labels for the objects
     objects_id = [object_.id for object_ in objects]
     raw_labels = (
-        await Label.filter(object__id__in=objects_id)
+        await Label.filter(object_id__in=objects_id)
         .all()
         .select_related("object__slug")
         .values("id", "criteria", "identification_guide", "value", "object__slug")
@@ -179,9 +179,9 @@ async def get_prompts_best_fit(objects: list[Object], one: bool = False) -> list
 
     # Rank prompts id by number of objects in common
     prompts = (
-        await Prompt.filter(objects__object__id__in=objects_id)
+        await Prompt.filter(objects__object_id__in=objects_id)
         .group_by("id", "name")
-        .annotate(object_count=Count("objects__object__id"))
+        .annotate(object_count=Count("objects__object_id"))
         .order_by("-object_count", "name")
         .all()
     )

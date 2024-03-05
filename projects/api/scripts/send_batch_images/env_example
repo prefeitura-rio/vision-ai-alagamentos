@@ -1,0 +1,5 @@
+export API_BASE_URL="http://localhost:8080"
+export API_USERNAME="admin"
+export API_PASSWORD="secret_password"
+export BUCKET_NAME="public_images"
+export BUCKET_PREFIX="classified_images"

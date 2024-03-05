@@ -18,6 +18,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
+      - name: Copy libs to agent directory
+        run: |
+          mkdir -p projects/agent/libs
+          cp -r libs/* projects/agent/libs/
+
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v1
         with:

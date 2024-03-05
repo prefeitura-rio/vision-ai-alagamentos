@@ -92,36 +92,21 @@ async def get_cameras(
 
     identifications = (
         await Identification.all()
-        .filter(snapshot__camera__id__in=ids, timestamp__gte=lastminutes)
-        .select_related(
+        .filter(snapshot__camera_id__in=ids, timestamp__gte=lastminutes)
+        .prefetch_related(
             "snapshot",
-            "snapshot__camera__id",
+            "snapshot__camera",
             "label",
             "label__object",
         )
         .order_by("-timestamp")
-        .values(
-            "id",
-            "timestamp",
-            "label_explanation",
-            "snapshot__id",
-            "snapshot__public_url",
-            "snapshot__timestamp",
-            "snapshot__camera__id",
-            "label__value",
-            "label__text",
-            "label__object__slug",
-            "label__object__title",
-            "label__object__question",
-            "label__object__explanation",
-        )
     )
 
     identifications_slug: dict[str, list[str]] = {}
 
     for identification in identifications:
-        slug = identification["label__object__slug"]
-        id = identification["snapshot__camera__id"]
+        slug = identification.label.object.slug
+        id = identification.snapshot.camera.id
 
         if id not in identifications_slug:
             identifications_slug[id] = []
@@ -133,20 +118,20 @@ async def get_cameras(
 
         cameras_out[id].identifications.append(
             IdentificationOut(
-                id=identification["id"],
+                id=identification.id,
                 object=slug,
-                title=identification["label__object__title"],
-                question=identification["label__object__question"],
-                explanation=identification["label__object__explanation"],
-                timestamp=identification["timestamp"],
-                label=identification["label__value"],
-                label_text=identification["label__text"],
-                label_explanation=identification["label_explanation"],
+                title=identification.label.object.title,
+                question=identification.label.object.question,
+                explanation=identification.label.object.explanation,
+                timestamp=identification.timestamp,
+                label=identification.label.value,
+                label_text=identification.label.text,
+                label_explanation=identification.label_explanation,
                 snapshot=SnapshotOut(
-                    id=identification["snapshot__id"],
+                    id=identification.snapshot.id,
                     camera_id=id,
-                    image_url=identification["snapshot__public_url"],
-                    timestamp=identification["snapshot__timestamp"],
+                    image_url=identification.snapshot.public_url,
+                    timestamp=identification.snapshot.timestamp,
                 ),
             )
         )
@@ -345,7 +330,7 @@ async def predict(
             detail="Not allowed to post snapshots for this camera.",
         )
 
-    snapshot = await Snapshot.get_or_none(id=snapshot_id, camera__id=camera_id)
+    snapshot = await Snapshot.get_or_none(id=snapshot_id, camera_id=camera_id)
     if not snapshot:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Snapshot not found")
 
@@ -402,31 +387,20 @@ async def get_identification(
     identifications = (
         await Identification.all()
         .filter(snapshot=snapshot)
-        .select_related("label", "label__object")
-        .values(
-            "id",
-            "timestamp",
-            "label_explanation",
-            "label__value",
-            "label__text",
-            "label__object__slug",
-            "label__object__title",
-            "label__object__question",
-            "label__object__explanation",
-        )
+        .prefetch_related("label", "label__object")
     )
 
     identifications = [
         IdentificationOut(
-            id=identification["id"],
-            object=identification["label__object__slug"],
-            title=identification["label__object__title"],
-            question=identification["label__object__question"],
-            explanation=identification["label__object__explanation"],
-            timestamp=identification["timestamp"],
-            label=identification["label__value"],
-            label_text=identification["label__text"],
-            label_explanation=identification["label_explanation"],
+            id=identification.id,
+            object=identification.label.object.slug,
+            title=identification.label.object.title,
+            question=identification.label.object.question,
+            explanation=identification.label.object.explanation,
+            timestamp=identification.timestamp,
+            label=identification.label.value,
+            label_text=identification.label.text,
+            label_explanation=identification.label_explanation,
             snapshot=SnapshotOut(
                 id=snapshot.id,
                 camera_id=camera.id,
@@ -453,10 +427,10 @@ async def create_identification(
     _: Annotated[User, Depends(is_ai)],
 ) -> IdentificationOut:
     """Update a camera snapshot identifications."""
-    snapshot = await Snapshot.get_or_none(id=snapshot_id, camera__id=camera_id)
+    snapshot = await Snapshot.get_or_none(id=snapshot_id, camera_id=camera_id)
     if not snapshot:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Snapshot not found.")
-    label = await Label.get_or_none(object__id=object_id, value=label_value).prefetch_related(
+    label = await Label.get_or_none(object_id=object_id, value=label_value).prefetch_related(
         "object"
     )
     if not label:

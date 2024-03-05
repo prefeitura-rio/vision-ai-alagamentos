@@ -18,6 +18,7 @@ import (
 	"github.com/bluenviron/gortsplib/v4/pkg/format/rtph264"
 	"github.com/bluenviron/gortsplib/v4/pkg/format/rtph265"
 	"github.com/pion/rtp"
+	"github.com/prefeitura-rio/vision-ai/libs"
 )
 
 var (
@@ -33,7 +34,7 @@ type CameraAPI struct {
 	RtspURL        string `json:"rtsp_url"`
 	UpdateInterval int    `json:"update_interval"`
 	snapshotURL    string
-	accessToken    *AccessToken
+	accessToken    *libs.AccessToken
 }
 
 type Camera struct {
@@ -41,7 +42,7 @@ type Camera struct {
 	getURL         *base.URL
 	updateInterval time.Duration
 	client         *gortsplib.Client
-	accessToken    *AccessToken
+	accessToken    *libs.AccessToken
 	rtpDecoder     rtpDecoder
 	frameDecoder   *h26xDecoder
 }

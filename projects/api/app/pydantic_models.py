@@ -99,6 +99,12 @@ class IdentificationHumanIN(BaseModel):
 class IdentificationMarkerIn(BaseModel):
     identifications_id: list[UUID] | None
     snapshots_id: list[UUID] | None
+    tags: list[str] | None
+
+
+class IdentificationMarkerDelete(BaseModel):
+    identifications_id: list[UUID] | None
+    snapshots_id: list[UUID] | None
 
 
 class IdentificationMarkerOut(BaseModel):
@@ -215,6 +221,7 @@ class Aggregation(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
+    expires_in: int
 
 
 class OIDCUser(BaseModel):

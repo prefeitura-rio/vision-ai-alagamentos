@@ -4,10 +4,13 @@ import pandas as pd
 import streamlit as st
 from utils.utils import (
     get_ai_identifications_cache,
+    get_identifications_index,
     get_objects_cache,
     send_user_identification,
 )
 from vision_ai.base.pandas import get_objetcs_labels_df
+
+FAKE_INDEX = 100
 
 st.set_page_config(
     page_title="Classificador de Labels",
@@ -29,6 +32,10 @@ identifications = [
     for identification in get_ai_identifications_cache()
     if identification["object"] != "image_description"
 ]
+
+identifications_index = get_identifications_index(
+    identifications=identifications, fake_index=FAKE_INDEX
+)
 
 
 # https://docs.google.com/document/d/1PRCjbIJw4_g3-p4gLjYoN0qTaenephyZyOsiOfVGWzM/edit
@@ -94,6 +101,7 @@ if st.session_state.next_id is not None:
         if identification["id"] == st.session_state.next_id:
             index = i
 
+
 if index >= len(identifications) or st.session_state.finish:
     st.write("Você já revisou todas as imagens.")
     if st.button("Carregar novas identificações"):
@@ -104,15 +112,25 @@ else:
     identification = identifications[index]
     object_ = identification["object"]
     snapshot_url = identification["snapshot"]["image_url"]
-    possible_labels = object_labels[object_labels["name"] == object_]
+    possible_labels = object_labels[object_labels["object"] == object_]
 
     col2, col1 = st.columns([3, 1])
     with col2:
+        st.markdown(
+            f"### Imagem: {identifications_index[snapshot_url]['index']} de {identifications_index[snapshot_url]['total']}"
+        )
+
         st.image(snapshot_url)
+
+        # total images but invisible, use the inspect to see
+        st.markdown(
+            f"<span style='color: rgba(0,0,0,0);'>{len(identifications_index)}</span>",
+            unsafe_allow_html=True,
+        )
     with col1:
         st.markdown(f"### {identification['question']}")
         st.markdown(f"**Explicação:** {identification['explanation']}")
 
-    for text, label in zip(possible_labels["text"], possible_labels["value"]):
+    for text, label in zip(possible_labels["text"], possible_labels["label"]):
         with col1:
             buttom(label=label, text=text, index=index)

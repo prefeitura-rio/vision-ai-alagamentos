@@ -33,7 +33,7 @@ if st.button("Update Data"):
     st.success("Data updated successfully!")
 
 
-prompt, objects_table = get_prompt_api(
+prompt_parameters, objects_table = get_prompt_api(
     prompt_name="base", prompt_data=prompt_data, objects_data=objects_data
 )
-st.markdown(prompt)
+st.markdown(prompt_parameters.get("prompt_text"))

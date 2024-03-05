@@ -1,6 +1,11 @@
 go 1.22.0
 
 use (
+	.
 	./benchmarking
+	./libs
 	./projects/agent
+	./projects/api/scripts/send_batch_images
 )
+
+replace github.com/prefeitura-rio/vision-ai/libs v0.0.0 => ./libs

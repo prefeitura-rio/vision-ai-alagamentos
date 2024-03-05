@@ -9,10 +9,11 @@ import streamlit as st
 from st_aggrid import GridOptionsBuilder  # noqa
 from st_aggrid import GridUpdateMode  # noqa
 from st_aggrid import AgGrid, ColumnsAutoSizeMode
-from utils.api import APIVisionAI
+from vision_ai.base.api import VisionaiAPI
 from vision_ai.base.pandas import explode_df
 
 STREAMLIT_PATH = Path(__file__).parent.parent.parent.absolute()
+CACHE_MINUTES = 5
 
 
 def get_vision_ai_api():
@@ -24,7 +25,7 @@ def get_vision_ai_api():
             username = st.session_state["username"]
             password = st.session_state["password"]
             try:
-                _ = APIVisionAI(
+                _ = VisionaiAPI(
                     username=username,
                     password=password,
                 )
@@ -45,7 +46,7 @@ def get_vision_ai_api():
     if not user_is_logged_in():
         st.stop()
 
-    vision_api = APIVisionAI(
+    vision_api = VisionaiAPI(
         username=st.session_state["username"],
         password=st.session_state["password"],
     )
@@ -54,10 +55,9 @@ def get_vision_ai_api():
 
 vision_api = get_vision_ai_api()
 
-
 # import os
 
-# vision_api = APIVisionAI(
+# vision_api = VisionaiAPI(
 #     username=os.environ.get("VISION_API_USERNAME"),
 #     password=os.environ.get("VISION_API_PASSWORD"),
 # )
@@ -120,10 +120,10 @@ def get_ai_identifications(
 
 def send_user_identification(identification_id, label, timeout=120):
     json = {"identification_id": identification_id, "label": label}
-    vision_api._post(path="/identifications", json=json, timeout=timeout)
+    vision_api._post(path="/identifications", json_data=json)
 
 
-@st.cache_data(ttl=60 * 5, persist=False)
+@st.cache_data(ttl=60 * CACHE_MINUTES, persist=False)
 def get_cameras_cache(
     only_active=True,
     use_mock_data=False,
@@ -140,12 +140,12 @@ def get_cameras_cache(
     )
 
 
-@st.cache_data(ttl=60 * 5, persist=False)
+@st.cache_data(ttl=60 * CACHE_MINUTES, persist=False)
 def get_objects_cache(page_size=100, timeout=120):
     return get_objects(page_size=page_size, timeout=timeout)
 
 
-@st.cache_data(ttl=60 * 5, persist=False)
+@st.cache_data(ttl=60 * CACHE_MINUTES, persist=False)
 def get_prompts_cache(page_size=100, timeout=120):
     return get_prompts(page_size=page_size, timeout=timeout)
 
@@ -555,3 +555,30 @@ def create_order_column(table):
     )
 
     return table
+
+
+def get_identifications_index(identifications: list, fake_index: int):
+    identifications_snapshots_to_index = {}
+    current_index = 1
+    cycle = 1
+    for identification in identifications:
+        url = identification["snapshot"]["image_url"]
+        if url not in identifications_snapshots_to_index:
+            identifications_snapshots_to_index[url] = {
+                "index": current_index,
+                "total": fake_index,
+                "cycle": cycle,
+            }
+            if current_index == fake_index:
+                cycle += 1
+            current_index = (current_index % fake_index) + 1  # Cycle through numbers until N
+
+    last_cycle = identifications_snapshots_to_index[
+        list(identifications_snapshots_to_index.keys())[-1]
+    ]["cycle"]
+    for url in identifications_snapshots_to_index.keys():
+        if identifications_snapshots_to_index[url]["cycle"] == last_cycle:
+            identifications_snapshots_to_index[url]["total"] = (
+                len(identifications_snapshots_to_index) % fake_index
+            )
+    return identifications_snapshots_to_index

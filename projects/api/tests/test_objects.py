@@ -296,7 +296,7 @@ async def test_object_label_order(
 
 
 @pytest.mark.anyio
-@pytest.mark.run(order=999)
+@pytest.mark.run(order=90)
 async def test_object_delete_label_by_id(
     client: AsyncClient,
     authorization_header: dict,
@@ -322,7 +322,7 @@ async def test_object_delete_label_by_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.run(order=1000)
+@pytest.mark.run(order=91)
 async def test_objects_delete(
     client: AsyncClient,
     authorization_header: dict,

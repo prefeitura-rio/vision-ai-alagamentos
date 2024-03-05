@@ -49,5 +49,5 @@ def get_prompt_api(prompt_name: str = "base", prompt_data: list = None, objects_
         .replace("{output_schema}", output_schema)
         .replace("{output_example}", output_example)
     )
-
-    return prompt_text, objects_table
+    prompt_parameters["prompt_text"] = prompt_text
+    return prompt_parameters, objects_table
