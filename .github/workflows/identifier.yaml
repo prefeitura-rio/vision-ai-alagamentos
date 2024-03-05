@@ -40,8 +40,8 @@ jobs:
       id-token: write
       contents: read
     env:
-      GCP_SA_KEY: github.ref == 'refs/heads/main' && ${{ secrets.PRODUCTION_GCP_SA_KEY }} || ${{ secrets.STAGING_GCP_SA_KEY }}
-      GCP_PROJECT_ID: github.ref == 'refs/heads/main' && ${{ secrets.PRODUCTION_GCP_PROJECT_ID }} || ${{ secrets.STAGING_GCP_PROJECT_ID }}
+      GCP_PROJECT_ID: ${{ github.ref == 'refs/heads/main' && secrets.PRODUCTION_GCP_PROJECT_ID || secrets.STAGING_GCP_PROJECT_ID }}
+      GCP_SA_KEY: ${{ github.ref == 'refs/heads/main' && secrets.PRODUCTION_GCP_SA_KEY || secrets.STAGING_GCP_SA_KEY }}
       GCF_NAME: vision-ai-function
       GCF_RUNTIME: python311
       GCF_ENTRY_POINT: predict
