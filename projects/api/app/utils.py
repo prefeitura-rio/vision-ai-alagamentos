@@ -7,15 +7,14 @@ from asyncio import Task
 from typing import Any, Callable
 
 import nest_asyncio
+from app import config
+from app.models import Label, Object, Prompt
 from google.cloud import pubsub
 from google.oauth2 import service_account
 from pydantic import BaseModel
 from tortoise.functions import Count
 from tortoise.models import Model
 from vision_ai.base.shared_models import Output, OutputFactory
-
-from app import config
-from app.models import Label, Object, Prompt
 
 
 def _to_task(future, as_task, loop):
