@@ -212,6 +212,16 @@ async def create_user_identification(
             label=label,
             identification=identification,
         )
+        tags = ["human"]
+        marker = await IdentificationMaker.filter(identification=identification).get_or_none()
+        if marker is None:
+            await IdentificationMaker.create(identification=identification, tags=tags)
+        else:
+            if marker.tags is None:
+                marker.tags = tags
+            else:
+                marker.tags = list(set(marker.tags + tags))
+            await marker.save()
     else:
         user_identification.label = label
         await user_identification.save()
@@ -225,7 +235,7 @@ async def create_user_identification(
         timestamp=user_identification.timestamp,
         label=label.value,
         label_text=label.text,
-        label_explanation="",
+        label_explanation="Human Identification",
         snapshot=SnapshotOut(
             id=identification.snapshot.id,
             image_url=identification.snapshot.public_url,
@@ -293,7 +303,7 @@ async def create_marker(
         for index, marker in enumerate(exist):
             tags: list[str] = data.tags
             if marker.tags is not None:
-                tags += data.tags
+                tags += marker.tags
             value_str = f"""{{"{'", "'.join(set(tags))}"}}"""
 
             exist[index].tags = value_str
@@ -348,9 +358,9 @@ async def delete_marker(
 
     conn = connections.get("default")
     query = f"""
-DELETE FROM "identification_marker"
-WHERE
-    "identification_marker"."identification_id" IN ('{"', '".join([str(id) for id in ids])}')
+    DELETE FROM "identification_marker"
+    WHERE
+      "identification_marker"."identification_id" IN ('{"', '".join([str(id) for id in ids])}')
     """
     await conn.execute_query(query)
 
