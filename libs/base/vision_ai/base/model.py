@@ -22,7 +22,7 @@ class Model:
     def llm_vertexai(
         self,
         image_url: str,
-        prompt: str,
+        prompt_text: str,
         google_api_model: str,
         max_output_tokens: int,
         temperature: float,
@@ -37,7 +37,10 @@ class Model:
         if image_problem == "ok":
             model = GenerativeModel(google_api_model)
             responses = model.generate_content(
-                contents=[prompt, Part.from_data(image_response.content, f"image/{image_format}")],
+                contents=[
+                    prompt_text,
+                    Part.from_data(image_response.content, f"image/{image_format}"),
+                ],
                 generation_config={
                     "max_output_tokens": max_output_tokens,
                     "temperature": temperature,
@@ -84,7 +87,16 @@ class Model:
             snapshot_df = model_input[model_input["snapshot_url"] == snapshot_url]
             for i in range(retry):
                 try:
-                    response = self.llm_vertexai(image_url=snapshot_url, **parameters).text
+                    response = self.llm_vertexai(
+                        image_url=snapshot_url,
+                        prompt_text=parameters["prompt_text"],
+                        google_api_model=parameters["google_api_model"],
+                        max_output_tokens=parameters["max_output_tokens"],
+                        temperature=parameters["temperature"],
+                        top_k=parameters["top_k"],
+                        top_p=parameters["top_p"],
+                        safety_settings=parameters["safety_settings"],
+                    ).text
                     ai_response_parsed = output_parser.parse(response).dict()
 
                     prediction = pd.DataFrame(ai_response_parsed["objects"])[
