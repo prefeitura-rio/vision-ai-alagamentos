@@ -1,12 +1,15 @@
 # -*- coding: utf-8 -*-
+from datetime import datetime, timedelta
 from typing import Annotated
+
+from fastapi import Depends
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi_cache.decorator import cache
+from httpx import AsyncClient
+from jose import jwt
 
 from app import config
 from app.pydantic_models import OIDCUser, Token
-from fastapi import Depends
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from httpx import AsyncClient
-from jose import jwt
 
 oidc_scheme = OAuth2PasswordBearer(tokenUrl="auth/token")
 
@@ -17,14 +20,15 @@ class AuthError(Exception):
         self.status_code = status_code
 
 
-async def authenticate_user(form_data: OAuth2PasswordRequestForm) -> Token:
+@cache(expire=60 * 45)
+async def get_user_token(username: str, password: str) -> tuple[str, str, float]:
     async with AsyncClient() as client:
         response = await client.post(
             config.OIDC_TOKEN_URL,
             data={
                 "grant_type": "password",
-                "username": form_data.username,
-                "password": form_data.password,
+                "username": username,
+                "password": password,
                 "client_id": config.OIDC_CLIENT_ID,
                 "client_secret": config.OIDC_CLIENT_SECRET,
                 "scope": "profile",
@@ -32,7 +36,17 @@ async def authenticate_user(form_data: OAuth2PasswordRequestForm) -> Token:
         )
         if response.status_code != 200:
             raise AuthError(response.json(), response.status_code)
-        return Token(**response.json())
+        data = response.json()
+        expires_at = datetime.now() + timedelta(seconds=data["expires_in"])
+        return (data["access_token"], data["token_type"], expires_at.timestamp())
+
+
+async def authenticate_user(form_data: OAuth2PasswordRequestForm) -> Token:
+    token, token_type, expires_at = await get_user_token(
+        username=form_data.username, password=form_data.password
+    )
+    expires_in = datetime.fromtimestamp(expires_at) - datetime.now()
+    return Token(access_token=token, token_type=token_type, expires_in=expires_in.seconds)
 
 
 async def get_current_user(authorization_header: Annotated[str, Depends(oidc_scheme)]):
