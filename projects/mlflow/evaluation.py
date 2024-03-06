@@ -15,7 +15,7 @@ from vertexai.preview import generative_models
 from vision_ai.base.api import VisionaiAPI
 from vision_ai.base.metrics import calculate_metrics, crossentropy
 from vision_ai.base.model import Model
-from vision_ai.base.pandas import explode_df
+from vision_ai.base.pandas import handle_snapshots_df
 from vision_ai.base.prompt import get_prompt_api, get_prompt_local
 from vision_ai.base.sheets import get_objects_table_from_sheets
 
@@ -79,10 +79,7 @@ def load_data(use_mock_snapshots=False, save_mock_snapshots=False, use_local_pro
             json.dump(snapshots, f)
 
     dataframe = pd.DataFrame(snapshots)
-    dataframe = explode_df(dataframe, "human_identification")
-    dataframe = dataframe.drop(columns=["ia_identification"])
-    dataframe = dataframe.sort_values(by=["snapshot_id", "object", "count"], ascending=False)
-    dataframe = dataframe.drop_duplicates(subset=["snapshot_id", "object"], keep="first")
+    dataframe = handle_snapshots_df(dataframe, "human_identification")
 
     # Calculate metrics for each object
     dataframe_balance = (
