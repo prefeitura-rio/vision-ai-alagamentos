@@ -3,6 +3,7 @@ import json
 import os
 import shutil
 import time
+from os import getenv
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -31,6 +32,7 @@ for var in [
 PROJECT_ID = "rj-vision-ai"
 LOCATION = "us-central1"
 vertexai.init(project=PROJECT_ID, location=LOCATION)
+SHEETS_URL = getenv("SHEETS_URL")
 SAFETY_CONFIG = {
     generative_models.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: generative_models.HarmBlockThreshold.BLOCK_NONE,
     generative_models.HarmCategory.HARM_CATEGORY_HARASSMENT: generative_models.HarmBlockThreshold.BLOCK_NONE,
@@ -58,9 +60,12 @@ def load_data(use_mock_snapshots=False, save_mock_snapshots=False, use_local_pro
     )
     if use_local_prompt:
         # LOCAL PROMPT + OBJECTS TABLE FROM SHEETS
-        with open("./projects/mlflow/prompt.md") as f:
+        with open(ABSOLUTE_PATH / "prompt.md") as f:
             prompt_text_local = f.read()
-        objects_table_md, _ = get_objects_table_from_sheets()
+        if SHEETS_URL:
+            objects_table_md, _ = get_objects_table_from_sheets(url=SHEETS_URL)
+        else:
+            objects_table_md, _ = get_objects_table_from_sheets()
         prompt, _ = get_prompt_local(
             prompt_parameters=None,
             prompt_template=prompt_text_local,
@@ -83,7 +88,9 @@ def load_data(use_mock_snapshots=False, save_mock_snapshots=False, use_local_pro
 
     # Calculate metrics for each object
     dataframe_balance = (
-        dataframe[["object", "label", "count"]].groupby(["object", "label"], as_index=False).count()
+        dataframe[["object", "hard_label", "count"]]
+        .groupby(["object", "hard_label"], as_index=False)
+        .count()
     )
     dataframe_balance["percentage"] = round(
         dataframe_balance["count"] / dataframe_balance["count"].sum(), 2
@@ -113,7 +120,7 @@ def make_predictions(dataframe, parameters, use_mock_predictions=False, max_work
         )
         final_predictions.to_csv(mock_final_predicition_path, index=False)
 
-    final_predictions["label"] = final_predictions["label"].fillna("null")
+    final_predictions["hard_label"] = final_predictions["hard_label"].fillna("null")
     final_predictions["label_ia"] = final_predictions["label_ia"].fillna("null")
     final_predictions["label_ia"] = final_predictions["label_ia"].apply(lambda x: str(x).lower())
     mask = (final_predictions["object"] == "image_corrupted") & (
@@ -165,7 +172,7 @@ def mlflow_log(
 
         for obj in output["object"].unique():
             df_obj = output[output["object"] == obj]
-            y_true = df_obj["label"]
+            y_true = df_obj["hard_label"]
             y_pred = df_obj["label_ia"]
             true_labels = df_obj["label"]
             true_probs = df_obj["distribution"]
