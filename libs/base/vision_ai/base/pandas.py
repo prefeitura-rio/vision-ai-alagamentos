@@ -17,6 +17,58 @@ def explode_df(dataframe: pd.DataFrame, column_to_explode: str, prefix: str = No
     return result_df
 
 
+def handle_snapshots_df(
+    snapshots: pd.DataFrame, human_identification_col: str = "human_identification"
+) -> pd.DataFrame:
+    # Explode human_identification column
+    snapshots_exploded = snapshots.explode(human_identification_col)
+
+    # Extract labels and counts
+    snapshots_exploded["label"] = snapshots_exploded[human_identification_col].apply(
+        lambda x: x["label"]
+    )
+    snapshots_exploded["object"] = snapshots_exploded[human_identification_col].apply(
+        lambda x: x["object"]
+    )
+    snapshots_exploded["count"] = snapshots_exploded[human_identification_col].apply(
+        lambda x: x["count"]
+    )
+
+    # Group by object and calculate label distribution
+    grouped = (
+        snapshots_exploded.groupby(
+            ["snapshot_id", "snapshot_timestamp", "snapshot_url", "object", "label"]
+        )["count"]
+        .sum()
+        .reset_index()
+    )
+    grouped["distribution"] = grouped.groupby("object")["count"].transform(lambda x: x)
+
+    # Aggregate labels and distributions for each object
+    result = (
+        grouped.groupby(["snapshot_id", "snapshot_timestamp", "snapshot_url", "object"])[
+            ["label", "distribution"]
+        ]
+        .agg(list)
+        .reset_index()
+    )
+
+    # Get hard label using the highest probability
+    result["hard_label"] = result.apply(
+        lambda x: x["label"][x["distribution"].index(max(x["distribution"]))], axis=1
+    )
+
+    # Get count for hard label
+    result["count"] = result.apply(lambda x: max(x["distribution"]), axis=1)
+
+    # Normalize distribution
+    result["distribution"] = result["distribution"].apply(
+        lambda x: [round(i / sum(x), 2) for i in x]
+    )
+
+    return result
+
+
 def get_objetcs_labels_df(objects: pd.DataFrame, keep_null: bool = True):
     objects_df = objects.rename(columns={"id": "object_id"})
     objects_df = objects_df[["name", "object_id", "labels"]]

@@ -12,10 +12,19 @@ import vertexai
 from sklearn.metrics import confusion_matrix, recall_score
 from vertexai.preview import generative_models
 from vision_ai.base.api import VisionaiAPI
-from vision_ai.base.metrics import calculate_metrics
+from vision_ai.base.metrics import calculate_metrics, crossentropy
 from vision_ai.base.model import Model
-from vision_ai.base.pandas import explode_df
+from vision_ai.base.pandas import handle_snapshots_df
 from vision_ai.base.prompt import get_prompt_api
+
+# Assert all environment variables are set
+for var in [
+    "MLFLOW_TRACKING_USERNAME",
+    "MLFLOW_TRACKING_PASSWORD",
+    "VISION_API_USERNAME",
+    "VISION_API_PASSWORD",
+]:
+    assert os.environ.get(var), f"Environment variable {var} is not set"
 
 PROJECT_ID = "rj-vision-ai"
 LOCATION = "us-central1"
@@ -42,12 +51,6 @@ temperature = 0.2
 top_k = 32
 top_p = 1
 
-
-# with open(ABSOLUTE_PATH / "secrets.json") as f:
-#     secret = json.load(f)")
-
-# os.environ["MLFLOW_TRACKING_USERNAME"] = secret["mlflow_tracking_username"]
-# os.environ["MLFLOW_TRACKING_PASSWORD"] = secret["mlflow_tracking_password"]
 
 vision_api = VisionaiAPI(
     username=os.environ.get("VISION_API_USERNAME"),
@@ -88,13 +91,14 @@ with open(mock_snapshot_data_path, "r") as f:
 
 
 df = pd.DataFrame(snapshots)
-df = explode_df(df, "human_identification")
-df = df.drop(columns=["ia_identification"])
-df = df.sort_values(by=["snapshot_id", "object", "count"], ascending=False)
-df = df.drop_duplicates(subset=["snapshot_id", "object"], keep="first")
+df = handle_snapshots_df(df)
+
 # Calculate metrics for each object
-df_balance = df[["object", "label", "count"]].groupby(["object", "label"], as_index=False).count()
+df_balance = (
+    df[["object", "hard_label", "count"]].groupby(["object", "hard_label"], as_index=False).count()
+)
 df_balance["percentage"] = round(df_balance["count"] / df_balance["count"].sum(), 2)
+df_balance.to_csv(artifact_input_balance_path, index=False)
 
 
 model = Model()
@@ -119,7 +123,6 @@ final_predictions.to_csv(mock_final_predicition_path, index=False)
 
 
 # prepare dataframe for mlflow
-final_predictions["label"] = final_predictions["label"].fillna("null")
 final_predictions["label_ia"] = final_predictions["label_ia"].fillna("null")
 final_predictions["label_ia"] = final_predictions["label_ia"].apply(lambda x: str(x).lower())
 
@@ -140,13 +143,12 @@ df.to_csv(artifact_input_path, index=False)
 
 final_predictions.to_csv(artifact_output_path, index=False)
 final_predictions_errors.to_csv(artifact_output_errors_path, index=False)
-df_balance.to_csv(artifact_input_balance_path, index=False)
 
 # MLFLOW DUMP
 mlflow.set_tracking_uri(uri="https://mlflow.dados.rio")
 
 # Create a new MLflow Experiment
-tag = "model-evaluation"
+tag = "model-evaluation-crossentropy"
 today = pd.Timestamp.now().strftime("%Y-%m-%d")
 mlflow.set_experiment(f"{today}-{tag}")
 
@@ -165,14 +167,19 @@ with mlflow.start_run():
 
     results = {}
 
-    for obj in final_predictions["object"].unique():
+    for obj in df["object"].unique():
         df_obj = final_predictions[final_predictions["object"] == obj]
-        y_true = df_obj["label"]
-        y_pred = df_obj["label_ia"]
+        true_labels = df_obj["label"]
+        true_probs = df_obj["distribution"]
+        y_true = df_obj["hard_label"].astype(str)
+        y_pred = df_obj["label_ia"].astype(str)
 
         # Choose an appropriate average method (e.g., 'micro', 'macro', or 'weighted')
         average_method = "macro"
         accuracy, precision, recall, f1 = calculate_metrics(y_true, y_pred, average_method)
+        crossentropy_loss_mean, crossentropy_loss_std = crossentropy(
+            true_labels, true_probs, y_pred
+        )
         unique_labels = sorted(set(y_true) | set(y_pred))
         cm = confusion_matrix(y_true, y_pred, labels=unique_labels)
 
@@ -197,7 +204,12 @@ with mlflow.start_run():
             f"{obj}_precision": precision,
             f"{obj}_recall": recall,
             f"{obj}_f1_score": f1,
+            f"{obj}_crossentropy_loss": crossentropy_loss_mean,
+            f"{obj}_crossentropy_loss_std": crossentropy_loss_std,
         }
+
+        mlflow.log_metric(f"{obj}_crossentropy_loss", crossentropy_loss_mean)
+        mlflow.log_metric(f"{obj}_crossentropy_loss_std", crossentropy_loss_std)
 
         if obj == "image_corrupted":
             mlflow.log_metric(f"{obj}_recall", recall)
