@@ -13,11 +13,20 @@ import vertexai
 from sklearn.metrics import confusion_matrix, recall_score
 from vertexai.preview import generative_models
 from vision_ai.base.api import VisionaiAPI
-from vision_ai.base.metrics import calculate_metrics
+from vision_ai.base.metrics import calculate_metrics, crossentropy
 from vision_ai.base.model import Model
 from vision_ai.base.pandas import explode_df
 from vision_ai.base.prompt import get_prompt_api, get_prompt_local
 from vision_ai.base.sheets import get_objects_table_from_sheets
+
+# Assert all environment variables are set
+for var in [
+    "MLFLOW_TRACKING_USERNAME",
+    "MLFLOW_TRACKING_PASSWORD",
+    "VISION_API_USERNAME",
+    "VISION_API_PASSWORD",
+]:
+    assert os.environ.get(var), f"Environment variable {var} is not set"
 
 PROJECT_ID = "rj-vision-ai"
 LOCATION = "us-central1"
@@ -161,10 +170,15 @@ def mlflow_log(
             df_obj = output[output["object"] == obj]
             y_true = df_obj["label"]
             y_pred = df_obj["label_ia"]
-
+            true_labels = df_obj["label"]
+            true_probs = df_obj["distribution"]
             # Choose an appropriate average method (e.g., 'micro', 'macro', or 'weighted')
             average_method = "macro"
             accuracy, precision, recall, f1 = calculate_metrics(y_true, y_pred, average_method)
+            crossentropy_loss_mean, crossentropy_loss_std = crossentropy(
+                true_labels, true_probs, y_pred
+            )
+
             unique_labels = sorted(set(y_true) | set(y_pred))
             cm = confusion_matrix(y_true, y_pred, labels=unique_labels)
 
@@ -183,6 +197,9 @@ def mlflow_log(
             # Save image temporarily
             temp_image_path = ARTIFACT_PATH / f"cm_{obj}.png"
             plt.savefig(temp_image_path)
+
+            mlflow.log_metric(f"{obj}_crossentropy_loss", crossentropy_loss_mean)
+            mlflow.log_metric(f"{obj}_crossentropy_loss_std", crossentropy_loss_std)
 
             if obj == "image_corrupted":
                 mlflow.log_metric(f"{obj}_recall", recall)
