@@ -354,16 +354,16 @@ if __name__ == "__main__":
     experiment_name = f"{today}-{tag}"
 
     start_time = time.time()
-    dataframe, dataframe_balance, parameters = load_data(
+    dataframe, dataframe_balance, original_parameters = load_data(
         use_mock_snapshots=False, save_mock_snapshots=True
     )
 
-    temperature = 0
+    temperature = 0.05
     while temperature <= 1.01:
         print(f"\nStart Temperature: {temperature}")
 
         parameters = {
-            "prompt_text": parameters["prompt_text"],
+            "prompt_text": original_parameters["prompt_text"],
             "google_api_model": "gemini-pro-vision",
             "max_output_tokens": 2048,
             "temperature": temperature,
@@ -378,7 +378,7 @@ if __name__ == "__main__":
             n_runs=5,
             use_mock_predictions=False,
             save_mock_predictions=False,
-            max_workers=10,
+            max_workers=50,
         )
 
         print("\nStart MLflow logging\n")
