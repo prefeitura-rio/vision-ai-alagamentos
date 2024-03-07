@@ -367,43 +367,43 @@ if __name__ == "__main__":
 
     start_time = time.time()
     dataframe, dataframe_balance, original_parameters = load_data(
-        use_mock_snapshots=True, save_mock_snapshots=True
+        use_mock_snapshots=False, save_mock_snapshots=True
     )
 
-    # temperature = 0.05
-    # while temperature <= 1.01:
-    #     print(f"\nStart Temperature: {temperature}")
+    temperature = 0
+    while temperature <= 1.01:
+        print(f"\nStart Temperature: {temperature}")
 
-    parameters = {
-        "prompt_text": original_parameters["prompt_text"],
-        "google_api_model": "gemini-pro-vision",
-        "max_output_tokens": 2048,
-        "temperature": 0.2,
-        "top_k": 32,
-        "top_p": 1,
-        "safety_settings": SAFETY_CONFIG,
-    }
+        parameters = {
+            "prompt_text": original_parameters["prompt_text"],
+            "google_api_model": "gemini-pro-vision",
+            "max_output_tokens": 2048,
+            "temperature": temperature,
+            "top_k": 32,
+            "top_p": 1,
+            "safety_settings": SAFETY_CONFIG,
+        }
 
-    runs_df, run_errors, parameters = run_experiments(
-        dataframe=dataframe,
-        parameters=parameters,
-        n_runs=5,
-        use_mock_predictions=True,
-        save_mock_predictions=True,
-        max_workers=50,
-    )
+        runs_df, run_errors, parameters = run_experiments(
+            dataframe=dataframe,
+            parameters=parameters,
+            n_runs=5,
+            use_mock_predictions=False,
+            save_mock_predictions=True,
+            max_workers=50,
+        )
 
-    print("\nStart MLflow logging\n")
+        print("\nStart MLflow logging\n")
 
-    mlflow_log(
-        experiment_name=experiment_name,
-        input=dataframe,
-        output=runs_df,
-        input_balance=dataframe_balance,
-        output_erros=run_errors,
-        parameters=parameters,
-    )
+        mlflow_log(
+            experiment_name=experiment_name,
+            input=dataframe,
+            output=runs_df,
+            input_balance=dataframe_balance,
+            output_erros=run_errors,
+            parameters=parameters,
+        )
 
-    print(f"\nRun time: {time.time() - start_time}")
+        print(f"\nRun time: {time.time() - start_time}")
 
-    # temperature += 0.05
+        temperature += 0.05
