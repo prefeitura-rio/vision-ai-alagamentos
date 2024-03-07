@@ -95,6 +95,15 @@ def load_data(use_mock_snapshots=False, save_mock_snapshots=False, use_local_pro
     dataframe_balance["percentage"] = round(
         dataframe_balance["count"] / dataframe_balance["count"].sum(), 2
     )
+    dataframe_balance["object_percentage"] = round(
+        dataframe_balance.groupby("object")["percentage"].transform("sum"), 2
+    )
+    # Calculating the percentage inside each object
+    total_counts = dataframe_balance.groupby("object")["count"].sum()
+    dataframe_balance["object_percentage"] = dataframe_balance.apply(
+        lambda row: row["count"] / total_counts[row["object"]], axis=1
+    )
+    dataframe_balance["object_percentage"] = dataframe_balance["object_percentage"].round(2)
 
     return dataframe, dataframe_balance, prompt_parameters
 
@@ -282,7 +291,12 @@ def mlflow_log(
 
 
 def run_experiments(
-    dataframe, parameters, n_runs=5, use_mock_predictions=False, save_mock_predictions=True
+    dataframe,
+    parameters,
+    n_runs=5,
+    use_mock_predictions=False,
+    save_mock_predictions=True,
+    max_workers=10,
 ):
     mock_final_predicition_path = ABSOLUTE_PATH / "mock_final_predictions.csv"
     use_mock_predictions = True
@@ -298,7 +312,7 @@ def run_experiments(
             final_predictions, final_predictions_errors, parameters = make_predictions(
                 dataframe=dataframe,
                 parameters=parameters,
-                max_workers=50,
+                max_workers=max_workers,
             )
             final_predictions.insert(0, "run", run)
             runs_df = pd.concat([runs_df, final_predictions])
@@ -335,40 +349,49 @@ def clean_labels(dataframe):
 
 
 if __name__ == "__main__":
-    tag = "test-runs"
+    tag = "temperature"
     today = pd.Timestamp.now().strftime("%Y-%m-%d")
     experiment_name = f"{today}-{tag}"
 
     start_time = time.time()
-    dataframe, dataframe_balance, parameters = load_data(use_mock_snapshots=True)
-
-    parameters = {
-        "prompt_text": parameters["prompt_text"],
-        "google_api_model": "gemini-pro-vision",
-        "max_output_tokens": 2048,
-        "temperature": 0.2,
-        "top_k": 32,
-        "top_p": 1,
-        "safety_settings": SAFETY_CONFIG,
-    }
-
-    runs_df, run_errors, parameters = run_experiments(
-        dataframe=dataframe,
-        parameters=parameters,
-        n_runs=5,
-        use_mock_predictions=True,
-        save_mock_predictions=True,
+    dataframe, dataframe_balance, parameters = load_data(
+        use_mock_snapshots=False, save_mock_snapshots=True
     )
 
-    print("\nStart MLflow logging\n")
+    temperature = 0
+    while temperature <= 1.01:
+        print(f"Start Temperature: {temperature}")
 
-    mlflow_log(
-        experiment_name=experiment_name,
-        input=dataframe,
-        output=runs_df,
-        input_balance=dataframe_balance,
-        output_erros=run_errors,
-        parameters=parameters,
-    )
+        parameters = {
+            "prompt_text": parameters["prompt_text"],
+            "google_api_model": "gemini-pro-vision",
+            "max_output_tokens": 2048,
+            "temperature": temperature,
+            "top_k": 32,
+            "top_p": 1,
+            "safety_settings": SAFETY_CONFIG,
+        }
 
-    print(f"\nRun time: {time.time() - start_time}")
+        runs_df, run_errors, parameters = run_experiments(
+            dataframe=dataframe,
+            parameters=parameters,
+            n_runs=5,
+            use_mock_predictions=False,
+            save_mock_predictions=False,
+            max_workers=10,
+        )
+
+        print("\nStart MLflow logging\n")
+
+        mlflow_log(
+            experiment_name=experiment_name,
+            input=dataframe,
+            output=runs_df,
+            input_balance=dataframe_balance,
+            output_erros=run_errors,
+            parameters=parameters,
+        )
+
+        print(f"\nRun time: {time.time() - start_time}")
+
+        temperature += 0.05
