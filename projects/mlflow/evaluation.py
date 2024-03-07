@@ -99,8 +99,7 @@ def load_data(use_mock_snapshots=False, save_mock_snapshots=False, use_local_pro
     return dataframe, dataframe_balance, prompt_parameters
 
 
-def make_predictions(dataframe, parameters, use_mock_predictions=False, max_workers=10):
-    mock_final_predicition_path = ABSOLUTE_PATH / "mock_final_predictions.csv"
+def make_predictions(dataframe, parameters, max_workers=10):
 
     model = Model()
     parameters = {
@@ -112,25 +111,17 @@ def make_predictions(dataframe, parameters, use_mock_predictions=False, max_work
         "max_output_tokens": parameters["max_output_tokens"],
         "safety_settings": SAFETY_CONFIG,
     }
-    if use_mock_predictions:
-        final_predictions = pd.read_csv(mock_final_predicition_path)
-    else:
-        final_predictions = model.predict_batch_mlflow(
-            model_input=dataframe, parameters=parameters, max_workers=max_workers
-        )
-        final_predictions.to_csv(mock_final_predicition_path, index=False)
 
-    final_predictions["hard_label"] = final_predictions["hard_label"].fillna("null")
-    final_predictions["label_ia"] = final_predictions["label_ia"].fillna("null")
-    final_predictions["label_ia"] = final_predictions["label_ia"].apply(lambda x: str(x).lower())
+    final_predictions = model.predict_batch_mlflow(
+        model_input=dataframe, parameters=parameters, max_workers=max_workers
+    )
+
     mask = (final_predictions["object"] == "image_corrupted") & (
         final_predictions["label_ia"] == "prediction_error"
     )
 
     final_predictions_errors = final_predictions[mask]
     final_predictions = final_predictions[~mask]
-
-    parameters["number_errors"] = len(final_predictions_errors["snapshot_id"].unique())
 
     return final_predictions, final_predictions_errors, parameters
 
@@ -144,25 +135,31 @@ def mlflow_log(
     parameters,
 ):
     # Set up MLflow tracking
-
-    artifact_input_path = ARTIFACT_PATH / "input.csv"
-    artifact_output_path = ARTIFACT_PATH / "output.csv"
-    artifact_output_errors_path = ARTIFACT_PATH / "output_erros.csv"
-    artifact_input_balance_path = ARTIFACT_PATH / "input_balance.csv"
-
-    input.to_csv(artifact_input_path, index=False)
-    output.to_csv(artifact_output_path, index=False)
-    output_erros.to_csv(artifact_output_errors_path, index=False)
-    input_balance.to_csv(artifact_input_balance_path, index=False)
-
     mlflow.set_tracking_uri(uri="https://mlflow.dados.rio")
     mlflow.set_experiment(experiment_name)
-
     with mlflow.start_run():
         # Log the hyperparameter
         mlflow.log_text(parameters["prompt_text"], "prompt.md")
         parameters.pop("prompt_text")
+        if len(output_erros) > 0:
+            parameters["errors"] = len(output_erros["snapshot_id"].unique())
+
+        parameters["images"] = len(output["snapshot_id"].unique())
+        parameters["safety_settings"] = json.dumps(SAFETY_CONFIG)
+
         mlflow.log_params(parameters)
+
+        artifact_input_path = ARTIFACT_PATH / "input.csv"
+        input.to_csv(artifact_input_path, index=False)
+
+        artifact_input_balance_path = ARTIFACT_PATH / "input_balance.csv"
+        input_balance.to_csv(artifact_input_balance_path, index=False)
+
+        artifact_output_path = ARTIFACT_PATH / "output.csv"
+        output.to_csv(artifact_output_path, index=False)
+
+        artifact_output_errors_path = ARTIFACT_PATH / "output_erros.csv"
+        output_erros.to_csv(artifact_output_errors_path, index=False)
 
         mlflow.log_artifact(artifact_input_path)
         mlflow.log_artifact(artifact_output_path)
@@ -170,63 +167,181 @@ def mlflow_log(
             mlflow.log_artifact(artifact_output_errors_path)
         mlflow.log_artifact(artifact_input_balance_path)
 
-        for obj in output["object"].unique():
-            df_obj = output[output["object"] == obj]
-            y_true = df_obj["hard_label"]
-            y_pred = df_obj["label_ia"]
-            true_labels = df_obj["label"]
-            true_probs = df_obj["distribution"]
-            # Choose an appropriate average method (e.g., 'micro', 'macro', or 'weighted')
-            average_method = "macro"
-            accuracy, precision, recall, f1 = calculate_metrics(y_true, y_pred, average_method)
-            crossentropy_loss_mean, crossentropy_loss_std = crossentropy(
-                true_labels, true_probs, y_pred
-            )
+        metrics_df = pd.DataFrame()
+        for run in output["run"].unique().tolist():
+            output_run = output[output["run"] == run]
+            for obj in output_run["object"].unique():
+                df_obj = output_run[output_run["object"] == obj]
+                y_true = df_obj["hard_label"]
+                y_pred = df_obj["label_ia"]
+                true_labels = df_obj["label"]
+                true_probs = df_obj["distribution"]
+                # Choose an appropriate average method (e.g., 'micro', 'macro', or 'weighted')
+                average_method = "macro"
+                accuracy, precision, recall, f1 = calculate_metrics(y_true, y_pred, average_method)
+                crossentropy_loss_mean, crossentropy_loss_std = crossentropy(
+                    true_labels, true_probs, y_pred
+                )
 
-            unique_labels = sorted(set(y_true) | set(y_pred))
-            cm = confusion_matrix(y_true, y_pred, labels=unique_labels)
+                unique_labels = sorted(set(y_true) | set(y_pred))
 
-            plt.figure(figsize=(8, 6))
-            sns.heatmap(
-                cm,
-                annot=True,
-                fmt="d",
-                cmap="Blues",
-                xticklabels=unique_labels,
-                yticklabels=unique_labels,
-            )
-            plt.ylabel("Actual")
-            plt.xlabel("Predicted")
-            plt.title(f"Confusion Matrix for {obj}")
-            # Save image temporarily
-            temp_image_path = ARTIFACT_PATH / f"cm_{obj}.png"
-            plt.savefig(temp_image_path)
-
-            mlflow.log_metric(f"{obj}_crossentropy_loss", crossentropy_loss_mean)
-            mlflow.log_metric(f"{obj}_crossentropy_loss_std", crossentropy_loss_std)
-
-            if obj == "image_corrupted":
-                mlflow.log_metric(f"{obj}_recall", recall)
-                mlflow.log_metric(f"{obj}_precision", precision)
-            elif obj == "rain":
-                mlflow.log_metric(f"{obj}_f1_score", f1)
-            elif obj in ["water_level", "road_blockade"]:
-                mlflow.log_metric(f"{obj}_recall", recall)
                 recall_per_label = recall_score(
                     y_true, y_pred, average=None, labels=unique_labels, zero_division=0
                 )
                 for i, label in enumerate(unique_labels):
-                    if label not in ["null", "free", "low"]:
-                        mlflow.log_metric(f"{obj}_{label}_recall", recall_per_label[i])
-            # mlflow.log_metrics(metrics)
-            mlflow.log_artifact(temp_image_path)
+                    metrics_df = pd.concat(
+                        [
+                            metrics_df,
+                            pd.DataFrame(
+                                [
+                                    {
+                                        "run": run,
+                                        "object": obj,
+                                        "label": label,
+                                        "accuracy": accuracy,
+                                        "precision": precision,
+                                        "recall": recall,
+                                        "f1": f1,
+                                        "crossentropy_loss_mean": crossentropy_loss_mean,
+                                        "crossentropy_loss_std": crossentropy_loss_std,
+                                        "label_recall": recall_per_label[i],
+                                    }
+                                ]
+                            ),
+                        ]
+                    )
+
+                cm = confusion_matrix(y_true, y_pred, labels=unique_labels)
+                plt.figure(figsize=(8, 6))
+                sns.heatmap(
+                    cm,
+                    annot=True,
+                    fmt="d",
+                    cmap="Blues",
+                    xticklabels=unique_labels,
+                    yticklabels=unique_labels,
+                )
+                plt.ylabel("Actual")
+                plt.xlabel("Predicted")
+                plt.title(f"Confusion Matrix for {obj}")
+                # Save image temporarily
+                temp_image_path = ARTIFACT_PATH / f"{run}_cm_{obj}.png"
+                plt.savefig(temp_image_path)
+                mlflow.log_artifact(temp_image_path)
+
+        artifact_output_metrics_path = ARTIFACT_PATH / "metrics.csv"
+        metrics_df.to_csv(artifact_output_metrics_path, index=False)
+        mlflow.log_artifact(artifact_output_metrics_path)
+
+        cols = [
+            "object",
+            "accuracy",
+            "precision",
+            "recall",
+            "f1",
+            "crossentropy_loss_mean",
+            "crossentropy_loss_std",
+        ]
+        object_metrics = metrics_df[cols].groupby("object", as_index=False).mean()
+        artifact_metrics_objects_path = ARTIFACT_PATH / "metrics_objects.csv"
+        object_metrics.to_csv(artifact_metrics_objects_path, index=False)
+        mlflow.log_artifact(artifact_metrics_objects_path)
+
+        cols = ["object", "label", "label_recall"]
+        label_metrics = metrics_df[cols].groupby(["object", "label"], as_index=False).mean()
+        artifact_metrics_labels_path = ARTIFACT_PATH / "metrics_labels.csv"
+        label_metrics.to_csv(artifact_metrics_labels_path, index=False)
+        mlflow.log_artifact(artifact_metrics_labels_path)
+
+        mask = (label_metrics["object"].isin(["road_blockade", "water_level"])) & (
+            label_metrics["label"].isin(["partially", "totally", "medium", "high"])
+        )
+        label_metrics_filtered = label_metrics[mask]
+        artifact_metrics_labels_filterd_path = ARTIFACT_PATH / "metrics_labels_filtered.csv"
+        label_metrics_filtered.to_csv(artifact_metrics_labels_filterd_path, index=False)
+        mlflow.log_artifact(artifact_metrics_labels_filterd_path)
+
+        for _, row in object_metrics.iterrows():
+            obj = row["object"]
+
+            mlflow.log_metric(f"{obj}_crossentropy_loss", row["crossentropy_loss_mean"])
+            mlflow.log_metric(f"{obj}_crossentropy_loss_std", row["crossentropy_loss_std"])
+
+            if obj == "image_corrupted":
+                mlflow.log_metric(f"{obj}_recall", row["recall"])
+                mlflow.log_metric(f"{obj}_precision", row["precision"])
+            elif obj == "rain":
+                mlflow.log_metric(f"{obj}_f1_score", row["f1"])
+            elif obj in ["water_level", "road_blockade"]:
+                mlflow.log_metric(f"{obj}_recall", row["recall"])
+                for _, label_row in label_metrics_filtered.iterrows():
+                    label = label_row["label"]
+                    mlflow.log_metric(f"{obj}_{label}_recall", label_row["label_recall"])
 
     shutil.rmtree(ARTIFACT_PATH)
 
 
+def run_experiments(
+    dataframe, parameters, n_runs=5, use_mock_predictions=False, save_mock_predictions=True
+):
+    mock_final_predicition_path = ABSOLUTE_PATH / "mock_final_predictions.csv"
+    use_mock_predictions = True
+    save_mock_predictions = True
+    runs_df = pd.DataFrame()
+    run_errors = pd.DataFrame()
+
+    if use_mock_predictions and mock_final_predicition_path.exists():
+        runs_df = pd.read_csv(mock_final_predicition_path, dtype=str)
+    else:
+        for run in range(n_runs):
+            print(f"\nStart Predictions Run: {run+1}/{n_runs}\n")
+            final_predictions, final_predictions_errors, parameters = make_predictions(
+                dataframe=dataframe,
+                parameters=parameters,
+                max_workers=50,
+            )
+            final_predictions.insert(0, "run", run)
+            runs_df = pd.concat([runs_df, final_predictions])
+
+            final_predictions_errors.insert(0, "run", run)
+            run_errors = pd.concat([run_errors, final_predictions_errors])
+
+    runs_df = clean_labels(dataframe=runs_df)
+
+    parameters["runs"] = n_runs
+
+    if save_mock_predictions:
+        runs_df.to_csv(mock_final_predicition_path, index=False)
+
+    return runs_df, run_errors, parameters
+
+
+def clean_labels(dataframe):
+    dataframe["label_ia"] = dataframe["label_ia"].astype(str)
+    replacer = ["\n", "{", "}", "[", "]"]
+    for replace in replacer:
+        dataframe["label_ia"] = dataframe["label_ia"].str.replace(replace, "")
+    dataframe["label_ia"] = dataframe["label_ia"].str.strip()
+    dataframe["label_ia"] = dataframe["label_ia"].fillna("null")
+    dataframe["label_ia"] = dataframe["label_ia"].fillna("null")
+    dataframe["label_ia"] = dataframe["label_ia"].apply(lambda x: str(x).lower())
+    dataframe["label_ia"] = dataframe["label_ia"].str.replace("nan", "null")
+
+    dataframe["hard_label"] = dataframe["hard_label"].fillna("null")
+    dataframe["hard_label"] = dataframe["hard_label"].apply(lambda x: str(x).lower())
+    dataframe["hard_label"] = dataframe["hard_label"].str.replace("nan", "null")
+
+    return dataframe
+
+
 if __name__ == "__main__":
+    tag = "test-runs"
+    today = pd.Timestamp.now().strftime("%Y-%m-%d")
+    experiment_name = f"{today}-{tag}"
+
     start_time = time.time()
-    dataframe, dataframe_balance, parameters = load_data(save_mock_snapshots=True)
+    dataframe, dataframe_balance, parameters = load_data(use_mock_snapshots=True)
+
     parameters = {
         "prompt_text": parameters["prompt_text"],
         "google_api_model": "gemini-pro-vision",
@@ -237,21 +352,23 @@ if __name__ == "__main__":
         "safety_settings": SAFETY_CONFIG,
     }
 
-    print("\nStart Predictions\n")
-    final_predictions, final_predictions_errors, parameters = make_predictions(
-        dataframe=dataframe, parameters=parameters, use_mock_predictions=False, max_workers=50
+    runs_df, run_errors, parameters = run_experiments(
+        dataframe=dataframe,
+        parameters=parameters,
+        n_runs=5,
+        use_mock_predictions=True,
+        save_mock_predictions=True,
     )
-    tag = "temperature-stability"
-    today = pd.Timestamp.now().strftime("%Y-%m-%d")
-    experiment_name = f"{today}-{tag}"
 
     print("\nStart MLflow logging\n")
+
     mlflow_log(
         experiment_name=experiment_name,
         input=dataframe,
-        output=final_predictions,
+        output=runs_df,
         input_balance=dataframe_balance,
-        output_erros=final_predictions_errors,
+        output_erros=run_errors,
         parameters=parameters,
     )
+
     print(f"\nRun time: {time.time() - start_time}")
