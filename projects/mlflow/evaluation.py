@@ -42,7 +42,6 @@ SAFETY_CONFIG = {
 
 ABSOLUTE_PATH = Path(__file__).parent.absolute()
 ARTIFACT_PATH = Path("/tmp/ml_flow_artifacts")
-ARTIFACT_PATH.mkdir(exist_ok=True, parents=True)
 
 
 def load_data(use_mock_snapshots=False, save_mock_snapshots=False, use_local_prompt=False):
@@ -184,6 +183,7 @@ def mlflow_log(
     parameters,
 ):
     # Set up MLflow tracking
+    ARTIFACT_PATH.mkdir(exist_ok=True, parents=True)
     mlflow.set_tracking_uri(uri="https://mlflow.dados.rio")
     mlflow.set_experiment(experiment_name)
     with mlflow.start_run():
@@ -370,7 +370,7 @@ if __name__ == "__main__":
         use_mock_snapshots=False, save_mock_snapshots=True
     )
 
-    temperature = 0
+    temperature = 0.05
     while temperature <= 1.01:
         print(f"\nStart Temperature: {temperature}")
 
