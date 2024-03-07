@@ -299,8 +299,6 @@ def run_experiments(
     max_workers=10,
 ):
     mock_final_predicition_path = ABSOLUTE_PATH / "mock_final_predictions.csv"
-    use_mock_predictions = True
-    save_mock_predictions = True
     runs_df = pd.DataFrame()
     run_errors = pd.DataFrame()
 
@@ -360,7 +358,7 @@ if __name__ == "__main__":
 
     temperature = 0
     while temperature <= 1.01:
-        print(f"Start Temperature: {temperature}")
+        print(f"\nStart Temperature: {temperature}")
 
         parameters = {
             "prompt_text": parameters["prompt_text"],
