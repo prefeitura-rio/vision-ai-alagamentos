@@ -108,7 +108,7 @@ def load_data(use_mock_snapshots=False, save_mock_snapshots=False, use_local_pro
     return dataframe, dataframe_balance, prompt_parameters
 
 
-def make_predictions(dataframe, parameters, max_workers=10):
+def make_predictions(dataframe, parameters, max_workers=10, retry=5):
 
     model = Model()
     parameters = {
@@ -122,7 +122,7 @@ def make_predictions(dataframe, parameters, max_workers=10):
     }
 
     final_predictions = model.predict_batch_mlflow(
-        model_input=dataframe, parameters=parameters, max_workers=max_workers
+        model_input=dataframe, parameters=parameters, max_workers=max_workers, retry=retry
     )
 
     mask = (final_predictions["object"] == "image_corrupted") & (
@@ -133,6 +133,46 @@ def make_predictions(dataframe, parameters, max_workers=10):
     final_predictions = final_predictions[~mask]
 
     return final_predictions, final_predictions_errors, parameters
+
+
+def run_experiments(
+    dataframe,
+    parameters,
+    n_runs=5,
+    use_mock_predictions=False,
+    save_mock_predictions=True,
+    max_workers=10,
+    retry=5,
+):
+    mock_final_predicition_path = ABSOLUTE_PATH / "mock_final_predictions.csv"
+    runs_df = pd.DataFrame()
+    run_errors = pd.DataFrame()
+
+    if use_mock_predictions and mock_final_predicition_path.exists():
+        runs_df = pd.read_csv(mock_final_predicition_path, dtype=str)
+    else:
+        for run in range(n_runs):
+            print(f"\nStart Predictions Run: {run+1}/{n_runs}\n")
+            final_predictions, final_predictions_errors, parameters = make_predictions(
+                dataframe=dataframe,
+                parameters=parameters,
+                max_workers=max_workers,
+                retry=retry,
+            )
+            final_predictions.insert(0, "run", run)
+            runs_df = pd.concat([runs_df, final_predictions])
+
+            final_predictions_errors.insert(0, "run", run)
+            run_errors = pd.concat([run_errors, final_predictions_errors])
+
+    runs_df = clean_labels(dataframe=runs_df)
+
+    parameters["runs"] = n_runs
+
+    if save_mock_predictions:
+        runs_df.to_csv(mock_final_predicition_path, index=False)
+
+    return runs_df, run_errors, parameters
 
 
 def mlflow_log(
@@ -288,44 +328,6 @@ def mlflow_log(
                     mlflow.log_metric(f"{obj}_{label}_recall", label_row["label_recall"])
 
     shutil.rmtree(ARTIFACT_PATH)
-
-
-def run_experiments(
-    dataframe,
-    parameters,
-    n_runs=5,
-    use_mock_predictions=False,
-    save_mock_predictions=True,
-    max_workers=10,
-):
-    mock_final_predicition_path = ABSOLUTE_PATH / "mock_final_predictions.csv"
-    runs_df = pd.DataFrame()
-    run_errors = pd.DataFrame()
-
-    if use_mock_predictions and mock_final_predicition_path.exists():
-        runs_df = pd.read_csv(mock_final_predicition_path, dtype=str)
-    else:
-        for run in range(n_runs):
-            print(f"\nStart Predictions Run: {run+1}/{n_runs}\n")
-            final_predictions, final_predictions_errors, parameters = make_predictions(
-                dataframe=dataframe,
-                parameters=parameters,
-                max_workers=max_workers,
-            )
-            final_predictions.insert(0, "run", run)
-            runs_df = pd.concat([runs_df, final_predictions])
-
-            final_predictions_errors.insert(0, "run", run)
-            run_errors = pd.concat([run_errors, final_predictions_errors])
-
-    runs_df = clean_labels(dataframe=runs_df)
-
-    parameters["runs"] = n_runs
-
-    if save_mock_predictions:
-        runs_df.to_csv(mock_final_predicition_path, index=False)
-
-    return runs_df, run_errors, parameters
 
 
 def clean_labels(dataframe):
