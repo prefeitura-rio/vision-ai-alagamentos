@@ -81,7 +81,9 @@ class Model:
                 )
             )
 
-    def predict_batch_mlflow(self, model_input=None, parameters=None, retry=5, max_workers=10):
+    def predict_batch_mlflow(
+        self, model_input=None, parameters=None, retry=5, max_workers=10
+    ):
         def process_url(snapshot_url, index, total, retry, output_parser):
             start_time = time.time()
             snapshot_df = model_input[model_input["snapshot_url"] == snapshot_url]
@@ -111,9 +113,7 @@ class Model:
                     error = str(traceback.format_exc(chain=False))
 
                     error_str = f"{error_name}: {error}"
-                    print(
-                        f"Retrying {index}/{total}, retries left {retry -i -1}, Error: {error_str}"
-                    )
+                    print(f"Retrying {index}/{total}, retries left {retry -i -1}")
 
             prediction_error = snapshot_df.merge(
                 pd.DataFrame(
@@ -140,7 +140,9 @@ class Model:
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = [
-                executor.submit(process_url, url, i + 1, total_images, retry, output_parser)
+                executor.submit(
+                    process_url, url, i + 1, total_images, retry, output_parser
+                )
                 for i, url in enumerate(snapshot_urls)
             ]
             results = [future.result() for future in as_completed(futures)]
@@ -169,7 +171,12 @@ class Model:
 
         # Probability of grey image
         grey_image_prob = (
-            min(max((10 - np.max(np.abs(means - np.mean(means)))) / np.mean(std_devs), 0), 1)
+            min(
+                max(
+                    (10 - np.max(np.abs(means - np.mean(means)))) / np.mean(std_devs), 0
+                ),
+                1,
+            )
             if np.mean(std_devs) != 0
             else 0
         )
