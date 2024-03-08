@@ -65,3 +65,5 @@ jobs:
           region: ${{ env.GCR_REGION }}
           image: docker.io/${{ env.DOCKERHUB_USERNAME }}/${{ env.DOCKERHUB_REPOSITORY }}:${{ github.sha }}
           flags: '--port=3000 --allow-unauthenticated --concurrency=100 --verbosity=debug --session-affinity'
+          secrets: |
+            NEXT_PUBLIC_API_URL=VISION_AI_API_URL:latest
