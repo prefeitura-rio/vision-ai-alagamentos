@@ -3,7 +3,6 @@ import json
 import os
 import shutil
 import time
-from os import getenv
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -32,7 +31,7 @@ for var in [
 PROJECT_ID = "rj-vision-ai"
 LOCATION = "us-central1"
 vertexai.init(project=PROJECT_ID, location=LOCATION)
-SHEETS_URL = getenv("SHEETS_URL")
+# SHEETS_URL = getenv("SHEETS_URL")
 SAFETY_CONFIG = {
     generative_models.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: generative_models.HarmBlockThreshold.BLOCK_NONE,
     generative_models.HarmCategory.HARM_CATEGORY_HARASSMENT: generative_models.HarmBlockThreshold.BLOCK_NONE,
@@ -44,7 +43,12 @@ ABSOLUTE_PATH = Path(__file__).parent.absolute()
 ARTIFACT_PATH = Path("/tmp/ml_flow_artifacts")
 
 
-def load_data(use_mock_snapshots=False, save_mock_snapshots=False, use_local_prompt=False):
+def load_data(
+    use_mock_snapshots=False,
+    save_mock_snapshots=False,
+    use_local_prompt=False,
+    object_sheet_url="https://docs.google.com/spreadsheets/d/122uOaPr8YdW5PTzrxSPF-FD0tgco596HqgB7WK7cHFw/edit#gid=1672006844",
+):
     mock_snapshot_data_path = ABSOLUTE_PATH / "mock_snapshots_api_data.json"
 
     vision_api = VisionaiAPI(
@@ -61,8 +65,8 @@ def load_data(use_mock_snapshots=False, save_mock_snapshots=False, use_local_pro
         # LOCAL PROMPT + OBJECTS TABLE FROM SHEETS
         with open(ABSOLUTE_PATH / "prompt.md") as f:
             prompt_text_local = f.read()
-        if SHEETS_URL:
-            objects_table_md, _ = get_objects_table_from_sheets(url=SHEETS_URL)
+        if object_sheet_url:
+            objects_table_md, _ = get_objects_table_from_sheets(url=object_sheet_url)
         else:
             objects_table_md, _ = get_objects_table_from_sheets()
         prompt, _ = get_prompt_local(
@@ -195,7 +199,6 @@ def mlflow_log(
 
         parameters["images"] = len(output["snapshot_id"].unique())
         parameters["safety_settings"] = json.dumps(SAFETY_CONFIG)
-
         mlflow.log_params(parameters)
 
         artifact_input_path = ARTIFACT_PATH / "input.csv"
@@ -361,26 +364,35 @@ def clean_labels(dataframe):
 
 
 if __name__ == "__main__":
-    tag = "temperature"
+    tag = "water-level"
     today = pd.Timestamp.now().strftime("%Y-%m-%d")
     experiment_name = f"{today}-{tag}"
-
+    sheets_urls = {
+        "base": "https://docs.google.com/spreadsheets/d/122uOaPr8YdW5PTzrxSPF-FD0tgco596HqgB7WK7cHFw/edit#gid=1672006844",
+        "vehicle": "https://docs.google.com/spreadsheets/d/122uOaPr8YdW5PTzrxSPF-FD0tgco596HqgB7WK7cHFw/edit#gid=55110964",
+        "vehicle_diff": "https://docs.google.com/spreadsheets/d/122uOaPr8YdW5PTzrxSPF-FD0tgco596HqgB7WK7cHFw/edit#gid=1337396877",
+        "pedestrian": "https://docs.google.com/spreadsheets/d/122uOaPr8YdW5PTzrxSPF-FD0tgco596HqgB7WK7cHFw/edit#gid=1432557618",
+        "sidewalk": "https://docs.google.com/spreadsheets/d/122uOaPr8YdW5PTzrxSPF-FD0tgco596HqgB7WK7cHFw/edit#gid=912988762",
+        "water_depth": "https://docs.google.com/spreadsheets/d/122uOaPr8YdW5PTzrxSPF-FD0tgco596HqgB7WK7cHFw/edit#gid=981358768",
+        "vehicle_wheel": "https://docs.google.com/spreadsheets/d/122uOaPr8YdW5PTzrxSPF-FD0tgco596HqgB7WK7cHFw/edit#gid=1657724821",
+    }
     start_time = time.time()
-    dataframe, dataframe_balance, original_parameters = load_data(
-        use_mock_snapshots=False, save_mock_snapshots=True
-    )
-
-    temperature = 0.05
-    while temperature <= 1.01:
-        print(f"\nStart Temperature: {temperature}")
+    for key, value in sheets_urls.items():
+        print(f"Start prompt {key}")
+        dataframe, dataframe_balance, original_parameters = load_data(
+            use_mock_snapshots=True,
+            save_mock_snapshots=True,
+            use_local_prompt=True,
+            object_sheet_url=value,
+        )
 
         parameters = {
             "prompt_text": original_parameters["prompt_text"],
             "google_api_model": "gemini-pro-vision",
             "max_output_tokens": 2048,
-            "temperature": temperature,
-            "top_k": 32,
-            "top_p": 1,
+            "temperature": 0.15,  # 0-1
+            "top_k": 32,  # 1-40
+            "top_p": 1,  # 0-1
             "safety_settings": SAFETY_CONFIG,
         }
 
@@ -390,10 +402,12 @@ if __name__ == "__main__":
             n_runs=5,
             use_mock_predictions=False,
             save_mock_predictions=True,
-            max_workers=50,
+            max_workers=75,
         )
 
         print("\nStart MLflow logging\n")
+
+        parameters["prompt_name"] = key
 
         mlflow_log(
             experiment_name=experiment_name,
@@ -405,5 +419,3 @@ if __name__ == "__main__":
         )
 
         print(f"\nRun time: {time.time() - start_time}")
-
-        temperature += 0.05
