@@ -158,13 +158,37 @@ if not all(x is None for x in cameras_identifications):
             .reset_index(name="count")
         )
         st.dataframe(labels_count)
+
+    with st.expander("Exibir Imagens Críticas"):
+        # Create columns outside the loop
+        _col1, _col2 = st.columns(2)
+
+        # Loop through the DataFrame rows
+        for i, (index, row) in enumerate(cameras_identifications_filter.iterrows()):
+            # Choosing the column based on the row number
+            column = _col1 if i % 2 == 0 else _col2
+
+            with column:
+                if str(row["label"]) not in ["null", "free", "low"]:
+                    st.markdown(
+                        f"### Camera ID: {str(row['id'])}"
+                    )  # Ensure to convert to string if needed
+                    st.markdown(
+                        f"{str(row['object'])}: {str(row['label'])}"
+                    )  # Ensure to convert to string if needed
+
+                    st.markdown(
+                        f"<a href='{row['snapshot_url']}' target='_blank'><img src='{row['snapshot_url']}' style='max-width: 100%; max-height: 371px;'></a>",  # noqa
+                        unsafe_allow_html=True,
+                    )
+                    st.markdown("----")
+
 else:
     st.error(
         """
         Ops, parece que não há dados disponíveis, tente atualizar a página.
 
         Se o problema persistir, entre em contato com o administrador.
-
 
         """
     )

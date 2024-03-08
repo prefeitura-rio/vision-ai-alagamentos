@@ -14,10 +14,15 @@ from vision_ai.base.shared_models import GenerationResponseProblem, get_parser
 
 
 class Model:
+    def test(self):
+        model = GenerativeModel("gemini-pro")
+        responses = model.generate_content(contents=["Tell me a joke about dogs"])
+        print(responses)
+
     def llm_vertexai(
         self,
         image_url: str,
-        prompt: str,
+        prompt_text: str,
         google_api_model: str,
         max_output_tokens: int,
         temperature: float,
@@ -28,11 +33,14 @@ class Model:
 
         image_response = requests.get(image_url)
         image_problem = self.analyze_image_problems(image_response)
-
+        image_format = image_url.split(".")[-1]
         if image_problem == "ok":
             model = GenerativeModel(google_api_model)
             responses = model.generate_content(
-                contents=[prompt, Part.from_data(image_response.content, "image/png")],
+                contents=[
+                    prompt_text,
+                    Part.from_data(image_response.content, f"image/{image_format}"),
+                ],
                 generation_config={
                     "max_output_tokens": max_output_tokens,
                     "temperature": temperature,
@@ -79,8 +87,18 @@ class Model:
             snapshot_df = model_input[model_input["snapshot_url"] == snapshot_url]
             for i in range(retry):
                 try:
-                    response = self.llm_vertexai(image_url=snapshot_url, **parameters).text
+                    response = self.llm_vertexai(
+                        image_url=snapshot_url,
+                        prompt_text=parameters["prompt_text"],
+                        google_api_model=parameters["google_api_model"],
+                        max_output_tokens=parameters["max_output_tokens"],
+                        temperature=parameters["temperature"],
+                        top_k=parameters["top_k"],
+                        top_p=parameters["top_p"],
+                        safety_settings=parameters["safety_settings"],
+                    ).text
                     ai_response_parsed = output_parser.parse(response).dict()
+
                     prediction = pd.DataFrame(ai_response_parsed["objects"])[
                         ["object", "label", "label_explanation"]
                     ].rename(columns={"label": "label_ia"})
@@ -93,9 +111,7 @@ class Model:
                     error = str(traceback.format_exc(chain=False))
 
                     error_str = f"{error_name}: {error}"
-                    print(
-                        f"Retrying {index}/{total}, retries left {retry -i -1}, Error: {error_str}"
-                    )
+                    print(f"Retrying {index}/{total}, retries left {retry -i -1}")
 
             prediction_error = snapshot_df.merge(
                 pd.DataFrame(
@@ -151,7 +167,10 @@ class Model:
 
         # Probability of grey image
         grey_image_prob = (
-            min(max((10 - np.max(np.abs(means - np.mean(means)))) / np.mean(std_devs), 0), 1)
+            min(
+                max((10 - np.max(np.abs(means - np.mean(means)))) / np.mean(std_devs), 0),
+                1,
+            )
             if np.mean(std_devs) != 0
             else 0
         )
