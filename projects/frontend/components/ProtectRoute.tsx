@@ -26,8 +26,10 @@ const ProtectRoute = <P extends object>(Component: ComponentType<P>) => {
   };
 
   // If the component has getInitialProps, we need to copy it to the ProtectedComponent
-  if (Component.getInitialProps) {
-    ProtectedComponent.getInitialProps = Component.getInitialProps;
+  if ((Component as any).getInitialProps) {
+    (ProtectedComponent as any).getInitialProps = (
+      Component as any
+    ).getInitialProps;
   }
 
   return ProtectedComponent; // This should be the returned value of the ProtectRoute function

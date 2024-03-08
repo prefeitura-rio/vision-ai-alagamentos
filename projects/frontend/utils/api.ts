@@ -8,6 +8,7 @@ interface ExtendedAxiosInstance extends AxiosInstance {
   get_all_pages: (path: string, pageSize: number) => Promise<any[]>;
 }
 
+// @ts-ignore
 const api: ExtendedAxiosInstance = axios.create({
   baseURL: config.apiUrl, // Set your API base URL here
 });
