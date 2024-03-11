@@ -88,7 +88,7 @@ def predict(cloud_event: dict) -> None:
         table_id=TABLE_ID,
         bq_data_json=bq_data,
         image_url=data["image_url"],
-        prompt=data["prompt_text"],
+        prompt_text=data["prompt_text"],
         google_api_model=data["model"],
         max_output_tokens=data["max_output_tokens"],
         temperature=data["temperature"],
