@@ -10,7 +10,7 @@ from vision_ai.base.shared_models import Output
 def get_prediction(
     bq_data_json: dict,
     image_url: str,
-    prompt: str,
+    prompt_text: str,
     google_api_model: str,
     max_output_tokens: int,
     temperature: float,
@@ -25,7 +25,7 @@ def get_prediction(
         model = Model()
         responses = model.llm_vertexai(
             image_url=image_url,
-            prompt=prompt,
+            prompt_text=prompt_text,
             google_api_model=google_api_model,
             max_output_tokens=max_output_tokens,
             temperature=temperature,

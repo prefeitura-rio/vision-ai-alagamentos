@@ -47,7 +47,7 @@ def load_data(
     use_mock_snapshots=False,
     save_mock_snapshots=False,
     use_local_prompt=False,
-    object_sheet_url="https://docs.google.com/spreadsheets/d/122uOaPr8YdW5PTzrxSPF-FD0tgco596HqgB7WK7cHFw/edit#gid=1672006844",
+    object_sheet_url=None,
 ):
     mock_snapshot_data_path = ABSOLUTE_PATH / "mock_snapshots_api_data.json"
 
@@ -65,10 +65,11 @@ def load_data(
         # LOCAL PROMPT + OBJECTS TABLE FROM SHEETS
         with open(ABSOLUTE_PATH / "prompt.md") as f:
             prompt_text_local = f.read()
-        if object_sheet_url:
-            objects_table_md, _ = get_objects_table_from_sheets(url=object_sheet_url)
-        else:
-            objects_table_md, _ = get_objects_table_from_sheets()
+    else:
+        prompt_text_local = prompt_parameters["prompt_text"]
+
+    if object_sheet_url:
+        objects_table_md, _ = get_objects_table_from_sheets(url=object_sheet_url)
         prompt, _ = get_prompt_local(
             prompt_parameters=None,
             prompt_template=prompt_text_local,
@@ -277,7 +278,7 @@ def mlflow_log(
                 plt.xlabel("Predicted")
                 plt.title(f"Confusion Matrix for {obj}")
                 # Save image temporarily
-                temp_image_path = ARTIFACT_PATH / f"{run}_cm_{obj}.png"
+                temp_image_path = ARTIFACT_PATH / f"cm_{obj}_{run}.png"
                 plt.savefig(temp_image_path)
                 mlflow.log_artifact(temp_image_path)
 
@@ -364,15 +365,15 @@ def clean_labels(dataframe):
 
 
 if __name__ == "__main__":
-    tag = "water-level"
+    tag = "water-level-fix"
     today = pd.Timestamp.now().strftime("%Y-%m-%d")
     experiment_name = f"{today}-{tag}"
     sheets_urls = {
-        "base": "https://docs.google.com/spreadsheets/d/122uOaPr8YdW5PTzrxSPF-FD0tgco596HqgB7WK7cHFw/edit#gid=1672006844",
-        "vehicle": "https://docs.google.com/spreadsheets/d/122uOaPr8YdW5PTzrxSPF-FD0tgco596HqgB7WK7cHFw/edit#gid=55110964",
-        "vehicle_diff": "https://docs.google.com/spreadsheets/d/122uOaPr8YdW5PTzrxSPF-FD0tgco596HqgB7WK7cHFw/edit#gid=1337396877",
-        "pedestrian": "https://docs.google.com/spreadsheets/d/122uOaPr8YdW5PTzrxSPF-FD0tgco596HqgB7WK7cHFw/edit#gid=1432557618",
-        "sidewalk": "https://docs.google.com/spreadsheets/d/122uOaPr8YdW5PTzrxSPF-FD0tgco596HqgB7WK7cHFw/edit#gid=912988762",
+        # "base": "https://docs.google.com/spreadsheets/d/122uOaPr8YdW5PTzrxSPF-FD0tgco596HqgB7WK7cHFw/edit#gid=1672006844",
+        # "vehicle": "https://docs.google.com/spreadsheets/d/122uOaPr8YdW5PTzrxSPF-FD0tgco596HqgB7WK7cHFw/edit#gid=55110964",
+        # "vehicle_diff": "https://docs.google.com/spreadsheets/d/122uOaPr8YdW5PTzrxSPF-FD0tgco596HqgB7WK7cHFw/edit#gid=1337396877",
+        # "pedestrian": "https://docs.google.com/spreadsheets/d/122uOaPr8YdW5PTzrxSPF-FD0tgco596HqgB7WK7cHFw/edit#gid=1432557618",
+        # "sidewalk": "https://docs.google.com/spreadsheets/d/122uOaPr8YdW5PTzrxSPF-FD0tgco596HqgB7WK7cHFw/edit#gid=912988762",
         "water_depth": "https://docs.google.com/spreadsheets/d/122uOaPr8YdW5PTzrxSPF-FD0tgco596HqgB7WK7cHFw/edit#gid=981358768",
         "vehicle_wheel": "https://docs.google.com/spreadsheets/d/122uOaPr8YdW5PTzrxSPF-FD0tgco596HqgB7WK7cHFw/edit#gid=1657724821",
     }
@@ -382,17 +383,17 @@ if __name__ == "__main__":
         dataframe, dataframe_balance, original_parameters = load_data(
             use_mock_snapshots=True,
             save_mock_snapshots=True,
-            use_local_prompt=True,
+            use_local_prompt=False,
             object_sheet_url=value,
         )
-
+        print("\n\n\n", original_parameters["prompt_text"], "\n\n\n")
         parameters = {
             "prompt_text": original_parameters["prompt_text"],
             "google_api_model": "gemini-pro-vision",
             "max_output_tokens": 2048,
             "temperature": 0.15,  # 0-1
-            "top_k": 32,  # 1-40
-            "top_p": 1,  # 0-1
+            "top_k": 10,  # 1-40
+            "top_p": 0.9,  # 0-1
             "safety_settings": SAFETY_CONFIG,
         }
 
