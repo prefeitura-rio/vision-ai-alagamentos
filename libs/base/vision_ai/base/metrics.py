@@ -15,8 +15,12 @@ def calculate_metrics(y_true, y_pred, average):
     y_pred_filtered = y_pred[valid_indices]
 
     accuracy = accuracy_score(y_true_filtered, y_pred_filtered)
-    precision = precision_score(y_true_filtered, y_pred_filtered, average=average, zero_division=0)
-    recall = recall_score(y_true_filtered, y_pred_filtered, average=average, zero_division=0)
+    precision = precision_score(
+        y_true_filtered, y_pred_filtered, average=average, zero_division=0
+    )
+    recall = recall_score(
+        y_true_filtered, y_pred_filtered, average=average, zero_division=0
+    )
     f1 = f1_score(y_true_filtered, y_pred_filtered, average=average, zero_division=0)
 
     return accuracy, precision, recall, f1
@@ -29,16 +33,24 @@ def water_level_custon_metric(y_true, y_pred):
     pred_low = y_pred == "low"
 
     # Calculate M_high
-    M_high = (pred_low & true_high).sum() / true_high.sum() if true_high.sum() > 0 else 0
+    M_high = (
+        (pred_low & true_high).sum() / true_high.sum() if true_high.sum() > 0 else 0
+    )
 
     # Calculate M_medium
-    M_medium = (pred_low & true_medium).sum() / true_medium.sum() if true_medium.sum() > 0 else 0
+    M_medium = (
+        (pred_low & true_medium).sum() / true_medium.sum()
+        if true_medium.sum() > 0
+        else 0
+    )
 
     return M_high, M_medium
 
 
 def crossentropy(
-    true_labels_series: pd.Series, true_probs_series: pd.Series, y_pred_series: pd.Series
+    true_labels_series: pd.Series,
+    true_probs_series: pd.Series,
+    y_pred_series: pd.Series,
 ) -> float:
     """
     Calculate the cross-entropy loss between true and predicted label.
@@ -59,6 +71,10 @@ def crossentropy(
         true_probs = np.array(true_probs)
         pred_probs = np.zeros(len(true_probs))
         pred_probs[true_labels.index(str(y_pred))] = 1
+        # Switch variables
+        a = true_probs
+        true_probs = pred_probs
+        pred_probs = a
         crossentropies.append(
             -np.sum(
                 true_probs * np.log(pred_probs + EPSILON)
