@@ -13,7 +13,11 @@ import vertexai
 from sklearn.metrics import confusion_matrix, recall_score
 from vertexai.preview import generative_models
 from vision_ai.base.api import VisionaiAPI
-from vision_ai.base.metrics import calculate_metrics, crossentropy
+from vision_ai.base.metrics import (
+    calculate_metrics,
+    crossentropy,
+    water_level_custon_metric,
+)
 from vision_ai.base.model import Model
 from vision_ai.base.pandas import handle_snapshots_df
 from vision_ai.base.prompt import get_prompt_api, get_prompt_local
@@ -235,6 +239,7 @@ def mlflow_log(
                 crossentropy_loss_mean, crossentropy_loss_std = crossentropy(
                     true_labels, true_probs, y_pred
                 )
+                M_high, M_medium = water_level_custon_metric(y_true=y_true, y_pred=y_pred)
 
                 unique_labels = sorted(set(y_true) | set(y_pred))
 
@@ -258,6 +263,8 @@ def mlflow_log(
                                         "crossentropy_loss_mean": crossentropy_loss_mean,
                                         "crossentropy_loss_std": crossentropy_loss_std,
                                         "label_recall": recall_per_label[i],
+                                        "M_high": M_high if obj == "water_level" else 0,
+                                        "M_medium": M_medium if obj == "water_level" else 0,
                                     }
                                 ]
                             ),
@@ -294,6 +301,8 @@ def mlflow_log(
             "f1",
             "crossentropy_loss_mean",
             "crossentropy_loss_std",
+            "M_high",
+            "M_medium",
         ]
         object_metrics = metrics_df[cols].groupby("object", as_index=False).mean()
         artifact_metrics_objects_path = ARTIFACT_PATH / "metrics_objects.csv"
@@ -330,6 +339,9 @@ def mlflow_log(
                 mlflow.log_metric(f"{obj}_recall", row["recall"])
                 mlflow.log_metric(f"{obj}_crossentropy_loss", row["crossentropy_loss_mean"])
                 mlflow.log_metric(f"{obj}_crossentropy_loss_std", row["crossentropy_loss_std"])
+                mlflow.log_metric(f"{obj}_M_high", row["M_high"])
+                mlflow.log_metric(f"{obj}_M_medium", row["M_medium"])
+
                 for _, label_row in label_metrics_filtered.iterrows():
                     label = label_row["label"]
                     if label in ["medium", "high"]:
@@ -365,17 +377,17 @@ def clean_labels(dataframe):
 
 
 if __name__ == "__main__":
-    tag = "water-level-fix"
+    tag = "water-level"
     today = pd.Timestamp.now().strftime("%Y-%m-%d")
     experiment_name = f"{today}-{tag}"
     sheets_urls = {
-        # "base": "https://docs.google.com/spreadsheets/d/122uOaPr8YdW5PTzrxSPF-FD0tgco596HqgB7WK7cHFw/edit#gid=1672006844",
+        "base": "https://docs.google.com/spreadsheets/d/122uOaPr8YdW5PTzrxSPF-FD0tgco596HqgB7WK7cHFw/edit#gid=1672006844",
         # "vehicle": "https://docs.google.com/spreadsheets/d/122uOaPr8YdW5PTzrxSPF-FD0tgco596HqgB7WK7cHFw/edit#gid=55110964",
         # "vehicle_diff": "https://docs.google.com/spreadsheets/d/122uOaPr8YdW5PTzrxSPF-FD0tgco596HqgB7WK7cHFw/edit#gid=1337396877",
         # "pedestrian": "https://docs.google.com/spreadsheets/d/122uOaPr8YdW5PTzrxSPF-FD0tgco596HqgB7WK7cHFw/edit#gid=1432557618",
         # "sidewalk": "https://docs.google.com/spreadsheets/d/122uOaPr8YdW5PTzrxSPF-FD0tgco596HqgB7WK7cHFw/edit#gid=912988762",
-        "water_depth": "https://docs.google.com/spreadsheets/d/122uOaPr8YdW5PTzrxSPF-FD0tgco596HqgB7WK7cHFw/edit#gid=981358768",
-        "vehicle_wheel": "https://docs.google.com/spreadsheets/d/122uOaPr8YdW5PTzrxSPF-FD0tgco596HqgB7WK7cHFw/edit#gid=1657724821",
+        # "water_depth": "https://docs.google.com/spreadsheets/d/122uOaPr8YdW5PTzrxSPF-FD0tgco596HqgB7WK7cHFw/edit#gid=981358768",
+        # "vehicle_wheel": "https://docs.google.com/spreadsheets/d/122uOaPr8YdW5PTzrxSPF-FD0tgco596HqgB7WK7cHFw/edit#gid=1657724821",
     }
     start_time = time.time()
     for key, value in sheets_urls.items():
@@ -386,7 +398,6 @@ if __name__ == "__main__":
             use_local_prompt=False,
             object_sheet_url=value,
         )
-        print("\n\n\n", original_parameters["prompt_text"], "\n\n\n")
         parameters = {
             "prompt_text": original_parameters["prompt_text"],
             "google_api_model": "gemini-pro-vision",
@@ -401,7 +412,7 @@ if __name__ == "__main__":
             dataframe=dataframe,
             parameters=parameters,
             n_runs=5,
-            use_mock_predictions=False,
+            use_mock_predictions=True,
             save_mock_predictions=True,
             max_workers=75,
         )
