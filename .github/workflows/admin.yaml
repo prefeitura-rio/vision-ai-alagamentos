@@ -37,9 +37,15 @@ jobs:
           username: ${{ env.DOCKERHUB_USERNAME }}
           password: ${{ env.DOCKERHUB_TOKEN }}
 
-      - name: Write .env.production file containing the API URL
+      - name: Write .env.production file containing the API URL (Production)
+        if: github.ref == 'refs/heads/main'
         run: |
-          echo "VITE_VISION_AI_API_URL=https://${{ github.ref == 'refs/heads/main' && '' || 'staging-' }}api.vision-ai.dados.rio" > ./projects/admin/.env.production
+          echo "VITE_VISION_AI_API_URL=https://api.vision-ai.dados.rio" > ./projects/admin/.env.production
+
+      - name: Write .env.staging file containing the API URL (Staging)
+        if: github.ref == 'refs/heads/development'
+        run: |
+          echo "VITE_VISION_AI_API_URL=https://staging-api.vision-ai.dados.rio" > ./projects/admin/.env.staging
 
       - name: Build and push image
         uses: docker/build-push-action@v2
