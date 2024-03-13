@@ -5,12 +5,13 @@ from typing import Union
 
 import folium
 import pandas as pd
-import streamlit as st
 from st_aggrid import GridOptionsBuilder  # noqa
 from st_aggrid import GridUpdateMode  # noqa
 from st_aggrid import AgGrid, ColumnsAutoSizeMode
 from vision_ai.base.api import VisionaiAPI
 from vision_ai.base.pandas import explode_df
+
+import streamlit as st
 
 STREAMLIT_PATH = Path(__file__).parent.parent.parent.absolute()
 CACHE_MINUTES = 5
@@ -193,7 +194,7 @@ def treat_data(response):
     cameras_identifications_explode = explode_df(cameras_attr, "identifications")  # noqa
 
     cameras_identifications_explode = cameras_identifications_explode.rename(
-        columns={"id": "object_id"}
+        columns={"id": "identification_id"}
     ).rename(columns={"camera_id": "id"})
     cameras_identifications_explode = cameras_identifications_explode.rename(
         columns={
@@ -365,11 +366,21 @@ def create_map(chart_data, location=None):
     return m
 
 
+def display_identification(identification):
+    with st.container(border=True):
+        st.markdown(f'**{identification["title"]}**')
+        if identification["label"] != "null":
+            st.markdown(
+                f'**:{get_icon_color(identification["label"])}[{identification["label_text"]}]**'
+            )
+        st.markdown(f'**Descrição:** {identification["label_explanation"]}')
+
+
 def display_camera_details(row, cameras_identifications_df):
     camera_id = row["id"]
     image_url = row["snapshot_url"]
     camera_name = row["name"]
-    # snapshot_timestamp = row["snapshot_timestamp"].strftime("%d/%m/%Y %H:%M")  # noqa
+    snapshot_timestamp = row["snapshot_timestamp"].strftime("%d/%m/%Y %H:%M")  # noqa
 
     st.markdown(f"### 📷 Camera snapshot")  # noqa
     st.markdown(f"Endereço: {camera_name}")
@@ -398,74 +409,21 @@ def display_camera_details(row, cameras_identifications_df):
     )
     camera_identifications.index = camera_identifications[""]
     camera_identifications = camera_identifications[camera_identifications["timestamp"].notnull()]
-    camera_identifications["timestamp"] = camera_identifications["timestamp"].apply(  # noqa
-        lambda x: x.strftime("%d/%m/%Y %H:%M")
-    )
 
-    rename_columns = {
-        "timestamp": "Data Identificação",
-        "title": "Identificador",
-        "label_text": "Classificação",
-        "label_explanation": "Descrição",
-    }
-
-    camera_identifications = camera_identifications.rename(columns=rename_columns)  # noqa
-
-    # make a markdown with the first row of the dataframe and the first value of "Data Identificação"
-    first_row = camera_identifications.iloc[0]
-    markdown = f'<p><strong>Data Identificação:</strong> {first_row["Data Identificação"]}</p>'
-    st.markdown(markdown, unsafe_allow_html=True)
-    i = 0
-    markdown = ""
+    st.markdown(f"**Data Captura:** {snapshot_timestamp}")
+    items = []
     for _, row in camera_identifications.iterrows():
-        critic_level = get_icon_color(row["label"])
-        # if critic_level = green, make classificacao have the color green and all capital letters
-        if critic_level == "green":
-            classificacao = f'<span style="color: green; text-transform: uppercase;">{row["Classificação"].upper()}</span>'
-        # if critic_level = orange, make classificacao have the color orange and all capital letters
-        elif critic_level == "orange":
-            classificacao = f'<span style="color: orange; text-transform: uppercase;">{row["Classificação"].upper()}</span>'
-        # if critic_level = red, make classificacao have the color red and all capital letters
-        elif critic_level == "red":
-            classificacao = f'<span style="color: red; text-transform: uppercase;">{row["Classificação"].upper()}</span>'
-        else:
-            classificacao = row["Classificação"].upper()
-        # capitalize the identificador
-        identificador = row["Identificador"].capitalize()
-        classificacao = classificacao if classificacao != "NULO" else ""
-        # if i is even and not the last row
-        if i % 2 == 0 and i != len(camera_identifications) - 1:
-            markdown += f"""
-            <div style="display: flex; margin-bottom: 10px;">
-                <div style="flex: 1; border: 3px solid #ccc; border-radius: 5px; padding: 10px; margin-right: 10px;">
-                    <p><strong>{identificador}</strong></p>
-                    <p><strong>{classificacao}</strong></p>
-                    <p><strong>Descrição:</strong> {row["Descrição"]}</p>
-                </div>"""
-        # if it is the last row, make it complete the row
-        elif i == len(camera_identifications) - 1:
-            markdown += f"""
-                <div style="flex: 1; border: 3px solid #ccc; border-radius: 5px; padding: 10px; margin-right: 10px;">
-                    <p><strong>{identificador}</strong></p>
-                    <p><strong>{classificacao}</strong></p>
-                    <p><strong>Descrição:</strong> {row["Descrição"]}</p>
-                </div>
-            </div>  <!-- Close the row here -->
-            """
-            st.markdown(markdown, unsafe_allow_html=True)
-            markdown = ""
-        else:
-            markdown += f"""
-                <div style="flex: 1; border: 3px solid #ccc; border-radius: 5px; padding: 10px; margin-right: 10px;">
-                    <p><strong>{identificador}</strong></p>
-                    <p><strong>{classificacao}</strong></p>
-                    <p><strong>Descrição:</strong> {row["Descrição"]}</p>
-                </div>
-            </div>  <!-- Close the row here -->
-            """
-            st.markdown(markdown, unsafe_allow_html=True)
-            markdown = ""
-        i += 1
+        items.append(row)
+
+    for i in range(1, len(items), 2):
+        col1, col2 = st.columns(2)
+        with col1:
+            display_identification(items[i - 1])
+        with col2:
+            display_identification(items[i])
+
+    if len(items) % 2 == 1:
+        display_identification(items[len(items) - 1])
 
 
 def display_agrid_table(table):
