@@ -165,8 +165,11 @@ func sendHeartbeat(heartbeatURL string, accessToken *libs.AccessToken, healthy b
 	}
 
 	_, err = libs.HTTPPost(heartbeatURL, accessToken, "application/json", bytes.NewReader(data))
+	if err != nil {
+		return fmt.Errorf("error send heartbeat: %w", err)
+	}
 
-	return fmt.Errorf("error send heartbeat: %w", err)
+	return nil
 }
 
 func main() {
