@@ -307,7 +307,7 @@ async def test_get_identifications(client: AsyncClient, authorization_header: di
 
 
 @pytest.mark.anyio
-@pytest.mark.run(order=70)
+@pytest.mark.run(order=80)
 async def test_delete_identifications(
     client: AsyncClient,
     authorization_header: dict,
@@ -319,7 +319,7 @@ async def test_delete_identifications(
 
 
 @pytest.mark.anyio
-@pytest.mark.run(order=71)
+@pytest.mark.run(order=81)
 async def test_delete_camera(client: AsyncClient, authorization_header: dict, context: dict):
     path = f"/cameras/{context['test_camera_id']}"
     response = await client.delete(path, headers=authorization_header)
