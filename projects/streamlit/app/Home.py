@@ -33,7 +33,7 @@ hide_identifications = get_hide_identifications()
 
 cameras_identifications, cameras_identifications_descriptions = treat_data(
     cameras, hide_identifications
-)
+)]
 
 if not all(x is None for x in cameras_identifications):
     col1, col2 = st.columns(2)
