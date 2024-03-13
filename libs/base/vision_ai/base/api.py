@@ -42,9 +42,7 @@ class VisionaiAPI:
         if response.status_code == 200:
             token = response.json()["access_token"]
             # now + expires_in_seconds - 10 minutes
-            expires_at = datetime.now() + timedelta(
-                seconds=response.json()["expires_in"] - 600
-            )
+            expires_at = datetime.now() + timedelta(seconds=response.json()["expires_in"] - 600)
 
             return {"Authorization": f"Bearer {token}"}, token, expires_at
         else:
@@ -81,23 +79,17 @@ class VisionaiAPI:
 
     def _put(self, path, json_data=None):
         self._refresh_token_if_needed()
-        response = requests.put(
-            f"{self._base_url}{path}", headers=self._headers, json=json_data
-        )
+        response = requests.put(f"{self._base_url}{path}", headers=self._headers, json=json_data)
         return response
 
     def _post(self, path, json_data=None):
         self._refresh_token_if_needed()
-        response = requests.post(
-            f"{self._base_url}{path}", headers=self._headers, json=json_data
-        )
+        response = requests.post(f"{self._base_url}{path}", headers=self._headers, json=json_data)
         return response
 
     def _delete(self, path: str, json_data: dict | None = None):
         self._refresh_token_if_needed()
-        response = requests.delete(
-            f"{self._base_url}{path}", headers=self._headers, json=json_data
-        )
+        response = requests.delete(f"{self._base_url}{path}", headers=self._headers, json=json_data)
         return response
 
     def _get_all_pages(self, path, page_size=100, timeout=120):
@@ -107,25 +99,20 @@ class VisionaiAPI:
 
             start = time.time()
             response = self._get(path=page, timeout=timeout)
-            print(
-                f"Page {page} out {total_pages} took {round(time.time() - start,2)} seconds"
-            )
+            print(f"Page {page} out {total_pages} took {round(time.time() - start,2)} seconds")
             return response
 
         if isinstance(path, str):
             print(f"Getting all pages for {path}")
             # Initial request to determine the number of pages
-            initial_response = self._get(
-                path=f"{path}?page=1&size=1", timeout=timeout
-            )  # noqa
+            initial_response = self._get(path=f"{path}?page=1&size=1", timeout=timeout)  # noqa
             if not initial_response:
                 return []
 
             # Assuming the initial response contains the total number of items or pages # noqa
             total_pages = self._calculate_total_pages(initial_response, page_size)
             pages = [
-                f"{path}?page={page}&size={page_size}"
-                for page in range(1, total_pages + 1)  # noqa
+                f"{path}?page={page}&size={page_size}" for page in range(1, total_pages + 1)  # noqa
             ]
 
         elif isinstance(path, list):
@@ -135,9 +122,7 @@ class VisionaiAPI:
         data = []
         with ThreadPoolExecutor(max_workers=total_pages) as executor:
             # Create a future for each page
-            futures = [
-                executor.submit(get_page, page, total_pages) for page in pages
-            ]  # noqa
+            futures = [executor.submit(get_page, page, total_pages) for page in pages]  # noqa
 
             for future in as_completed(futures):
                 response = future.result()
@@ -253,13 +238,9 @@ class VisionaiAPI:
         criteria = item.get("criteria")
         identification_guide = item.get("identification_guide")
         prompt_id = item.get("prompt_id")
-        object_data = next(
-            (obj for obj in objects if obj.get("slug") == object_slug), None
-        )
+        object_data = next((obj for obj in objects if obj.get("slug") == object_slug), None)
         # Ensure object exists
-        object_id = self._ensure_object_exists(
-            object_slug=object_slug, object_data=object_data
-        )
+        object_id = self._ensure_object_exists(object_slug=object_slug, object_data=object_data)
 
         # Ensure label exists or create it
 
@@ -301,9 +282,7 @@ class VisionaiAPI:
             return object_data["id"]  # Return existing object ID
 
         print(f"Creating object '{object_slug}'...")
-        response = self._post(
-            "/objects", json_data={"name": object_slug, "slug": object_slug}
-        )
+        response = self._post("/objects", json_data={"name": object_slug, "slug": object_slug})
         if response.status_code == 200:
             print(f"Object '{object_slug}' created successfully.")
             return response.json().get("id")  # Return new object ID
@@ -320,9 +299,7 @@ class VisionaiAPI:
         identification_guide: str,
         labels: list,
     ) -> None:
-        label_data = next(
-            (lbl for lbl in labels if lbl.get("value") == label_slug), None
-        )
+        label_data = next((lbl for lbl in labels if lbl.get("value") == label_slug), None)
         if label_data:
             print(f"Label '{label_slug}' exists. Updating label...")
             response = self._put(
@@ -371,9 +348,7 @@ class VisionaiAPI:
     ) -> None:
         # Prepare the endpoint path
         if cameras is not None:
-            camera_data = next(
-                (cam for cam in cameras if cam.get("id") == camera_id), None
-            )
+            camera_data = next((cam for cam in cameras if cam.get("id") == camera_id), None)
             if object_slug in camera_data.get("objects", []):
                 print(
                     f"Camera {camera_id}: Object '{object_slug}' is already associated. Local Test!"
@@ -387,9 +362,7 @@ class VisionaiAPI:
         response = requests.post(f"{self._base_url}{path}", headers=self._headers)
         # Check the response status and handle accordingly
         if response.status_code == 200:
-            print(
-                f"Camera {camera_id}: Object '{object_slug}' associated successfully."
-            )
+            print(f"Camera {camera_id}: Object '{object_slug}' associated successfully.")
         elif response.status_code == 409:
             print(f"Camera {camera_id}: Object' {object_slug}' is already associated.")
         elif response.status_code == 422:
@@ -412,9 +385,7 @@ class VisionaiAPI:
             )
 
             if object_slug in prompt_data.get("objects", []):
-                print(
-                    f"Prompt: Object '{object_slug}' is already associated. Local Test!"
-                )
+                print(f"Prompt: Object '{object_slug}' is already associated. Local Test!")
                 return
 
         response = self._post(f"/prompts/{prompt_id}/objects?object_id={object_id}")
@@ -526,9 +497,7 @@ class VisionaiAPI:
         label_slug = item.get("label_slug")
         prompt_id = item.get("prompt_id")
         # Ensure object exists
-        object_data = next(
-            (obj for obj in objects if obj.get("slug") == object_slug), None
-        )
+        object_data = next((obj for obj in objects if obj.get("slug") == object_slug), None)
         if not object_data:
             print(f"Object '{object_slug}' not found, skipping deletions. Local Test!")
             return
@@ -569,21 +538,15 @@ class VisionaiAPI:
         label_slug: str,
         labels=None,
     ) -> None:
-        label_data = next(
-            (lbl for lbl in labels if lbl.get("value") == label_slug), None
-        )
+        label_data = next((lbl for lbl in labels if lbl.get("value") == label_slug), None)
         if not label_data:
-            print(
-                f"Label '{label_slug}' not found on object '{object_slug}' . Local Test!"
-            )
+            print(f"Label '{label_slug}' not found on object '{object_slug}' . Local Test!")
             return
 
         path = f"/objects/{object_id}/labels/{label_slug}"
         response = self._delete(path)
         if response.status_code == 200:
-            print(
-                f"Label '{label_slug}': deleted from object '{object_slug}'  successfully."
-            )
+            print(f"Label '{label_slug}': deleted from object '{object_slug}'  successfully.")
         else:
             print(
                 f"Label '{label_slug}': falied to delete from object '{object_slug}' .\nStatus Code:{response.status_code}\nError: {response.json()}"
@@ -595,20 +558,14 @@ class VisionaiAPI:
         self, camera_id: str, object_slug: str, object_id: str, cameras=None
     ) -> None:
         if cameras is not None:
-            camera_data = next(
-                (cam for cam in cameras if cam.get("id") == camera_id), None
-            )
+            camera_data = next((cam for cam in cameras if cam.get("id") == camera_id), None)
             if object_slug not in camera_data.get("objects", []):
-                print(
-                    f"Camera {camera_id}: object '{object_slug}'  not found. Local Test!"
-                )
+                print(f"Camera {camera_id}: object '{object_slug}'  not found. Local Test!")
                 return
         path = f"/cameras/{camera_id}/objects/{object_id}"
         response = self._delete(path)
         if response.status_code == 200:
-            print(
-                f"Camera ID {camera_id}: object '{object_slug}'  deleted successfully."
-            )
+            print(f"Camera ID {camera_id}: object '{object_slug}'  deleted successfully.")
         else:
             print(
                 f"Camera {camera_id}: failed to delete '{object_slug}' .\nStatus Code:{response.status_code}\nError: {response.json()}"
@@ -620,9 +577,7 @@ class VisionaiAPI:
         self, prompt_id: str, object_slug: str, object_id: str, prompts=None
     ) -> None:
         if prompts is not None:
-            prompt_data = next(
-                (prmt for prmt in prompts if prmt.get("id") == prompt_id), None
-            )
+            prompt_data = next((prmt for prmt in prompts if prmt.get("id") == prompt_id), None)
             if object_slug not in prompt_data.get("objects", []):
                 print(f"Prompt: object '{object_slug}'  not found. Local Test!")
                 return
