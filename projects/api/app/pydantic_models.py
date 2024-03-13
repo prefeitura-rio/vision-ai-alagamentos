@@ -218,6 +218,15 @@ class Aggregation(BaseModel):
     human_identification: list[HumanIdentificationAggregation]
 
 
+class HideIn(BaseModel):
+    identifications_id: list[UUID]
+
+
+class HideOut(BaseModel):
+    count: int
+    ids: list[UUID]
+
+
 class Token(BaseModel):
     access_token: str
     token_type: str
