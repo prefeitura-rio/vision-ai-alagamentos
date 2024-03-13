@@ -2,14 +2,13 @@
 from datetime import datetime, timedelta
 from typing import Annotated
 
+from app import config
+from app.pydantic_models import OIDCUser, Token
 from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi_cache.decorator import cache
 from httpx import AsyncClient
 from jose import jwt
-
-from app import config
-from app.pydantic_models import OIDCUser, Token
 
 oidc_scheme = OAuth2PasswordBearer(tokenUrl="auth/token")
 
