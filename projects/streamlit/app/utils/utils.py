@@ -390,10 +390,7 @@ def display_camera_details(row, cameras_identifications_df):
     if image_url is None:
         st.markdown("Falha ao capturar o snapshot da câmera.")
     else:
-        st.markdown(
-            f"<a href='{row['snapshot_url']}' target='_blank'><img src='{row['snapshot_url']}' style='max-width: 100%; max-height: 371px;'></a>",
-            unsafe_allow_html=True,
-        )
+        st.image(image_url, use_column_width=True)
 
     st.markdown("### 📃 Detalhes")
     camera_identifications = cameras_identifications_df[
@@ -461,7 +458,7 @@ def display_agrid_table(table):
         columns_auto_size_mode=ColumnsAutoSizeMode.FIT_CONTENTS,
         update_mode=GridUpdateMode.MODEL_CHANGED | GridUpdateMode.COLUMN_RESIZED,  # noqa
         # fit_columns_on_grid_load=True,
-        height=413,
+        height=533,
         custom_css={
             "#gridToolBar": {
                 "padding-bottom": "0px !important",
