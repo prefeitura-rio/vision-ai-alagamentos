@@ -5,12 +5,13 @@ from typing import Union
 
 import folium
 import pandas as pd
-import streamlit as st
 from st_aggrid import GridOptionsBuilder  # noqa
 from st_aggrid import GridUpdateMode  # noqa
 from st_aggrid import AgGrid, ColumnsAutoSizeMode
 from vision_ai.base.api import VisionaiAPI
 from vision_ai.base.pandas import explode_df
+
+import streamlit as st
 
 STREAMLIT_PATH = Path(__file__).parent.parent.parent.absolute()
 CACHE_MINUTES = 5
@@ -391,6 +392,7 @@ def display_identification(identification, siblings):
             if identification["object"] == "image_corrupted":
                 identifications_id += [sibling["identification_id"] for sibling in siblings]
             send_hide_identification(identifications_id)
+            st.rerun()
 
 
 def display_camera_details(row, cameras_identifications_df):
