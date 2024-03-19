@@ -411,8 +411,66 @@ async def test_get_ai_identification(client: AsyncClient, authorization_header: 
         assert isinstance(item["snapshot"]["timestamp"], str)
 
 
-@pytest.mark.anyio
+@pytest.mark.anyo
 @pytest.mark.run(order=60)
+async def test_create_hide(client: AsyncClient, authorization_header: dict, context: dict):
+    response = await client.post(
+        "/identifications/hide",
+        headers=authorization_header,
+        json={
+            "identifications_id": [
+                str(identification) for identification in context["identifications_id"]
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+    assert "count" in response.json()
+    assert "ids" in response.json()
+    assert isinstance(response.json()["count"], int)
+    assert isinstance(response.json()["ids"], list)
+    assert len(response.json()["ids"]) == 6
+    for id in response.json()["ids"]:
+        assert isinstance(id, str)
+
+
+@pytest.mark.anyo
+@pytest.mark.run(order=61)
+async def test_get_hide(client: AsyncClient, authorization_header: dict):
+    response = await client.get("/identifications/hide", headers=authorization_header)
+
+    assert response.status_code == 200
+    assert len(response.json()) == 6
+    for identification in response.json():
+        assert "id" in identification
+        assert "object" in identification
+        assert "title" in identification
+        assert "question" in identification
+        assert "explanation" in identification
+        assert "timestamp" in identification
+        assert "label" in identification
+        assert "label_explanation" in identification
+        assert "snapshot" in identification
+        assert "id" in identification["snapshot"]
+        assert "camera_id" in identification["snapshot"]
+        assert "image_url" in identification["snapshot"]
+        assert "timestamp" in identification["snapshot"]
+        assert isinstance(identification["id"], str)
+        assert isinstance(identification["object"], str)
+        assert isinstance(identification["title"], str)
+        assert isinstance(identification["question"], str)
+        assert isinstance(identification["explanation"], str)
+        assert isinstance(identification["timestamp"], str)
+        assert isinstance(identification["label"], str)
+        assert isinstance(identification["label_explanation"], str)
+        assert isinstance(identification["snapshot"]["id"], str)
+        assert isinstance(identification["snapshot"]["camera_id"], str)
+        assert isinstance(identification["snapshot"]["image_url"], str)
+        assert isinstance(identification["snapshot"]["timestamp"], str)
+
+
+@pytest.mark.anyio
+@pytest.mark.run(order=62)
 async def test_get_all_ai_identification_3(
     client: AsyncClient,
     authorization_header: dict,
@@ -463,7 +521,7 @@ async def test_get_all_ai_identification_3(
 
 
 @pytest.mark.anyio
-@pytest.mark.run(order=61)
+@pytest.mark.run(order=71)
 async def test_delete_marker_identifications(
     client: AsyncClient, authorization_header: dict, context: dict
 ):
@@ -489,7 +547,7 @@ async def test_delete_marker_identifications(
 
 
 @pytest.mark.anyio
-@pytest.mark.run(order=62)
+@pytest.mark.run(order=72)
 async def test_get_ai_identification_after_delete(client: AsyncClient, authorization_header: dict):
     response = await client.get("/identifications/ai", headers=authorization_header)
 

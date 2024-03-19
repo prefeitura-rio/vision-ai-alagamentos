@@ -5,7 +5,8 @@ RUN apt update
 RUN apt install -y libavcodec-dev libavutil-dev libswscale-dev
 
 COPY go.mod go.sum ./
-COPY libs ../../libs
+COPY libs libs
+RUN echo 'replace github.com/prefeitura-rio/vision-ai/libs v0.0.0 => ./libs' >> go.mod
 RUN go mod download && go mod verify
 
 COPY *.go ./

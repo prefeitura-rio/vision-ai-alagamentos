@@ -5,6 +5,7 @@ from uuid import UUID
 
 from app.dependencies import get_user, is_admin, is_human
 from app.models import (
+    HideIdentification,
     Identification,
     IdentificationMaker,
     Label,
@@ -13,6 +14,8 @@ from app.models import (
 )
 from app.pydantic_models import (
     Aggregation,
+    HideIn,
+    HideOut,
     HumanIdentificationAggregation,
     IaIdentificationAggregation,
     IdentificationHumanIN,
@@ -349,11 +352,8 @@ async def delete_marker(
             detail="Must send indetifications or snapshots ids",
         )
 
-    print(snapshot_ids)
     identifications = await Identification.filter(snapshot_id__in=snapshot_ids).all()
     ids = [identification.id for identification in identifications]
-    print(ids)
-    print(identifications)
 
     conn = connections.get("default")
     query = f"""
@@ -366,10 +366,10 @@ async def delete_marker(
     return IdentificationMarkerOut(count=len(ids), ids=ids)
 
 
-@router.get("/aggregate")
+@router.get("/aggregate", response_model=list[Aggregation])
 async def get_aggregation(
     _: Annotated[User, Depends(is_admin)],
-):
+) -> list[Aggregation]:
     query = """
     SELECT
       COUNT(label."value") AS total,
@@ -431,3 +431,80 @@ async def get_aggregation(
         )
 
     return list(out.values())
+
+
+@router.post("/hide", response_model=HideOut)
+async def create_hide(
+    _: Annotated[User, Depends(is_human)],
+    data: HideIn,
+) -> HideOut:
+    all_identifications = await Identification.filter(id__in=data.identifications_id).all()
+    if len(all_identifications) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Identifications not found"
+        )
+
+    exists = (
+        await HideIdentification.filter(
+            identification__id__in=[identification.id for identification in all_identifications]
+        )
+        .all()
+        .prefetch_related("identification")
+    )
+    exists_id = [exist.identification.id for exist in exists]
+    identifications = [
+        identification
+        for identification in all_identifications
+        if identification.id not in exists_id
+    ]
+
+    if len(identifications) == 0:
+        return HideOut(count=0, ids=[])
+
+    await HideIdentification.bulk_create(
+        [
+            HideIdentification(timestamp=datetime.now(), identification=identification)
+            for identification in identifications
+        ]
+    )
+
+    return HideOut(
+        count=len(identifications), ids=[identification.id for identification in identifications]
+    )
+
+
+@router.get("/hide", response_model=list[IdentificationOut])
+async def get_all_hide(_: Annotated[User, Depends(is_human)]) -> list[IdentificationOut]:
+    interval = datetime.now() - timedelta(hours=2)
+    hides = (
+        await HideIdentification.filter(timestamp__gte=interval)
+        .prefetch_related(
+            "identification",
+            "identification__label",
+            "identification__label__object",
+            "identification__snapshot",
+            "identification__snapshot__camera",
+        )
+        .all()
+    )
+
+    return [
+        IdentificationOut(
+            id=hide.identification.id,
+            object=hide.identification.label.object.slug,
+            title=hide.identification.label.object.title,
+            question=hide.identification.label.object.question,
+            explanation=hide.identification.label.object.explanation,
+            timestamp=hide.identification.timestamp,
+            label=hide.identification.label.value,
+            label_text=hide.identification.label.text,
+            label_explanation="Hide identification",
+            snapshot=SnapshotOut(
+                id=hide.identification.snapshot.id,
+                image_url=hide.identification.snapshot.public_url,
+                camera_id=hide.identification.snapshot.camera_id,
+                timestamp=hide.identification.snapshot.timestamp,
+            ),
+        )
+        for hide in hides
+    ]

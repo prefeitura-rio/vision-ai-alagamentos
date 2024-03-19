@@ -63,6 +63,15 @@ class UserIdentification(Model):
         unique_together = ("username", "identification")
 
 
+class HideIdentification(Model):
+    id = fields.UUIDField(pk=True)
+    timestamp = fields.DatetimeField()
+    identification = fields.ForeignKeyField("app.Identification")
+
+    class Meta:
+        table = "hide_identification"
+
+
 class Label(Model):
     id = fields.UUIDField(pk=True)
     order = fields.IntField(default=0)

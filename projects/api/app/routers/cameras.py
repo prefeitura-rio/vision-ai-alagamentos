@@ -27,6 +27,7 @@ from app.utils import (
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
+from fastapi_cache.decorator import cache
 from fastapi_pagination import Page, Params
 from fastapi_pagination.api import create_page
 from google.cloud import storage
@@ -44,15 +45,13 @@ class BigPage(Page[CameraIdentificationOut]):
 router = APIRouter(prefix="/cameras", tags=["Cameras"])
 
 
-@router.get("", response_model=BigPage)
-async def get_cameras(
-    _: Annotated[User, Depends(is_admin)], params: BigParams = Depends(), minute_interval: int = 30
-) -> Page[CameraIdentificationOut]:
-    """Get a list of all cameras."""
+@cache(expire=60 * 5)
+async def get_cameras_from_db(
+    size: int, offset: int, minute_interval: int
+) -> tuple[list[CameraIdentificationOut], int]:
+    print("cameras cache miss")
     cameras_out: dict[str, CameraIdentificationOut] = {}
-    offset = params.size * (params.page - 1)
-
-    ids = await Camera.all().limit(params.size).offset(offset).values_list("id", flat=True)
+    ids = await Camera.all().limit(size).offset(offset).values_list("id", flat=True)
 
     cameras = (
         await Camera.all()
@@ -136,7 +135,20 @@ async def get_cameras(
             )
         )
 
-    return create_page(list(cameras_out.values()), total=await Camera.all().count(), params=params)
+    return list(cameras_out.values()), await Camera.all().count()
+
+
+@router.get("", response_model=BigPage)
+async def get_cameras(
+    _: Annotated[User, Depends(is_admin)], params: BigParams = Depends(), minute_interval: int = 30
+) -> Page[CameraIdentificationOut]:
+    """Get a list of all cameras."""
+    offset = params.size * (params.page - 1)
+    cameras, total = await get_cameras_from_db(
+        size=params.size, offset=offset, minute_interval=minute_interval
+    )
+
+    return create_page(cameras, total=total, params=params)
 
 
 @router.post("", response_model=CameraOut)

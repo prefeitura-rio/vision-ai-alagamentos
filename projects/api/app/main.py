@@ -8,6 +8,8 @@ from app.oidc import AuthError
 from app.routers import agents, auth, cameras, identifications, objects, prompts
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi_cache import FastAPICache
+from fastapi_cache.backends.inmemory import InMemoryBackend
 from fastapi_pagination import add_pagination
 from loguru import logger
 from starlette.responses import JSONResponse
@@ -60,6 +62,9 @@ register_tortoise(
 )
 
 add_pagination(app)
+
+
+FastAPICache.init(InMemoryBackend())
 
 
 @app.exception_handler(AuthError)

@@ -1,44 +1,76 @@
 # -*- coding: utf-8 -*-
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed, wait
-from typing import Dict, List, Tuple
+from datetime import datetime, timedelta
+from typing import Callable, Dict, List, Tuple
 
 import requests
 
 
 class VisionaiAPI:
-    def __init__(self, base_url: str = None, username: str = None, password: str = None) -> None:
-        self.BASE_URL = base_url or "https://api.vision-ai.dados.rio"
-        self.username = username
-        self.password = password
-        self.headers, self.token_renewal_time = self._get_headers()
+    def __init__(
+        self,
+        username: str | None = None,
+        password: str | None = None,
+        base_url: str | None = None,
+        token: str | None = None,
+        token_callback: Callable[[str, datetime], None] = lambda *_: None,
+    ) -> None:
+        if token is None and (username is None or password is None):
+            raise ValueError("Must be set refresh token or username with password")
 
-    def _get_headers(self) -> Tuple[Dict[str, str], float]:
-        access_token_response = requests.post(
-            f"{self.BASE_URL}/auth/token",
-            data={"username": self.username, "password": self.password},
-        )
+        self._minutes_interval = 50
+        self._base_url = base_url or "https://api.vision-ai.dados.rio/"
+        self._username = username
+        self._password = password
+        self._token = token
+        self._token_callback = token_callback
+        self._headers, self._token, self._expires_at = self._get_headers()
 
-        if access_token_response.status_code == 200:
-            token = access_token_response.json()["access_token"]
-            return {"Authorization": f"Bearer {token}"}, time.time()
-        else:
-            print(
-                f"Status code: {access_token_response.status_code}\nResponse:{access_token_response.content}"
+    def _get_headers(self) -> Tuple[Dict[str, str], str | None, datetime]:
+        if self._password is None:
+            response = requests.post(
+                f"{self._base_url}/auth/token/refresh",
+                data={"refresh_token": self._token},
             )
+        else:
+            response = requests.post(
+                f"{self._base_url}/auth/token",
+                data={"username": self._username, "password": self._password},
+            )
+
+        if response.status_code == 200:
+            token = response.json()["access_token"]
+            # now + expires_in_seconds - 10 minutes
+            expires_at = datetime.now() + timedelta(seconds=response.json()["expires_in"] - 600)
+
+            return {"Authorization": f"Bearer {token}"}, token, expires_at
+        else:
+            print(f"Status code: {response.status_code}\nResponse:{response.content}")
             raise Exception()
 
     def _refresh_token_if_needed(self) -> None:
-        if time.time() - self.token_renewal_time >= 60 * 50:
-            self.headers, self.token_renewal_time = self._get_headers()
+        if self._expires_at <= datetime.now():
+            self._headers, self._token, self._expires_at = self._get_headers()
+            self._token_callback(self.get_token(), self.expires_at())
 
     def refresh_token(self):
         self._refresh_token_if_needed()
 
+    def get_token(self):
+        self._refresh_token_if_needed()
+
+        return self._headers["Authorization"].split(" ")[1]
+
+    def expires_at(self):
+        return self._expires_at
+
     def _get(self, path: str, timeout: int = 120) -> Dict:
         self._refresh_token_if_needed()
         try:
-            response = requests.get(f"{self.BASE_URL}{path}", headers=self.headers, timeout=timeout)
+            response = requests.get(
+                f"{self._base_url}{path}", headers=self._headers, timeout=timeout
+            )
 
             response.raise_for_status()
             return response.json()
@@ -47,17 +79,17 @@ class VisionaiAPI:
 
     def _put(self, path, json_data=None):
         self._refresh_token_if_needed()
-        response = requests.put(f"{self.BASE_URL}{path}", headers=self.headers, json=json_data)
+        response = requests.put(f"{self._base_url}{path}", headers=self._headers, json=json_data)
         return response
 
     def _post(self, path, json_data=None):
         self._refresh_token_if_needed()
-        response = requests.post(f"{self.BASE_URL}{path}", headers=self.headers, json=json_data)
+        response = requests.post(f"{self._base_url}{path}", headers=self._headers, json=json_data)
         return response
 
-    def _delete(self, path: str, json_data: dict = None) -> Dict:
+    def _delete(self, path: str, json_data: dict | None = None):
         self._refresh_token_if_needed()
-        response = requests.delete(f"{self.BASE_URL}{path}", headers=self.headers, json=json_data)
+        response = requests.delete(f"{self._base_url}{path}", headers=self._headers, json=json_data)
         return response
 
     def _get_all_pages(self, path, page_size=100, timeout=120):
@@ -327,7 +359,7 @@ class VisionaiAPI:
         # Prepare the query parameters
         # params = {"object_id": object_id}
         # Make the POST request with the required parameters
-        response = requests.post(f"{self.BASE_URL}{path}", headers=self.headers)
+        response = requests.post(f"{self._base_url}{path}", headers=self._headers)
         # Check the response status and handle accordingly
         if response.status_code == 200:
             print(f"Camera {camera_id}: Object '{object_slug}' associated successfully.")

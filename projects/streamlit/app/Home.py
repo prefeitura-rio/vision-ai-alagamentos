@@ -9,6 +9,7 @@ from utils.utils import (
     display_camera_details,
     get_cameras_cache,
     get_filted_cameras_objects,
+    get_hide_identifications,
     get_icon_color,
     treat_data,
 )
@@ -27,8 +28,12 @@ cameras = get_cameras_cache(
     page_size=3000, only_active=False, use_mock_data=False, update_mock_data=False
 )
 
-cameras_identifications, cameras_identifications_descriptions = treat_data(cameras)
 
+hide_identifications = get_hide_identifications()
+
+cameras_identifications, cameras_identifications_descriptions = treat_data(
+    cameras, hide_identifications
+)
 
 if not all(x is None for x in cameras_identifications):
     col1, col2 = st.columns(2)
