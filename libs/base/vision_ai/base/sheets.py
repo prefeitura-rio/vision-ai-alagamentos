@@ -47,7 +47,7 @@ def inject_credential(
 ):
     with open(credential_path) as f:
         cred = json.load(f)
-    os.environ["GCP_SERVICE_ACCOUNT"] = base64.b64encode(
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = base64.b64encode(
         str(cred).replace("'", '"').encode("utf-8")
     ).decode("utf-8")
 
@@ -63,7 +63,10 @@ def get_credentials_from_env(key: str, scopes: List[str] = None) -> service_acco
     env: str = getenv(key, "")
     if env == "":
         raise ValueError(f'Enviroment variable "{key}" not set!')
-    info: dict = json.loads(base64.b64decode(env))
+    try:
+        info: dict = json.loads(base64.b64decode(env))
+    except:
+        info: dict = json.load(open(env, "r"))
     cred: service_account.Credentials = service_account.Credentials.from_service_account_info(info)
     if scopes:
         cred = cred.with_scopes(scopes)
@@ -71,7 +74,7 @@ def get_credentials_from_env(key: str, scopes: List[str] = None) -> service_acco
 
 
 def get_gspread_sheet(
-    sheet_url: str, google_sheet_credential_env_name: str = "GCP_SERVICE_ACCOUNT"
+    sheet_url: str, google_sheet_credential_env_name: str = "GOOGLE_APPLICATION_CREDENTIALS"
 ) -> gspread.Client:
     url_prefix = "https://docs.google.com/spreadsheets/d/"
     if not sheet_url.startswith(url_prefix):
@@ -119,7 +122,7 @@ def sheet_append_row(
 
 def get_sheet_data(
     gsheets_url: str,
-    google_sheet_credential_env_name: str = "GCP_SERVICE_ACCOUNT",
+    google_sheet_credential_env_name: str = "GOOGLE_APPLICATION_CREDENTIALS",
     N: int = 10,
 ):
     gspread_sheet = get_gspread_sheet(
@@ -140,7 +143,7 @@ def get_sheet_data(
 
 def get_sessions_from_sheets(
     gsheets_url: str,
-    google_sheet_credential_env_name: str = "GCP_SERVICE_ACCOUNT",
+    google_sheet_credential_env_name: str = "GOOGLE_APPLICATION_CREDENTIALS",
     N: int = 10,
 ):
     dataframe = get_sheet_data(
@@ -158,7 +161,7 @@ def get_sessions_from_sheets(
 
 def get_knowledge_base_from_sheets(
     gsheets_url: str,
-    google_sheet_credential_env_name: str = "GCP_SERVICE_ACCOUNT",
+    google_sheet_credential_env_name: str = "GOOGLE_APPLICATION_CREDENTIALS",
     N: int = 10,
 ):
     dataframe = get_sheet_data(
@@ -193,7 +196,7 @@ def save_data_in_sheets(
     data: dict = {},
     data_url: str = None,
     prompt_url: str = None,
-    google_sheet_credential_env_name: str = "GCP_SERVICE_ACCOUNT",
+    google_sheet_credential_env_name: str = "GOOGLE_APPLICATION_CREDENTIALS",
 ):
     """
     Saves data to a google sheet.
@@ -286,3 +289,54 @@ def save_data_in_sheets(
         )
 
         return data_worksheet
+
+
+def create_google_sheet_from_dataframe(
+    df: pd.DataFrame,
+    sheet_title: str,
+    worksheet_title: str,
+    google_sheet_credential_env_name: str = "GOOGLE_APPLICATION_CREDENTIALS",
+):
+    """
+    Creates a Google Sheet from a Pandas DataFrame.
+
+    Parameters:
+        df (pd.DataFrame): The DataFrame to be exported to Google Sheets.
+        sheet_title (str): The title of the new Google Sheet.
+        google_sheet_credential_env_name (str): Environment variable name for Google Sheets credentials.
+    """
+    # Authenticate and create the sheet
+    credentials = get_credentials_from_env(
+        key=google_sheet_credential_env_name,
+        scopes=[
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive",
+        ],
+    )
+    gspread_client = gspread.authorize(credentials)
+    try:
+        sheet = gspread_client.open(sheet_title)
+    except gspread.SpreadsheetNotFound:
+        sheet = gspread_client.create(sheet_title)
+
+    # Open the first worksheet
+    worksheet = sheet.add_worksheet(title=worksheet_title, rows=1000, cols=20)
+
+    if "snapshot_url" in df:
+        df["snapshot_url"] = df["snapshot_url"].apply(
+            lambda url: f'=IMAGE("{url}")' if pd.notna(url) else ""
+        )
+
+    # Convert DataFrame to list of lists (each row becomes a list)
+    df = df.astype(str)
+    data = df.values.tolist()
+
+    # Add the DataFrame to sheet
+    worksheet.update(
+        "A1", [df.columns.values.tolist()] + data, value_input_option="USER_ENTERED"
+    )  # Adds the header and data
+
+    # Make the sheet public
+    sheet.share(None, perm_type="anyone", role="writer")
+
+    return sheet.url
