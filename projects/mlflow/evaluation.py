@@ -16,12 +16,12 @@ from vision_ai.base.api import VisionaiAPI
 from vision_ai.base.metrics import (
     calculate_metrics,
     crossentropy,
-    water_level_custon_metric,
+    water_level_custom_metric,
 )
 from vision_ai.base.model import Model
 from vision_ai.base.pandas import handle_snapshots_df
 from vision_ai.base.prompt import get_prompt_api, get_prompt_local
-from vision_ai.base.sheets import get_objects_table_from_sheets
+from vision_ai.base.sheets import get_objects_table_from_sheets, create_google_sheet_from_dataframe
 
 # Assert all environment variables are set
 for var in [
@@ -50,7 +50,7 @@ ARTIFACT_PATH = Path("/tmp/ml_flow_artifacts")
 def load_data(
     use_mock_snapshots=False,
     save_mock_snapshots=False,
-    use_local_prompt=False,
+    use_local_prompt=None,
     object_sheet_url=None,
 ):
     mock_snapshot_data_path = ABSOLUTE_PATH / "mock_snapshots_api_data.json"
@@ -62,24 +62,26 @@ def load_data(
     # GET PROMPT FROM API
     prompt_data = vision_api._get_all_pages(path="/prompts")
     objects_data = vision_api._get_all_pages(path="/objects")
-    prompt_parameters, _ = get_prompt_api(
-        prompt_name="base", prompt_data=prompt_data, objects_data=objects_data
-    )
+    prompt_parameters = dict()
+
     if use_local_prompt:
         # LOCAL PROMPT + OBJECTS TABLE FROM SHEETS
-        with open(ABSOLUTE_PATH / "prompt.md") as f:
-            prompt_text_local = f.read()
-    else:
-        prompt_text_local = prompt_parameters["prompt_text"]
+        with open(use_local_prompt, "r") as f:
+            prompt_parameters["prompt_text"] = f.read()
 
-    if object_sheet_url:
+    elif object_sheet_url:
         objects_table_md, _ = get_objects_table_from_sheets(url=object_sheet_url)
+        prompt_template = [p for p in prompt_data if p["name"] == "base"][0]["prompt_text"]
         prompt, _ = get_prompt_local(
             prompt_parameters=None,
-            prompt_template=prompt_text_local,
+            prompt_template=prompt_template,
             objects_table_md=objects_table_md,
         )
         prompt_parameters["prompt_text"] = prompt
+    else:
+        prompt_parameters = get_prompt_api(
+            prompt_name="base", prompt_data=prompt_data, objects_data=objects_data
+        )
 
     if use_mock_snapshots:
         with open(mock_snapshot_data_path, "r") as f:
@@ -185,6 +187,7 @@ def run_experiments(
 
 def mlflow_log(
     experiment_name,
+    run_name,
     input,
     output,
     input_balance,
@@ -195,7 +198,8 @@ def mlflow_log(
     ARTIFACT_PATH.mkdir(exist_ok=True, parents=True)
     mlflow.set_tracking_uri(uri="https://mlflow.dados.rio")
     mlflow.set_experiment(experiment_name)
-    with mlflow.start_run():
+    # mlflow.set_tag("mlflow.runName", run_name)
+    with mlflow.start_run() as mlrun:
         # Log the hyperparameter
         mlflow.log_text(parameters["prompt_text"], "prompt.md")
         parameters.pop("prompt_text")
@@ -212,8 +216,32 @@ def mlflow_log(
         artifact_input_balance_path = ARTIFACT_PATH / "input_balance.csv"
         input_balance.to_csv(artifact_input_balance_path, index=False)
 
+        output["correct"] = output["hard_label"] == output["label_ia"]
+        output = output[
+            [
+                "run",
+                "object",
+                "correct",
+                "snapshot_url",
+                "label_ia",
+                "hard_label",
+                "label_explanation",
+                "label",
+                "distribution",
+            ]
+        ]
         artifact_output_path = ARTIFACT_PATH / "output.csv"
         output.to_csv(artifact_output_path, index=False)
+        # sheets_url = create_google_sheet_from_dataframe(
+        #     output,
+        #     f"{experiment_name}_{mlrun.info.run_id}",
+        # )
+
+        # save sheets_url in README.md and add as mlflow artifact
+        with open(ARTIFACT_PATH / "README.md", "w") as f:
+            f.write(f"## {experiment_name} - {run_name}\n")
+            f.write(f"### [Sheets URL]({sheets_url})\n")
+        mlflow.log_artifact(ARTIFACT_PATH / "README.md")
 
         artifact_output_errors_path = ARTIFACT_PATH / "output_erros.csv"
         output_erros.to_csv(artifact_output_errors_path, index=False)
@@ -239,7 +267,9 @@ def mlflow_log(
                 crossentropy_loss_mean, crossentropy_loss_std = crossentropy(
                     true_labels, true_probs, y_pred
                 )
-                M_high, M_medium = water_level_custon_metric(y_true=y_true, y_pred=y_pred)
+                Xrecall_high, Xrecall_medium = water_level_custom_metric(
+                    y_true=y_true, y_pred=y_pred
+                )
 
                 unique_labels = sorted(set(y_true) | set(y_pred))
 
@@ -263,8 +293,10 @@ def mlflow_log(
                                         "crossentropy_loss_mean": crossentropy_loss_mean,
                                         "crossentropy_loss_std": crossentropy_loss_std,
                                         "label_recall": recall_per_label[i],
-                                        "M_high": M_high if obj == "water_level" else 0,
-                                        "M_medium": M_medium if obj == "water_level" else 0,
+                                        "Xrecall_high": Xrecall_high if obj == "water_level" else 0,
+                                        "Xrecall_medium": (
+                                            Xrecall_medium if obj == "water_level" else 0
+                                        ),
                                     }
                                 ]
                             ),
@@ -301,8 +333,8 @@ def mlflow_log(
             "f1",
             "crossentropy_loss_mean",
             "crossentropy_loss_std",
-            "M_high",
-            "M_medium",
+            "Xrecall_high",
+            "Xrecall_medium",
         ]
         object_metrics = metrics_df[cols].groupby("object", as_index=False).mean()
         artifact_metrics_objects_path = ARTIFACT_PATH / "metrics_objects.csv"
@@ -336,11 +368,13 @@ def mlflow_log(
                 mlflow.log_metric(f"{obj}_crossentropy_loss", row["crossentropy_loss_mean"])
                 mlflow.log_metric(f"{obj}_crossentropy_loss_std", row["crossentropy_loss_std"])
             elif obj == "water_level":
+                mlflow.log_metric(f"{obj}_precision", row["precision"])
+                mlflow.log_metric(f"{obj}_accuracy", row["accuracy"])
                 mlflow.log_metric(f"{obj}_recall", row["recall"])
                 mlflow.log_metric(f"{obj}_crossentropy_loss", row["crossentropy_loss_mean"])
                 mlflow.log_metric(f"{obj}_crossentropy_loss_std", row["crossentropy_loss_std"])
-                mlflow.log_metric(f"{obj}_M_high", row["M_high"])
-                mlflow.log_metric(f"{obj}_M_medium", row["M_medium"])
+                mlflow.log_metric(f"{obj}_Xrecall_high", row["Xrecall_high"])
+                mlflow.log_metric(f"{obj}_Xrecall_medium", row["Xrecall_medium"])
 
                 for _, label_row in label_metrics_filtered.iterrows():
                     label = label_row["label"]
@@ -377,27 +411,32 @@ def clean_labels(dataframe):
 
 
 if __name__ == "__main__":
-    tag = "water-level"
+    tag = "water-minimal-baselines"
     today = pd.Timestamp.now().strftime("%Y-%m-%d")
     experiment_name = f"{today}-{tag}"
     sheets_urls = {
-        "base": "https://docs.google.com/spreadsheets/d/122uOaPr8YdW5PTzrxSPF-FD0tgco596HqgB7WK7cHFw/edit#gid=1672006844",
+        # "base": "https://docs.google.com/spreadsheets/d/122uOaPr8YdW5PTzrxSPF-FD0tgco596HqgB7WK7cHFw/edit#gid=1672006844",
+        # "random": "https://docs.google.com/spreadsheets/d/122uOaPr8YdW5PTzrxSPF-FD0tgco596HqgB7WK7cHFw/edit#gid=1377715485",
+        # "vague": "https://docs.google.com/spreadsheets/d/122uOaPr8YdW5PTzrxSPF-FD0tgco596HqgB7WK7cHFw/edit#gid=2004312781",
+        # "empty": "https://docs.google.com/spreadsheets/d/122uOaPr8YdW5PTzrxSPF-FD0tgco596HqgB7WK7cHFw/edit#gid=568577633",
         # "vehicle": "https://docs.google.com/spreadsheets/d/122uOaPr8YdW5PTzrxSPF-FD0tgco596HqgB7WK7cHFw/edit#gid=55110964",
         # "vehicle_diff": "https://docs.google.com/spreadsheets/d/122uOaPr8YdW5PTzrxSPF-FD0tgco596HqgB7WK7cHFw/edit#gid=1337396877",
         # "pedestrian": "https://docs.google.com/spreadsheets/d/122uOaPr8YdW5PTzrxSPF-FD0tgco596HqgB7WK7cHFw/edit#gid=1432557618",
-        # "sidewalk": "https://docs.google.com/spreadsheets/d/122uOaPr8YdW5PTzrxSPF-FD0tgco596HqgB7WK7cHFw/edit#gid=912988762",
+        "sidewalk": "https://docs.google.com/spreadsheets/d/122uOaPr8YdW5PTzrxSPF-FD0tgco596HqgB7WK7cHFw/edit#gid=912988762",
         # "water_depth": "https://docs.google.com/spreadsheets/d/122uOaPr8YdW5PTzrxSPF-FD0tgco596HqgB7WK7cHFw/edit#gid=981358768",
         # "vehicle_wheel": "https://docs.google.com/spreadsheets/d/122uOaPr8YdW5PTzrxSPF-FD0tgco596HqgB7WK7cHFw/edit#gid=1657724821",
+        # "sidewalk_aggressive": "https://docs.google.com/spreadsheets/d/122uOaPr8YdW5PTzrxSPF-FD0tgco596HqgB7WK7cHFw/edit#gid=929890265",
     }
     start_time = time.time()
     for key, value in sheets_urls.items():
         print(f"Start prompt {key}")
         dataframe, dataframe_balance, original_parameters = load_data(
-            use_mock_snapshots=True,
+            use_mock_snapshots=False,
             save_mock_snapshots=True,
             use_local_prompt=False,
             object_sheet_url=value,
         )
+
         parameters = {
             "prompt_text": original_parameters["prompt_text"],
             "google_api_model": "gemini-pro-vision",
@@ -411,8 +450,8 @@ if __name__ == "__main__":
         runs_df, run_errors, parameters = run_experiments(
             dataframe=dataframe,
             parameters=parameters,
-            n_runs=5,
-            use_mock_predictions=True,
+            n_runs=1,
+            use_mock_predictions=False,
             save_mock_predictions=True,
             max_workers=75,
         )
@@ -423,6 +462,7 @@ if __name__ == "__main__":
 
         mlflow_log(
             experiment_name=experiment_name,
+            run_name=key,
             input=dataframe,
             output=runs_df,
             input_balance=dataframe_balance,
