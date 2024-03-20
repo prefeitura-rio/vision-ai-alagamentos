@@ -20,7 +20,7 @@ class VisionaiAPI:
             raise ValueError("Must be set refresh token or username with password")
 
         self._minutes_interval = 50
-        self._base_url = base_url or "https://api.vision-ai.dados.rio/"
+        self._base_url = base_url or "https://vision-ai-api-6l6zvj2vlq-uc.a.run.app"
         self._username = username
         self._password = password
         self._token = token
@@ -28,16 +28,11 @@ class VisionaiAPI:
         self._headers, self._token, self._expires_at = self._get_headers()
 
     def _get_headers(self) -> Tuple[Dict[str, str], str | None, datetime]:
-        if self._password is None:
-            response = requests.post(
-                f"{self._base_url}/auth/token/refresh",
-                data={"refresh_token": self._token},
-            )
-        else:
-            response = requests.post(
-                f"{self._base_url}/auth/token",
-                data={"username": self._username, "password": self._password},
-            )
+
+        response = requests.post(
+            f"{self._base_url}/auth/token",
+            data={"username": self._username, "password": self._password},
+        )
 
         if response.status_code == 200:
             token = response.json()["access_token"]
