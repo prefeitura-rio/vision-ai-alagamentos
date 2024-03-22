@@ -12,11 +12,12 @@ keywords = ["vision", "ai", "llava"]
 
 [tool.poetry.dependencies]
 python = "^3.10"
-fastapi = "^0.109.0"
-uvicorn = { extras = ["standard"], version = "^0.26.0" }
 llava = { git = "https://github.com/haotian-liu/LLaVA" }
 protobuf = "^5.26.0"
-
+flask = "^3.0.2"
+poetry = "^1.8.2"
+pyzmq = "^25.1.2"
+gunicorn = "^21.2.0"
 
 [tool.poetry.group.dev.dependencies]
 black = "^24.2.0"
@@ -31,11 +32,8 @@ taskipy = "^1.12.0"
 
 [tool.black]
 line-length = 100
-target-version = ["py311"]
+target-version = ["py310"]
 include = "\\.pyi?$"
-
-[tool.coverage.run]
-omit = ["app/config/*"]
 
 [tool.isort]
 profile = "black"
@@ -48,8 +46,7 @@ addopts = ["--doctest-modules", "--cov=app", "-ra", "-v"]
 
 [tool.taskipy.tasks]
 lint = "black . && isort . && flake8 ."
-migrate = "aerich migrate && aerich upgrade"
-serve = "uvicorn app.main:app --reload --port 8080 --loop asyncio"
+serve = "gunicorn"
 test = "pytest"
 
 [build-system]
