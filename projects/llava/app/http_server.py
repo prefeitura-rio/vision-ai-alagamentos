@@ -1,6 +1,4 @@
 # -*- coding: utf-8 -*-
-import pickle
-
 import zmq
 from flask import Flask, request
 
@@ -14,6 +12,6 @@ def run_model():
     context = zmq.Context()
     with context.socket(zmq.REQ) as socket:
         socket.connect(zmq_url)
-        socket.send(pickle.dumps(params))
-        response = pickle.loads(socket.recv())
+        socket.send_pyobj(params)
+        response = socket.recv_pyobj()
         return response

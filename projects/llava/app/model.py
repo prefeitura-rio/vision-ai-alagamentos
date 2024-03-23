@@ -1,10 +1,10 @@
 import base64
 import logging
 import os
-import pickle
 import threading
 import traceback
 from argparse import ArgumentParser
+from dataclasses import dataclass
 from io import BytesIO
 
 import requests
@@ -18,22 +18,50 @@ from transformers import (
 )
 
 
-def load_image(image_raw: str):
-    image = None
-
+def load_image(image_raw: str) -> Image.Image:
     if image_raw.startswith("http://") or image_raw.startswith("https://"):
         timeout = int(os.getenv("REQUEST_TIMEOUT", "3"))
-        response = requests.get(image_raw, timeout=timeout)
-        image = Image.open(BytesIO(response.content))
-    elif image_raw.lower().endswith(("png", "jpg", "jpeg", "webp", "gif")):
-        image = Image.open(image_raw)
-    elif image_raw.startswith("data:"):
-        image_raw = image_raw.split(",")[1]
-        image = Image.open(BytesIO(base64.b64decode(image_raw)))
-    else:
-        image = Image.open(BytesIO(base64.b64decode(image_raw)))
+        return Image.open(requests.get(image_raw, timeout=timeout, stream=True).raw)
 
-    return image
+    if image_raw.lower().endswith(("png", "jpg", "jpeg", "webp", "gif")):
+        return Image.open(image_raw)
+
+    if image_raw.startswith("data:"):
+        image_raw = image_raw.split(",")[1]
+
+    return Image.open(BytesIO(base64.b64decode(image_raw)))
+
+
+def parser_prompt(params) -> tuple[str, list[Image.Image]]:
+    prompt = params.get("prompt", None)
+    images = params.get("images", None)
+
+    if prompt is None:
+        raise ValueError("Must be sent a prompt")
+
+    if images is None or type(images) is not list:
+        raise ValueError("Must be sent a list of images")
+
+    if len(images) != prompt.count("<image>"):
+        raise ValueError("Number of images does not match number of <image> tokens in prompt")
+
+    return prompt, [load_image(image) for image in images]
+
+
+@dataclass
+class ModelParams:
+    temperature: float
+    top_p: float
+    top_k: int
+    max_length: int
+    do_sample: bool
+
+    def __init__(self, params):
+        self.temperature = float(params.get("temperature", 0.2))
+        self.top_p = float(params.get("top_p", 1.0))
+        self.top_k = int(params.get("top_k", 32))
+        self.max_length = min(int(params.get("max_length", 256)), 1024)
+        self.do_sample = True if self.temperature > 0.001 else False
 
 
 class Model:
@@ -46,51 +74,38 @@ class Model:
             bnb_4bit_quant_type="nf4",
         )
 
-        model: LlavaNextForConditionalGeneration = LlavaNextForConditionalGeneration.from_pretrained(
-            model_name,
-            quantization_config=quantization_config,
-            device_map="auto",
-            low_cpu_mem_usage=True,
-            attn_implementation="flash_attention_2",
+        model: LlavaNextForConditionalGeneration = (
+            LlavaNextForConditionalGeneration.from_pretrained(
+                model_name,
+                quantization_config=quantization_config,
+                device_map="auto",
+                low_cpu_mem_usage=True,
+                attn_implementation="flash_attention_2",
+            )
         )
         self.model = model
         logging.info("Model loaded")
 
-        processor: LlavaNextProcessor = LlavaNextProcessor.from_pretrained(model_name, use_fast=False)
+        processor: LlavaNextProcessor = LlavaNextProcessor.from_pretrained(
+            model_name,
+            use_fast=False,
+        )
         self.processor = processor
         logging.info("Processor loaded")
 
-    # TODO: remover dependencia do git do LLaVA
-    # TODO: separar validação de parametros da execução do modelo
     # TODO: fazer inferencia por batch
-    def generate_output(self, params):
+    def generate_output(self, prompt: str, images: list[Image.Image], params: ModelParams):
         model, processor = self.model, self.processor
-
-        prompt = params["prompt"]
-        images = params.get("images", None)
-
-        if images is None or type(images) is not list:
-            raise ValueError("Must be sent a list of images")
-
-        if len(images) != prompt.count("<image>"):
-            raise ValueError("Number of images does not match number of <image> tokens in prompt")
-
-        images = [load_image(image) for image in images]
-        temperature = float(params.get("temperature", 0.2))
-        top_p = float(params.get("top_p", 1.0))
-        top_k = int(params.get("top_k", 32))
-        max_length = min(int(params.get("max_length", 256)), 1024)
-        do_sample = True if temperature > 0.001 else False
 
         inputs = processor(text=prompt, images=images, return_tensors="pt").to("cuda")
 
         output_ids = model.generate(
             **inputs,
-            do_sample=do_sample,
-            temperature=temperature,
-            top_k=top_k,
-            top_p=top_p,
-            max_length=max_length,
+            do_sample=params.do_sample,
+            temperature=params.temperature,
+            top_k=params.top_k,
+            top_p=params.top_p,
+            max_length=params.max_length,
             use_cache=True,
         )
 
@@ -110,11 +125,13 @@ def worker(worker_url: str, model: Model, context=None):
     socket.connect(worker_url)
 
     while True:
-        message = pickle.loads(socket.recv())
+        message = socket.recv_pyobj()
         print(f"Received request: {message}")
 
         try:
-            text = model.generate_output(message)
+            prompt, images = parser_prompt(message)
+            params = ModelParams(message)
+            text = model.generate_output(prompt, images, params)
             error_code = 0
         except ValueError as e:
             logging.error("Caught ValueError:", e)
@@ -126,7 +143,7 @@ def worker(worker_url: str, model: Model, context=None):
             text = "Internal Server Error"
             error_code = 2
 
-        socket.send(pickle.dumps({"text": text, "error_code": error_code}))
+        socket.send_pyobj({"text": text, "error_code": error_code})
 
 
 if __name__ == "__main__":
