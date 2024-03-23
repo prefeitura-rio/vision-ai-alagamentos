@@ -2,8 +2,8 @@ import base64
 import logging
 import os
 import threading
-import traceback
 import time
+import traceback
 import uuid
 from argparse import ArgumentParser
 from dataclasses import dataclass
@@ -69,8 +69,7 @@ class ModelParams:
 
 
 class Model:
-    def __init__(self):
-        model_name = "llava-hf/llava-v1.6-34b-hf"
+    def __init__(self, model_name):
         quantization_config = BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_compute_dtype=torch.float16,
@@ -92,12 +91,17 @@ class Model:
 
         processor: LlavaNextProcessor = LlavaNextProcessor.from_pretrained(
             model_name,
-            use_fast=False,
+            use_fast=model_name != "llava-hf/llava-v1.6-34b-hf",
         )
         self.processor = processor
         logging.debug("Processor loaded")
 
-    def generate_output(self, prompt: str | list[str], images: list[Image.Image], params: ModelParams):
+    def generate_output(
+        self, 
+        prompt: str | list[str], 
+        images: list[Image.Image], 
+        params: ModelParams,
+    ):
         model, processor = self.model, self.processor
 
         inputs = processor(text=prompt, images=images, return_tensors="pt").to("cuda")
@@ -112,7 +116,10 @@ class Model:
             use_cache=True,
         )
 
-        return [result.strip() for result in processor.batch_decode(output_ids, skip_special_tokens=True)]
+        return [
+            result.strip()
+            for result in processor.batch_decode(output_ids, skip_special_tokens=True)
+        ]
 
 
 def send_time(url_timer: str, sleep: int, context: zmq.Context | None = None):
@@ -127,7 +134,15 @@ def send_time(url_timer: str, sleep: int, context: zmq.Context | None = None):
         socket.recv_string()
 
 
-def queue(queue_url: str, model: Model, params: ModelParams, cache: Cache, context: zmq.Context | None = None):
+def queue(
+    queue_url: str,
+    model: Model,
+    params: ModelParams,
+    cache: Cache,
+    batch_size: int,
+    batch_timeout: int,
+    context: zmq.Context | None = None,
+):
     context = context or zmq.Context.instance()
     queue = []
     last_time = time.time()
@@ -165,7 +180,7 @@ def queue(queue_url: str, model: Model, params: ModelParams, cache: Cache, conte
 
             now = time.time()
 
-            if len(queue) >= 5 or (now - last_time >= 10 and len(queue) > 0):
+            if len(queue) >= batch_size or (now - last_time >= batch_timeout and len(queue) > 0):
                 prompts = []
                 images = []
                 ids = []
@@ -184,19 +199,23 @@ def queue(queue_url: str, model: Model, params: ModelParams, cache: Cache, conte
 
                 queue = []
 
-            if now - last_time >= 10:
+            if now - last_time >= batch_timeout:
                 logging.debug(f"queue size: {len(queue)}")
                 last_time = now
-
 
         except Exception as e:
             logging.error("Caught Unknown Error", e)
             logging.error(traceback.format_exc())
 
 
-def worker(worker_url: str, queue_url: str, cache: Cache, context: zmq.Context | None = None):
+def worker(
+    worker_url: str,
+    queue_url: str,
+    cache: Cache,
+    max_retries: int,
+    context: zmq.Context | None = None,
+):
     context = context or zmq.Context.instance()
-    max_retries = 200
 
     socket = context.socket(zmq.REP)
     socket.connect(worker_url)
@@ -242,17 +261,112 @@ def worker(worker_url: str, queue_url: str, cache: Cache, context: zmq.Context |
             logging.error(traceback.format_exc())
 
 
-if __name__ == "__main__":
-    parser = ArgumentParser(description="Serve model")
-    parser.add_argument("--listen-address", default="tcp://127.0.0.1:5555")
-    args = parser.parse_args()
+class RangeArg(object):
+    def __init__(self, start, end):
+        self.start = start
+        self.end = end
 
+    def __eq__(self, other):
+        return self.start < other <= self.end
+
+    def __str__(self):
+        return f"must be greater than {self.start} and less or equal than {self.end}"
+
+
+if __name__ == "__main__":
+    avaliable_models = [
+        "llava-hf/llava-v1.6-mistral-7b-hf",
+        "llava-hf/llava-v1.6-vicuna-7b-hf",
+        "llava-hf/llava-v1.6-vicuna-13b-hf",
+        "llava-hf/llava-v1.6-34b-hf",
+    ]
+
+    parser = ArgumentParser(description="LLaVA server model")
+    parser.add_argument("--server-address", default="tcp://127.0.0.1:5555", help="Server Address")
+    parser.add_argument(
+        "--model-name",
+        default="llava-hf/llava-v1.6-vicuna-7b-hf",
+        choices=avaliable_models,
+        help="LLaVA model name",
+    )
+    parser.add_argument(
+        "--model-temperature",
+        default=0.2,
+        choices=[RangeArg(0.0, 1.0)],
+        help="LLaVA model temperature",
+    )
+    parser.add_argument(
+        "--model-top-p",
+        default=1.0,
+        choices=[RangeArg(0.0, 1.0)],
+        help="LLaVA model top-p",
+    )
+    parser.add_argument(
+        "--model-top-k",
+        default=32,
+        choices=[RangeArg(1, 128)],
+        help="LLaVA model top-k",
+    )
+    parser.add_argument(
+        "--model-max-length",
+        default=256,
+        choices=[ RangeArg(15, 1024) ],
+        help="LLaVA model max response length",
+    )
+    parser.add_argument(
+        "--batch-timeout",
+        default=10,
+        type=int,
+        choices=[RangeArg(4, 60)],
+        help="The timeout in seconds to execute a batch if queue length is less than --batch-size",
+    )
+    parser.add_argument(
+        "--batch-size",
+        default=5,
+        type=int,
+        choices=[RangeArg(0, 100)],
+        help="How many prompts are execute in batch",
+    )
+    parser.add_argument(
+        "--worker-timeout",
+        default=180,
+        type=int,
+        choices=[RangeArg(59, 600)],
+        help="Timeout in seconds to worker get response",
+    )
+    parser.add_argument(
+        "--workers",
+        default=5,
+        type=int,
+        choices=[RangeArg(4, 100)],
+        help="How many workers",
+    )
+    parser.add_argument(
+        "--models",
+        default=1,
+        type=int,
+        choices=[RangeArg(0, 10)],
+        help="How many parallel models",
+    )
+    args = parser.parse_args()
     logging.basicConfig(level=logging.INFO)
+    logging.debug("Arguments parsed")
+
     logging.debug("Starting model")
-    model = Model()
+    logging.info(f"Using model: {args.model_name}")
+
+    cache = Cache()
+    model = Model(args.model_name)
+    raw_params = {
+        "temperature": args.model_temperature,
+        "top_p": args.model_top_p,
+        "top_k": args.model_top_k,
+        "max_length": args.model_max_length,
+    }
+    params = ModelParams(raw_params)
 
     url_worker = "inproc://workers"
-    url_client = args.listen_address
+    url_client = args.server_address
     url_queue_router = "inproc://queues_router"
     url_queue_dealer = "inproc://queues_dealer"
 
@@ -274,20 +388,19 @@ if __name__ == "__main__":
     queues_dealer.bind(url_queue_dealer)
     logging.debug("Binded queues dealer")
 
-    cache = Cache()
-
-    for _ in range(10):
-        thread = threading.Thread(target=worker, args=(url_worker, url_queue_router, cache))
+    for _ in range(args.workers):
+        thread_args = (url_worker, url_queue_router, cache, args.worker_timeout)
+        thread = threading.Thread(target=worker, args=thread_args)
         thread.daemon = True
         thread.start()
     logging.info("Workers started")
 
-    for _ in range(1):
-        thread = threading.Thread(target=queue, args=(url_queue_dealer, model, ModelParams({}), cache))
+    for _ in range(args.models):
+        thread_args = (url_queue_dealer, model, params, cache, args.batch_size, args.batch_timeout)
+        thread = threading.Thread(target=queue, args=thread_args)
         thread.daemon = True
         thread.start()
     logging.info("Queues started")
-
 
     logging.info("starting polling")
     poller = zmq.Poller()
