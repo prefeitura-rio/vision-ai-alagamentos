@@ -11,18 +11,14 @@ import requests
 import torch
 import zmq
 from PIL import Image
-
-from llava.constants import (
-    DEFAULT_IM_END_TOKEN,
-    DEFAULT_IM_START_TOKEN,
-    DEFAULT_IMAGE_TOKEN,
-    IMAGE_TOKEN_INDEX,
+from transformers import (
+    BitsAndBytesConfig,
+    LlavaNextForConditionalGeneration,
+    LlavaNextProcessor,
 )
-from llava.mm_utils import process_images, tokenizer_image_token
-from llava.model.builder import load_pretrained_model
 
 
-def load_image(image_raw):
+def load_image(image_raw: str):
     image = None
 
     if image_raw.startswith("http://") or image_raw.startswith("https://"):
@@ -42,75 +38,71 @@ def load_image(image_raw):
 
 class Model:
     def __init__(self):
-        model_path = "liuhaotian/llava-v1.6-34b"
-        model_name = "llava-v1.6-34b"
-
-        self.tokenizer, self.model, self.image_processor, self.context_len = load_pretrained_model(
-            model_path=model_path,
-            model_base=None,
-            model_name=model_name,
-            load_8bit=False,
-            load_4bit=True,
-            device="cuda",
-            use_flash_attn=True,
+        model_name = "llava-hf/llava-v1.6-34b-hf"
+        quantization_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_compute_dtype=torch.float16,
+            bnb_4bit_use_double_quant=True,
+            bnb_4bit_quant_type="nf4",
         )
+
+        model: LlavaNextForConditionalGeneration = LlavaNextForConditionalGeneration.from_pretrained(
+            model_name,
+            quantization_config=quantization_config,
+            device_map="auto",
+            low_cpu_mem_usage=True,
+            attn_implementation="flash_attention_2",
+        )
+        self.model = model
         logging.info("Model loaded")
 
+        processor: LlavaNextProcessor = LlavaNextProcessor.from_pretrained(model_name, use_fast=False)
+        self.processor = processor
+        logging.info("Processor loaded")
+
+    # TODO: remover dependencia do git do LLaVA
+    # TODO: separar validação de parametros da execução do modelo
+    # TODO: fazer inferencia por batch
     def generate_output(self, params):
-        tokenizer, model, image_processor = self.tokenizer, self.model, self.image_processor
+        model, processor = self.model, self.processor
 
         prompt = params["prompt"]
-        ori_prompt = prompt
         images = params.get("images", None)
 
         if images is None or type(images) is not list:
             raise ValueError("Must be sent a list of images")
 
-        if len(images) != prompt.count(DEFAULT_IMAGE_TOKEN):
+        if len(images) != prompt.count("<image>"):
             raise ValueError("Number of images does not match number of <image> tokens in prompt")
 
         images = [load_image(image) for image in images]
-        image_sizes = [image.size for image in images]
-        images = process_images(images, image_processor, model.config)
-
-        images = [image.to(model.device, dtype=torch.float16) for image in images]
-
-        replace_token = DEFAULT_IMAGE_TOKEN
-        if getattr(model.config, "mm_use_im_start_end", False):
-            replace_token = DEFAULT_IM_START_TOKEN + replace_token + DEFAULT_IM_END_TOKEN
-        prompt = prompt.replace(DEFAULT_IMAGE_TOKEN, replace_token)
-
-        image_args = {"images": images, "image_sizes": image_sizes}
-
         temperature = float(params.get("temperature", 0.2))
         top_p = float(params.get("top_p", 1.0))
         top_k = int(params.get("top_k", 32))
         max_length = min(int(params.get("max_length", 256)), 1024)
         do_sample = True if temperature > 0.001 else False
 
-        input_ids = (
-            tokenizer_image_token(prompt, tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pt")
-            .unsqueeze(0)
-            .to("cuda")
-        )
-
-        if max_length < 1:
-            return ori_prompt + "Exceeds max token length. Please start a new conversation, thanks."
+        inputs = processor(text=prompt, images=images, return_tensors="pt").to("cuda")
 
         output_ids = model.generate(
-            inputs=input_ids,
+            **inputs,
             do_sample=do_sample,
             temperature=temperature,
             top_k=top_k,
             top_p=top_p,
             max_length=max_length,
             use_cache=True,
-            **image_args,
         )
 
-        return tokenizer.batch_decode(output_ids, skip_special_tokens=True)[0].strip()
+        return processor.batch_decode(output_ids, skip_special_tokens=True)[0].strip()
 
 
+# TODO: criar uma pipline de processamento em batch
+# 1. validar parametros
+# 2. baixar imagem
+# 3. puxar parametros para fila de requisições
+# 4. retornar id da requisição
+# 5. ficar verificando reposta da requisição em um cache de memória
 def worker(worker_url: str, model: Model, context=None):
     context = context or zmq.Context.instance()
 

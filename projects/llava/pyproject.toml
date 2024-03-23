@@ -12,12 +12,17 @@ keywords = ["vision", "ai", "llava"]
 
 [tool.poetry.dependencies]
 python = "^3.10"
-llava = { git = "https://github.com/haotian-liu/LLaVA" }
 protobuf = "^5.26.0"
 flask = "^3.0.2"
 poetry = "^1.8.2"
 pyzmq = "^25.1.2"
 gunicorn = "^21.2.0"
+transformers = "^4.39.1"
+torch = "^2.2.1"
+pillow = "^10.2.0"
+bitsandbytes = "^0.43.0"
+accelerate = "^0.28.0"
+sentencepiece = "^0.2.0"
 
 [tool.poetry.group.dev.dependencies]
 black = "^24.2.0"
