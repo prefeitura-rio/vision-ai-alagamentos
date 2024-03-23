@@ -4,8 +4,9 @@ import os
 import threading
 import time
 import traceback
+import signal
 import uuid
-from argparse import ArgumentParser
+from argparse import ArgumentParser, Namespace
 from dataclasses import dataclass
 from io import BytesIO
 from typing import Any
@@ -134,8 +135,8 @@ def send_time(url_timer: str, sleep: int, context: zmq.Context | None = None):
         socket.recv_string()
 
 
-def queue(
-    queue_url: str,
+def inferance(
+    inferance_url: str,
     model: Model,
     params: ModelParams,
     cache: Cache,
@@ -148,7 +149,7 @@ def queue(
     last_time = time.time()
 
     socket = context.socket(zmq.REP)
-    socket.connect(queue_url)
+    socket.connect(inferance_url)
 
     url_timer = f"inproc://timer-{uuid.uuid4()}"
     timer = context.socket(zmq.PAIR)
@@ -173,7 +174,7 @@ def queue(
 
             if socks.get(socket) == zmq.POLLIN:
                 message = socket.recv_pyobj()
-                logging.debug(f"received queue request: {message}")
+                logging.debug(f"received inferance request: {message}")
                 id = uuid.uuid4()
                 queue.append((id, message))
                 socket.send_pyobj(id)
@@ -200,7 +201,7 @@ def queue(
                 queue = []
 
             if now - last_time >= batch_timeout:
-                logging.debug(f"queue size: {len(queue)}")
+                logging.debug(f"inferance queue size: {len(queue)}")
                 last_time = now
 
         except Exception as e:
@@ -210,7 +211,7 @@ def queue(
 
 def worker(
     worker_url: str,
-    queue_url: str,
+    inferance_url: str,
     cache: Cache,
     max_retries: int,
     context: zmq.Context | None = None,
@@ -220,8 +221,8 @@ def worker(
     socket = context.socket(zmq.REP)
     socket.connect(worker_url)
 
-    queue = context.socket(zmq.REQ)
-    queue.connect(queue_url)
+    inferance = context.socket(zmq.REQ)
+    inferance.connect(inferance_url)
 
     while True:
         try:
@@ -230,8 +231,8 @@ def worker(
 
             try:
                 prompt, images = parser_prompt(message)
-                queue.send_pyobj({"prompt": prompt, "images": images})
-                id = queue.recv_pyobj()
+                inferance.send_pyobj({"prompt": prompt, "images": images})
+                id = inferance.recv_pyobj()
                 text = cache.get(id)
                 retries = 0
 
@@ -273,7 +274,7 @@ class RangeArg(object):
         return f"must be greater than {self.start} and less or equal than {self.end}"
 
 
-if __name__ == "__main__":
+def parser_args() -> Namespace:
     avaliable_models = [
         "llava-hf/llava-v1.6-mistral-7b-hf",
         "llava-hf/llava-v1.6-vicuna-7b-hf",
@@ -318,7 +319,7 @@ if __name__ == "__main__":
         default=10,
         type=int,
         choices=[RangeArg(4, 60)],
-        help="The timeout in seconds to execute a batch if queue length is less than --batch-size",
+        help="The timeout in seconds to execute a batch if inferance queue length is less than --batch-size",
     )
     parser.add_argument(
         "--batch-size",
@@ -342,13 +343,25 @@ if __name__ == "__main__":
         help="How many workers",
     )
     parser.add_argument(
-        "--models",
+        "--inferances",
         default=1,
         type=int,
         choices=[RangeArg(0, 10)],
-        help="How many parallel models",
+        help="How many parallel inferances",
     )
-    args = parser.parse_args()
+    
+    return parser.parse_args()
+
+
+def signal_handler(sig, frame):
+    logging.info("LLaVA model server exited by signal")
+    exit(0)
+
+def main():
+    signal.signal(signal.SIGINT, signal_handler)
+
+    args = parser_args()
+
     logging.basicConfig(level=logging.INFO)
     logging.debug("Arguments parsed")
 
@@ -365,10 +378,10 @@ if __name__ == "__main__":
     }
     params = ModelParams(raw_params)
 
-    url_worker = "inproc://workers"
     url_client = args.server_address
-    url_queue_router = "inproc://queues_router"
-    url_queue_dealer = "inproc://queues_dealer"
+    url_worker = "inproc://workers"
+    url_inferance_router = "inproc://inferances_router"
+    url_inferance_dealer = "inproc://inferances_dealer"
 
     context = zmq.Context.instance()
 
@@ -380,24 +393,24 @@ if __name__ == "__main__":
     workers.bind(url_worker)
     logging.debug("Binded workers")
 
-    queues_router = context.socket(zmq.ROUTER)
-    queues_router.bind(url_queue_router)
-    logging.debug("Binded queues router")
+    inferances_router = context.socket(zmq.ROUTER)
+    inferances_router.bind(url_inferance_router)
+    logging.debug("Binded inferances router")
 
-    queues_dealer = context.socket(zmq.DEALER)
-    queues_dealer.bind(url_queue_dealer)
-    logging.debug("Binded queues dealer")
+    inferancess_dealer = context.socket(zmq.DEALER)
+    inferancess_dealer.bind(url_inferance_dealer)
+    logging.debug("Binded inferances dealer")
 
     for _ in range(args.workers):
-        thread_args = (url_worker, url_queue_router, cache, args.worker_timeout)
+        thread_args = (url_worker, url_inferance_router, cache, args.worker_timeout)
         thread = threading.Thread(target=worker, args=thread_args)
         thread.daemon = True
         thread.start()
     logging.info("Workers started")
 
-    for _ in range(args.models):
-        thread_args = (url_queue_dealer, model, params, cache, args.batch_size, args.batch_timeout)
-        thread = threading.Thread(target=queue, args=thread_args)
+    for _ in range(args.inferances):
+        thread_args = (url_inferance_dealer, model, params, cache, args.batch_size, args.batch_timeout)
+        thread = threading.Thread(target=inferance, args=thread_args)
         thread.daemon = True
         thread.start()
     logging.info("Queues started")
@@ -406,24 +419,33 @@ if __name__ == "__main__":
     poller = zmq.Poller()
     poller.register(clients, zmq.POLLIN)
     poller.register(workers, zmq.POLLIN)
-    poller.register(queues_router, zmq.POLLIN)
-    poller.register(queues_dealer, zmq.POLLIN)
+    poller.register(inferances_router, zmq.POLLIN)
+    poller.register(inferancess_dealer, zmq.POLLIN)
 
     while True:
-        socks = dict(poller.poll())
+        try:
+            socks = dict(poller.poll())
 
-        if socks.get(clients) == zmq.POLLIN:
-            logging.debug("sending message to worker")
-            workers.send_multipart(clients.recv_multipart())
+            if socks.get(clients) == zmq.POLLIN:
+                logging.debug("sending message to worker")
+                workers.send_multipart(clients.recv_multipart())
 
-        if socks.get(workers) == zmq.POLLIN:
-            logging.debug("sending message to client")
-            clients.send_multipart(workers.recv_multipart())
+            if socks.get(workers) == zmq.POLLIN:
+                logging.debug("sending message to client")
+                clients.send_multipart(workers.recv_multipart())
 
-        if socks.get(queues_router) == zmq.POLLIN:
-            logging.debug("sending message to queue dealer")
-            queues_dealer.send_multipart(queues_router.recv_multipart())
+            if socks.get(inferances_router) == zmq.POLLIN:
+                logging.debug("sending message to inferance dealer")
+                inferancess_dealer.send_multipart(inferances_router.recv_multipart())
 
-        if socks.get(queues_dealer) == zmq.POLLIN:
-            logging.debug("sending message to queue router")
-            queues_router.send_multipart(queues_dealer.recv_multipart())
+            if socks.get(inferancess_dealer) == zmq.POLLIN:
+                logging.debug("sending message to inferance router")
+                inferances_router.send_multipart(inferancess_dealer.recv_multipart())
+        except KeyboardInterrupt:
+            logging.info("W: interrupt received, stopping...")
+            logging.info("LLaVA model server exited by keyboard")
+            exit(0)
+
+
+if __name__ == "__main__":
+    main()
