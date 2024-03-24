@@ -180,7 +180,6 @@ def inferance(
                 socket.send_pyobj(id)
 
             now = time.time()
-
             if len(queue) >= batch_size or (now - last_time >= batch_timeout and len(queue) > 0):
                 prompts = []
                 images = []
@@ -286,7 +285,7 @@ def parser_args() -> Namespace:
     parser.add_argument("--server-address", default="tcp://127.0.0.1:5555", help="Server Address")
     parser.add_argument(
         "--model-name",
-        default="llava-hf/llava-v1.6-vicuna-7b-hf",
+        default="llava-hf/llava-v1.6-mistral-7b-hf",
         choices=avaliable_models,
         help="LLaVA model name",
     )
@@ -323,7 +322,7 @@ def parser_args() -> Namespace:
     )
     parser.add_argument(
         "--batch-size",
-        default=5,
+        default=1,
         type=int,
         choices=[RangeArg(0, 100)],
         help="How many prompts are execute in batch",
@@ -337,7 +336,7 @@ def parser_args() -> Namespace:
     )
     parser.add_argument(
         "--workers",
-        default=5,
+        default=10,
         type=int,
         choices=[RangeArg(4, 100)],
         help="How many workers",
