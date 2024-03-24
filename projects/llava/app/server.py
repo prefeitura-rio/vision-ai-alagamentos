@@ -4,6 +4,7 @@ from flask import Flask, request
 
 server = Flask(__name__)
 
+
 def start(model_address: str) -> Flask:
     server.config["MODEL_ADDRESS"] = model_address
 

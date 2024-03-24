@@ -1,10 +1,10 @@
 import base64
 import logging
 import os
+import signal
 import threading
 import time
 import traceback
-import signal
 import uuid
 from argparse import ArgumentParser, Namespace
 from dataclasses import dataclass
@@ -98,16 +98,16 @@ class Model:
         logging.debug("Processor loaded")
 
     def generate_output(
-        self, 
-        prompt: str | list[str], 
-        images: list[Image.Image], 
+        self,
+        prompt: str | list[str],
+        images: list[Image.Image],
         params: ModelParams,
     ):
         model, processor = self.model, self.processor
 
         inputs = processor(text=prompt, images=images, return_tensors="pt").to("cuda")
 
-        output_ids = model.generate(
+        outputs = model.generate(
             **inputs,
             do_sample=params.do_sample,
             temperature=params.temperature,
@@ -119,7 +119,7 @@ class Model:
 
         return [
             result.strip()
-            for result in processor.batch_decode(output_ids, skip_special_tokens=True)
+            for result in processor.batch_decode(outputs[:, inputs.data["input_ids"].shape[1]:], skip_special_tokens=True)
         ]
 
 
@@ -310,7 +310,7 @@ def parser_args() -> Namespace:
     parser.add_argument(
         "--model-max-length",
         default=256,
-        choices=[ RangeArg(15, 1024) ],
+        choices=[RangeArg(15, 1024)],
         help="LLaVA model max response length",
     )
     parser.add_argument(
@@ -348,13 +348,14 @@ def parser_args() -> Namespace:
         choices=[RangeArg(0, 10)],
         help="How many parallel inferances",
     )
-    
+
     return parser.parse_args()
 
 
 def signal_handler(sig, frame):
     logging.info("LLaVA model server exited by signal")
     exit(0)
+
 
 def main():
     signal.signal(signal.SIGINT, signal_handler)
@@ -408,7 +409,14 @@ def main():
     logging.info("Workers started")
 
     for _ in range(args.inferances):
-        thread_args = (url_inferance_dealer, model, params, cache, args.batch_size, args.batch_timeout)
+        thread_args = (
+            url_inferance_dealer,
+            model,
+            params,
+            cache,
+            args.batch_size,
+            args.batch_timeout,
+        )
         thread = threading.Thread(target=inferance, args=thread_args)
         thread.daemon = True
         thread.start()
