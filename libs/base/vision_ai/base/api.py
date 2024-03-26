@@ -38,7 +38,6 @@ class VisionaiAPI:
                 f"{self._base_url}/auth/token",
                 data={"username": self._username, "password": self._password},
             )
-
         if response.status_code == 200:
             token = response.json()["access_token"]
             # now + expires_in_seconds - 10 minutes
