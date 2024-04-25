@@ -21,7 +21,10 @@ from vision_ai.base.metrics import (
 from vision_ai.base.model import Model
 from vision_ai.base.pandas import handle_snapshots_df
 from vision_ai.base.prompt import get_prompt_api, get_prompt_local
-from vision_ai.base.sheets import get_objects_table_from_sheets, create_google_sheet_from_dataframe
+from vision_ai.base.sheets import (
+    create_google_sheet_from_dataframe,
+    get_objects_table_from_sheets,
+)
 
 # Assert all environment variables are set
 for var in [
