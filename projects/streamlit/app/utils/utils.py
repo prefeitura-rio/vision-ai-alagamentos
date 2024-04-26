@@ -5,13 +5,12 @@ from typing import Union
 
 import folium
 import pandas as pd
+import streamlit as st
 from st_aggrid import GridOptionsBuilder  # noqa
 from st_aggrid import GridUpdateMode  # noqa
 from st_aggrid import AgGrid, ColumnsAutoSizeMode
 from vision_ai.base.api import VisionaiAPI
 from vision_ai.base.pandas import explode_df
-
-import streamlit as st
 
 STREAMLIT_PATH = Path(__file__).parent.parent.parent.absolute()
 CACHE_MINUTES = 5
@@ -168,10 +167,15 @@ def get_ai_identifications_cache(page_size=3000, timeout=120):
 def treat_data(response, hides):
     cameras_aux = pd.read_csv(STREAMLIT_PATH / "data/database/cameras_aux.csv", dtype=str)
 
-    cameras_aux = cameras_aux.rename(columns={"id_camera": "camera_id"})
+    cameras_aux = cameras_aux.rename(
+        columns={"id_camera": "camera_id", "latitude": "lat", "longitude": "long"}
+    )
     cameras = pd.DataFrame(response)
     cameras = cameras.rename(columns={"id": "camera_id"})
     cameras = cameras[cameras["identifications"].apply(lambda x: len(x) > 0)]
+
+    # st.dataframe(cameras)
+
     if len(cameras) == 0:
         return None, None
     cameras = cameras.merge(cameras_aux, on="camera_id", how="left")
@@ -523,9 +527,14 @@ def create_order_column(table):
     # 1. if the object is not in the order keys dict, return 99
     # 2. if the object is in the order keys, return the index of the label in the order list
 
-    # knowing that the dataframe always have the columns object and label, we can use the following code
+    # Knowing that the dataframe always has the columns 'object' and 'label', we can use the following code
     table["order"] = table.apply(
-        lambda row: order.get(row["object"], 99).index(row["label"]), axis=1
+        lambda row: (
+            order.get(row["object"], [99]).index(row["label"])
+            if row["object"] in order.keys()
+            else 99
+        ),
+        axis=1,
     )
 
     return table

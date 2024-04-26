@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # import folium # noqa
 
+import streamlit as st
 from streamlit_folium import st_folium  # noqa
 from utils.utils import (
     create_map,
@@ -12,8 +13,6 @@ from utils.utils import (
     get_icon_color,
     treat_data,
 )
-
-import streamlit as st
 
 st.set_page_config(page_title="Vision AI - Rio", layout="wide", initial_sidebar_state="collapsed")
 # st.image("./data/logo/logo.png", width=300)
@@ -175,7 +174,7 @@ if not all(x is None for x in cameras_identifications):
             column = _col1 if i % 2 == 0 else _col2
 
             with column:
-                if str(row["label"]) not in ["null", "free", "low"]:
+                if str(row["label"]) not in ["null", "free", "low", "false"]:
                     st.markdown(
                         f"### Camera ID: {str(row['id'])}"
                     )  # Ensure to convert to string if needed

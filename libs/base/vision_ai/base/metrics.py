@@ -22,17 +22,19 @@ def calculate_metrics(y_true, y_pred, average):
     return accuracy, precision, recall, f1
 
 
-def water_level_custon_metric(y_true, y_pred):
+def water_level_custom_metric(y_true, y_pred):
     # Assuming y_true and y_pred are Pandas Series with categories like 'low', 'medium', 'high'
     true_high = y_true == "high"
     true_medium = y_true == "medium"
     pred_low = y_pred == "low"
 
     # Calculate M_high
-    M_high = (pred_low & true_high).sum() / true_high.sum() if true_high.sum() > 0 else 0
+    M_high = 1 - ((pred_low & true_high).sum() / true_high.sum() if true_high.sum() > 0 else 0)
 
     # Calculate M_medium
-    M_medium = (pred_low & true_medium).sum() / true_medium.sum() if true_medium.sum() > 0 else 0
+    M_medium = 1 - (
+        (pred_low & true_medium).sum() / true_medium.sum() if true_medium.sum() > 0 else 0
+    )
 
     return M_high, M_medium
 

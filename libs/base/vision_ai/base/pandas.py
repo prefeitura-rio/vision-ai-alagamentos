@@ -35,6 +35,8 @@ def handle_snapshots_df(
     )
 
     # Group by object and calculate label distribution
+    snapshots_exploded.dropna(subset=["label"], inplace=True)
+    snapshots_exploded.query("label != 'null'", inplace=True)
     grouped = (
         snapshots_exploded.groupby(
             ["snapshot_id", "snapshot_timestamp", "snapshot_url", "object", "label"]
