@@ -5,6 +5,7 @@ from typing import Annotated
 from uuid import UUID
 
 import requests
+from app import config
 from app.dependencies import get_user, is_admin, is_human
 from app.models import (
     HideIdentification,
@@ -297,10 +298,8 @@ async def create_marker(
     all_users = True
     if data.whitelist is not None and len(data.whitelist) > 0:
         all_users = False
-        headers = {
-            "Authorization": "Bearer GhiaPmKSfYvjXqPDWvC1J70kJWgNqX6sE6JacdmlGU7QQw6MkD7eO3uJg7b2"
-        }
-        response = requests.get("https://authentik.dados.rio/api/v3/core/users/", headers=headers)
+        headers = {"Authorization": "Bearer " + config.OIDC_API_TOKEN}
+        response = requests.get(config.OIDC_API_URL + "/core/users/", headers=headers)
         all_usernames = [user["username"] for user in response.json()["results"]]
         for username in data.whitelist:
             if username not in all_usernames:
