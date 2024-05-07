@@ -5,12 +5,6 @@ from typing import Annotated
 from uuid import UUID
 
 import requests
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi_pagination import Page, create_page
-from fastapi_pagination.default import Params
-from tortoise import connections
-from tortoise.expressions import Q
-
 from app import config
 from app.dependencies import get_user, is_admin, is_human
 from app.models import (
