@@ -46,9 +46,19 @@ class IdentificationMaker(Model):
     id = fields.UUIDField(pk=True)
     identification = fields.ForeignKeyField("app.Identification")
     tags = ArrayField(element_type="text", null=True)
+    all_users = fields.BooleanField(null=False, default=True)
 
     class Meta:
         table = "identification_marker"
+
+
+class WhitelistIdentification(Model):
+    id = fields.UUIDField(pk=True)
+    identification = fields.ForeignKeyField("app.Identification")
+    username = fields.CharField(max_length=255)
+
+    class Meta:
+        table = "whitelist_identification"
 
 
 class UserIdentification(Model):

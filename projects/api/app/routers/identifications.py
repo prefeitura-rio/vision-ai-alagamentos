@@ -1,7 +1,15 @@
 # -*- coding: utf-8 -*-
+import itertools
 from datetime import datetime, timedelta
 from typing import Annotated
 from uuid import UUID
+
+import requests
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi_pagination import Page, create_page
+from fastapi_pagination.default import Params
+from tortoise import connections
+from tortoise.expressions import Q
 
 from app.dependencies import get_user, is_admin, is_human
 from app.models import (
@@ -11,6 +19,7 @@ from app.models import (
     Label,
     Snapshot,
     UserIdentification,
+    WhitelistIdentification,
 )
 from app.pydantic_models import (
     Aggregation,
@@ -26,11 +35,6 @@ from app.pydantic_models import (
     SnapshotOut,
     User,
 )
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi_pagination import Page, create_page
-from fastapi_pagination.default import Params
-from tortoise import connections
-from tortoise.expressions import Q
 
 router = APIRouter(prefix="/identifications", tags=["identifications"])
 
@@ -56,9 +60,18 @@ async def get_ai_identifications(
         .values_list("identification_id", flat=True)
     )
 
+    whitelist = (
+        await WhitelistIdentification.all()
+        .filter(username=user.name)
+        .values_list("identification_id", flat=True)
+    )
+
     ids = (
         await IdentificationMaker.all()
-        .filter(identification_id__not_in=indentificateds)
+        .filter(
+            Q(identification_id__not_in=indentificateds)
+            & Q(Q(all_users=True) | Q(identification_id__in=whitelist))
+        )
         .values_list("identification_id", flat=True)
     )
 
@@ -281,6 +294,23 @@ async def create_marker(
             detail="Must send indetifications or snapshots ids",
         )
 
+    usernames = []
+    all_users = True
+    if data.whitelist is not None and len(data.whitelist) > 0:
+        all_users = False
+        headers = {
+            "Authorization": "Bearer GhiaPmKSfYvjXqPDWvC1J70kJWgNqX6sE6JacdmlGU7QQw6MkD7eO3uJg7b2"
+        }
+        response = requests.get("https://authentik.dados.rio/api/v3/core/users/", headers=headers)
+        all_usernames = [user["username"] for user in response.json()["results"]]
+        for username in data.whitelist:
+            if username not in all_usernames:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="User not exist",
+                )
+        usernames = data.whitelist
+
     identifications = await Identification.filter(snapshot_id__in=snapshot_ids).all()
     exist = (
         await IdentificationMaker.filter(
@@ -294,9 +324,17 @@ async def create_marker(
         identification for identification in identifications if identification.id not in exist_ids
     ]
 
+    if len(usernames) > 0:
+        await WhitelistIdentification.bulk_create(
+            [
+                WhitelistIdentification(identification=identification, username=username)
+                for (username, identification) in itertools.product(usernames, identifications)
+            ]
+        )
+
     await IdentificationMaker.bulk_create(
         [
-            IdentificationMaker(identification=identification, tags=data.tags)
+            IdentificationMaker(identification=identification, tags=data.tags, all_users=all_users)
             for identification in identifications
         ]
     )

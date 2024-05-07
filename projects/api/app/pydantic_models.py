@@ -100,6 +100,7 @@ class IdentificationMarkerIn(BaseModel):
     identifications_id: list[UUID] | None
     snapshots_id: list[UUID] | None
     tags: list[str] | None
+    whitelist: list[str] | None
 
 
 class IdentificationMarkerDelete(BaseModel):
