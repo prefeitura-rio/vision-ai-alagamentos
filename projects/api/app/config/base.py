@@ -20,6 +20,8 @@ OIDC_CLIENT_ID = getenv_or_action("OIDC_CLIENT_ID")
 OIDC_CLIENT_SECRET = getenv_or_action("OIDC_CLIENT_SECRET")
 OIDC_ISSUER_URL = getenv_or_action("OIDC_ISSUER_URL")
 OIDC_TOKEN_URL = getenv_or_action("OIDC_TOKEN_URL")
+OIDC_API_URL = getenv_or_action("OIDC_API_URL")
+OIDC_API_TOKEN = getenv_or_action("OIDC_API_TOKEN")
 
 # GCP
 GCP_SERVICE_ACCOUNT_CREDENTIALS = getenv_or_action("GCP_SERVICE_ACCOUNT_CREDENTIALS", action="warn")
