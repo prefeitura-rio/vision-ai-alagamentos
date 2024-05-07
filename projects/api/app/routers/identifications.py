@@ -5,12 +5,6 @@ from typing import Annotated
 from uuid import UUID
 
 import requests
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi_pagination import Page, create_page
-from fastapi_pagination.default import Params
-from tortoise import connections
-from tortoise.expressions import Q
-
 from app.dependencies import get_user, is_admin, is_human
 from app.models import (
     HideIdentification,
@@ -35,6 +29,11 @@ from app.pydantic_models import (
     SnapshotOut,
     User,
 )
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi_pagination import Page, create_page
+from fastapi_pagination.default import Params
+from tortoise import connections
+from tortoise.expressions import Q
 
 router = APIRouter(prefix="/identifications", tags=["identifications"])
 
