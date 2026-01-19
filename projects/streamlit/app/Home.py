@@ -131,12 +131,10 @@ if not all(x is None for x in cameras_identifications):
                 row=row, cameras_identifications_df=cameras_identifications_descriptions
             )  # noqa
         else:
-            st.markdown(
-                """
+            st.markdown("""
                 ### 📷 Câmera snapshot
                 Selecione uma Câmera na tabela para visualizar mais detalhes.
-                """
-            )
+                """)
 
     with col1:
         st.markdown("### 📍 Mapa")
@@ -189,11 +187,9 @@ if not all(x is None for x in cameras_identifications):
                     st.markdown("----")
 
 else:
-    st.error(
-        """
+    st.error("""
         Ops, parece que não há dados disponíveis, tente atualizar a página.
 
         Se o problema persistir, entre em contato com o administrador.
 
-        """
-    )
+        """)
